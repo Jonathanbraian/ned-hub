@@ -1524,7 +1524,7 @@ a{text-decoration:none;color:inherit}
           <div id="perf-view-tabs" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;display:none;gap:3px">
             <button class="period-tab active" onclick="switchPerfView('team',this)" id="pvt-team">Full Team</button>
             <button class="period-tab" onclick="switchPerfView('campus',this)" id="pvt-campus">By Campus</button>
-            <button class="period-tab" onclick="switchPerfView('byteam',this)" id="pvt-byteam">By Team</button>
+            <button class="period-tab" onclick="switchPerfView('byteam',this)" id="pvt-byteam">My Teams</button>
             <button class="period-tab" onclick="switchPerfView('individual',this)" id="pvt-individual">Individual</button>
           </div>
           <span id="perf-edit-badge" style="display:none;font-size:11px;font-weight:600;background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border);padding:3px 10px;border-radius:20px">Can update results</span>
@@ -2100,7 +2100,9 @@ a{text-decoration:none;color:inherit}
       </div>
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Individual target (&euro; / month)</label><input class="form-input" type="number" id="role-ind-target" placeholder="Leave blank for the level default" min="0" step="500"></div>
-        <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="role-team-target" placeholder="Leave blank for none" min="0" step="500"></div>
+        <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="role-team-target" placeholder="Leave blank for none" min="0" step="500">
+          <div class="form-hint">Not used any more - team targets are set on the team itself.</div>
+        </div>
       </div>
       <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="role-active" style="width:14px;height:14px;cursor:pointer" checked>
@@ -2117,7 +2119,7 @@ a{text-decoration:none;color:inherit}
     <div class="modal-header"><div class="modal-title" id="mtt-title">Team Target</div><button class="modal-close" onclick="closeModal('modal-team-target')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="modal-body">
       <input type="hidden" id="mtt-uid">
-      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>A monthly target for this leader's whole team. Quarterly is this figure times three, annual times twelve. Leave it blank to go back to adding up each member's own target.</span></div>
+      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>A monthly target for this team, measured against everyone on it. Quarterly is this figure times three, annual times twelve. Leave it blank to go back to adding up each member's own target.</span></div>
       <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="mtt-value" placeholder="Blank to clear" min="0" step="1000"></div>
       <div class="login-error" id="mtt-error" style="margin-top:10px;margin-bottom:0"></div>
     </div>
@@ -2339,7 +2341,6 @@ function mapProfileToUser(u){
     status:u.status, reports_to:u.reports_to||null, photo:u.photo||'', bio:d(u.bio)||'',
     monthly_target: (u.monthly_target!=null)?Number(u.monthly_target):null,
     role_id: u.role_id!=null?u.role_id:null,
-    team_target: (u.team_target!=null)?Number(u.team_target):null,
     role_name: d((rolesById[u.role_id]||{}).name) || null,
     team_id: u.team_id!=null?u.team_id:null,
     team_name: d((teamsById[u.team_id]||{}).name) || null,
@@ -2445,8 +2446,9 @@ function effectiveTargetOf(u, eff){
 }
 
 // ── TEAM TARGETS ────────────────────────────────────────────────
-// A leader's team is the whole subtree beneath them, not just direct reports.
-let effTeamTargets = {};
+// A team target lives on the team and is measured against that team's members
+// (profiles.team_id). A leader can run several teams plus loose individuals.
+let teamPerf = {};
 
 function teamSubtreeOf(leaderId){
   const out=[], seen=new Set([leaderId]);
@@ -2464,26 +2466,68 @@ function teamSubtreeOf(leaderId){
   return out;
 }
 
-// monthly team target, or null when the leader has none set
-function effectiveTeamTargetOf(u){
-  if(!u) return null;
-  if(effTeamTargets[u.id]!=null) return Number(effTeamTargets[u.id]);
-  if(u.team_target!=null) return Number(u.team_target);
-  const cargo = cargoOf(u);
-  if(cargo && cargo.team_target!=null) return Number(cargo.team_target);
-  return null;
-}
 const PERIOD_MULT={monthly:1,quarterly:3,annual:12};
-// The leader's team target for a period, or null to fall back to summing members.
-function teamTargetFor(leader, p){
-  const m=effectiveTeamTargetOf(leader);
-  return (m==null) ? null : m*(PERIOD_MULT[p]||1);
+
+function teamMembersOf(teamId){ return users.filter(u=>String(u.team_id)===String(teamId)); }
+function hasTeamTarget(teamId){
+  const tp=teamPerf[teamId];
+  return !!(tp && tp.target!=null);
+}
+// The team's target for a period: the figure set on the team, or the sum of its
+// members' own targets when none is set.
+function teamTargetOf(teamId, p){
+  const tp=teamPerf[teamId];
+  if(tp && tp.target!=null) return Number(tp.target)*(PERIOD_MULT[p]||1);
+  return teamMembersOf(teamId).reduce((a,u)=>a+u.perf[p].target,0);
+}
+// The team's actual: summed from its members, server-side where available.
+function teamActualOf(teamId, p){
+  const tp=teamPerf[teamId];
+  if(tp && tp.actual && tp.actual[p]!=null) return Number(tp.actual[p]);
+  return teamMembersOf(teamId).reduce((a,u)=>a+u.perf[p].actual,0);
+}
+
+// Target for a mixed list of people, without counting anyone twice: a team
+// contributes its own target once, but only when the whole team is in the list.
+// A filtered slice falls back to summing the people actually shown.
+function aggregateTargetOf(list, p){
+  const byTeam={}; let total=0;
+  list.forEach(u=>{
+    if(u.team_id==null){ total+=u.perf[p].target; return; }
+    const k=String(u.team_id);
+    (byTeam[k]=byTeam[k]||[]).push(u);
+  });
+  Object.keys(byTeam).forEach(k=>{
+    const shown=byTeam[k];
+    const whole=teamMembersOf(k);
+    total += (hasTeamTarget(k) && shown.length===whole.length)
+      ? teamTargetOf(k,p)
+      : shown.reduce((a,u)=>a+u.perf[p].target,0);
+  });
+  return total;
+}
+
+// Teams this person runs, and the teams they oversee further down the line.
+function teamsLedBy(uid){ return dbTeams.filter(t=>String(t.leader_id)===String(uid)); }
+function teamsOverseenBy(me){
+  if(!me) return [];
+  if(me.role==='director'||me.role==='manager') return dbTeams.filter(t=>t.active!==false);
+  const under=new Set([me.id, ...teamSubtreeOf(me.id).map(u=>u.id)]);
+  return dbTeams.filter(t=>t.leader_id && under.has(t.leader_id));
+}
+// Direct reports who are on no team at all.
+function looseIndividualsOf(uid){
+  return users.filter(u=>u.id!==uid && String(u.reports_to)===String(uid) && u.team_id==null);
+}
+function canSetTeamTarget(team){
+  return isUserAdmin() || canUpdatePerf() && String(team.leader_id)===String(currentUserId);
 }
 
 async function loadPerformance(){
   const r = await callDb('get_performance', { year: perfYear });
   const eff = (r&&r.effective_targets)||{};
-  effTeamTargets = (r&&r.effective_team_targets)||{};
+  teamPerf = {};
+  ((r&&r.team_perf)||[]).forEach(t=>{ teamPerf[t.team_id]=t; });
   const byUser = {};
   ((r&&r.results)||[]).forEach(row=>{
     (byUser[row.user_id] ||= {})[row.month] =
@@ -2896,7 +2940,7 @@ function renderPerformancePage(){
   document.getElementById('perf-edit-badge').style.display=canUpdate?'inline-flex':'none';
 
   // Update page title
-  const titles={team:'Full Team Performance',campus:'Performance by Campus',byteam:'Performance by Team',individual:'Individual Results'};
+  const titles={team:'Full Team Performance',campus:'Performance by Campus',byteam:'My Teams + Individuals',individual:'Individual Results'};
   document.getElementById('perf-page-title').textContent=(['agent','specialist','executive','leader'].includes(me.role))
     ?'My Performance':(titles[perfViewMode]||'Team Performance');
 
@@ -2926,7 +2970,7 @@ function renderPerformancePage(){
 
   // --- VIEW: BY TEAM ---
   if(perfViewMode==='byteam'){
-    document.getElementById('perf-page-desc').textContent='Performance broken down by team within each campus.'+(PERIOD_NOTE[p]||'');
+    document.getElementById('perf-page-desc').textContent='Each team against its own target, then the people who are on no team.'+(PERIOD_NOTE[p]||'');
     const campF=document.getElementById('perf-filter-campus')?.value||'';
     const teamF=document.getElementById('perf-filter-team')?.value||'';
     const roleF=document.getElementById('perf-filter-role')?.value||'';
@@ -2954,8 +2998,7 @@ function renderPerformancePage(){
 // ── FULL TEAM VIEW ──────────────────────────────────────────────
 function renderFullTeamView(me, teamList, p, canUpdate){
   const teamActual=teamList.reduce((a,u)=>a+u.perf[p].actual,0);
-  const setTeamTarget=teamTargetFor(me,p);
-  const teamTarget=(setTeamTarget!=null)?setTeamTarget:teamList.reduce((a,u)=>a+u.perf[p].target,0);
+  const teamTarget=aggregateTargetOf(teamList,p);
   const myActual=me.perf[p].actual; const myTarget=me.perf[p].target;
   const teamPct=teamTarget>0?Math.round(teamActual/teamTarget*100):0;
   const myPct=myTarget>0?Math.round(myActual/myTarget*100):0;
@@ -2966,7 +3009,7 @@ function renderFullTeamView(me, teamList, p, canUpdate){
       <div class="kpi-card kc-blue">
         <div class="kpi-label">Team Total</div>
         <div class="kpi-val">${fmt(teamActual)}</div>
-        <div class="kpi-sub">Target: ${fmt(teamTarget)}${setTeamTarget!=null?' (team target)':' (sum of members)'}${canUpdateFor(me)?` <button class="update-btn" style="margin-left:6px;padding:1px 7px;font-size:10px" onclick="openTeamTarget('${esc(me.id)}')">Edit team target</button>`:''}</div>
+        <div class="kpi-sub">Target: ${fmt(teamTarget)}</div>
         <div class="prog-wrap"><div class="prog-track"><div class="prog-fill" style="width:${Math.min(100,teamPct)}%;background:${pctColor(teamPct)}"></div></div></div>
         <div class="kpi-pct" style="color:${pctColor(teamPct)}">${teamPct}% of target</div>
       </div>
@@ -3000,7 +3043,7 @@ function renderByCampusView(me, teamList, p, canUpdate){
   const campusCards=campuses.map(c=>{
     const cl=teamList.filter(u=>u.campus===c.key||u.campus==='both');
     const actual=cl.reduce((a,u)=>a+u.perf[p].actual,0);
-    const target=cl.reduce((a,u)=>a+u.perf[p].target,0);
+    const target=aggregateTargetOf(cl,p);
     const pct=target>0?Math.round(actual/target*100):0;
     if(cl.length===0) return '';
     return `
@@ -3023,28 +3066,44 @@ function renderByCampusView(me, teamList, p, canUpdate){
 }
 
 // ── BY TEAM VIEW ──────────────────────────────────────────────
+// One section per real team, then the people who are on no team.
 function renderByTeamView(me, teamList, p, canUpdate){
-  // Group by campus + team
-  const groups={};
+  const byTeam={}, loose=[];
   teamList.forEach(u=>{
-    const key=(u.campus==='both'?'Dublin':u.campus.charAt(0).toUpperCase()+u.campus.slice(1))+' - '+displayTeam(u);
-    if(!groups[key]) groups[key]=[];
-    groups[key].push(u);
+    if(u.team_id==null){ loose.push(u); return; }
+    (byTeam[String(u.team_id)]=byTeam[String(u.team_id)]||[]).push(u);
   });
-  if(Object.keys(groups).length===0) return '<div style="padding:40px;text-align:center;color:var(--muted)">No data matches the selected filters.</div>';
-  return Object.entries(groups).sort((a,b)=>a[0].localeCompare(b[0])).map(([groupKey, members])=>{
+  const sections=Object.keys(byTeam).map(tid=>{
+    const members=byTeam[tid];
+    const team=teamsById[tid]||{};
+    const whole=teamMembersOf(tid);
+    const partial=members.length!==whole.length;
+    const explicit=hasTeamTarget(tid) && !partial;
     const actual=members.reduce((a,u)=>a+u.perf[p].actual,0);
-    const target=members.reduce((a,u)=>a+u.perf[p].target,0);
-    const pct=target>0?Math.round(actual/target*100):0;
+    const target=explicit?teamTargetOf(tid,p):members.reduce((a,u)=>a+u.perf[p].target,0);
+    const leader=team.leader_id?users.find(u=>u.id===team.leader_id):null;
+    return { key:(team.name||'Team'), tid, members, actual, target, explicit, partial, leader };
+  }).sort((a,b)=>a.key.localeCompare(b.key));
+  if(loose.length) sections.push({ key:'Individuals', tid:null, members:loose,
+    actual:loose.reduce((a,u)=>a+u.perf[p].actual,0),
+    target:loose.reduce((a,u)=>a+u.perf[p].target,0), explicit:false, partial:false, leader:null });
+  if(!sections.length) return '<div style="padding:40px;text-align:center;color:var(--muted)">No data matches the selected filters.</div>';
+  return sections.map(sec=>{
+    const pct=sec.target>0?Math.round(sec.actual/sec.target*100):0;
+    const sub=sec.tid==null ? 'no team'
+      : (sec.explicit ? 'team target' : (sec.partial ? 'filtered - sum of those shown' : 'sum of members'));
+    const editBtn=(sec.tid!=null && teamsById[sec.tid] && canSetTeamTarget(teamsById[sec.tid]))
+      ? ` <button class="update-btn" style="margin-left:6px;padding:1px 7px;font-size:10px" onclick="openTeamTarget('${esc(sec.tid)}')">Edit team target</button>` : '';
     return `
     <div style="margin-bottom:28px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
         <div style="width:3px;height:20px;background:linear-gradient(-25deg,#00A7B5,#9CFFAC);border-radius:3px"></div>
-        <div style="font-size:16px;font-weight:700">${groupKey}</div>
+        <div style="font-size:16px;font-weight:700">${esc(dashFix(sec.key))}</div>
+        ${sec.leader?`<span style="font-size:11.5px;color:var(--muted)">led by ${esc(sec.leader.first+' '+sec.leader.last)}</span>`:''}
         <span class="pct-badge ${pctBadgeClass(pct)}">${pct}%</span>
-        <span style="font-size:13px;color:var(--muted);margin-left:auto">${fmt(actual)} / ${fmt(target)} · ${members.length} members</span>
+        <span style="font-size:13px;color:var(--muted);margin-left:auto">${fmt(sec.actual)} / ${fmt(sec.target)} (${sub}) · ${sec.members.length} members${editBtn}</span>
       </div>
-      ${renderTeamTable(members, p, canUpdate)}
+      ${renderTeamTable(sec.members, p, canUpdate)}
     </div>`;
   }).join('');
 }
@@ -3054,8 +3113,7 @@ function renderIndividualTableView(me, teamList, p, canUpdate){
   const total=teamList.length;
   const onTarget=teamList.filter(u=>u.perf[p].actual>=u.perf[p].target).length;
   const totalActual=teamList.reduce((a,u)=>a+u.perf[p].actual,0);
-  const setTotalTarget=teamTargetFor(me,p);
-  const totalTarget=(setTotalTarget!=null)?setTotalTarget:teamList.reduce((a,u)=>a+u.perf[p].target,0);
+  const totalTarget=aggregateTargetOf(teamList,p);
   const overallPct=totalTarget>0?Math.round(totalActual/totalTarget*100):0;
   return `
     <div class="kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
@@ -3854,19 +3912,19 @@ async function refreshAfterRoleChange(){
   if(document.getElementById('page-home')?.classList.contains('active')) renderHomePerf();
 }
 
-// ── team target on a leader ─────────────────────────────────────
-function openTeamTarget(uid){
-  const u=users.find(x=>x.id===uid); if(!u) return;
-  document.getElementById('mtt-uid').value=uid;
-  document.getElementById('mtt-title').textContent=`Team Target - ${u.first} ${u.last}`;
-  const cur=effectiveTeamTargetOf(u);
-  document.getElementById('mtt-value').value=(cur!=null)?cur:'';
+// ── team target on a team ───────────────────────────────────────
+function openTeamTarget(teamId){
+  const t=teamsById[teamId]; if(!t) return;
+  document.getElementById('mtt-uid').value=teamId;
+  document.getElementById('mtt-title').textContent=`Team Target - ${t.name}`;
+  const tp=teamPerf[teamId];
+  document.getElementById('mtt-value').value=(tp&&tp.target!=null)?tp.target:'';
   const e=document.getElementById('mtt-error'); if(e){e.textContent='';e.style.display='none';}
   openBackdrop('modal-team-target');
 }
 
 async function saveTeamTarget(){
-  const uid=document.getElementById('mtt-uid').value;
+  const teamId=document.getElementById('mtt-uid').value;
   const raw=document.getElementById('mtt-value').value.trim();
   const err=document.getElementById('mtt-error');
   const fail=m=>{if(err){err.textContent=m;err.style.display='block';}};
@@ -3874,13 +3932,15 @@ async function saveTeamTarget(){
   const btn=document.getElementById('btn-save-mtt');
   btn.disabled=true;
   try{
-    const r=await callDb('set_team_target',{user_id:uid, team_target: raw===''?null:Number(raw)});
+    const r=await callDb('set_team_target',{team_id: isNaN(Number(teamId))?teamId:Number(teamId),
+      team_target: raw===''?null:Number(raw)});
     if(!r||!r.ok){
-      fail(r&&(r.error==='out_of_scope'||r.error==='forbidden')?"You can't set a team target for this person":'Could not save the team target');
+      fail(r&&(r.error==='out_of_scope'||r.error==='forbidden')?"You can't set the target for this team":'Could not save the team target');
       return;
     }
     closeModal('modal-team-target');
     showToast(raw===''?'Team target cleared':'Team target saved','success');
+    await loadTeams();
     await loadDirectory();
     await loadPerformance();
     renderPerformancePage();
@@ -4198,10 +4258,21 @@ function renderHomePerf(){
   } else {
     // TEAM widget
     // The subtree beneath this leader - the same population the team target covers.
-    const team=teamSubtreeOf(me.id);
-    const tActual=team.reduce((a,u)=>a+u.perf[p].actual,0);
-    const setTTarget=teamTargetFor(me,p);
-    const tTarget=(setTTarget!=null)?setTTarget:team.reduce((a,u)=>a+u.perf[p].target,0);
+    // One card per team this person oversees, plus their loose individuals.
+    const myTeams=teamsOverseenBy(me);
+    const loose=looseIndividualsOf(me.id);
+    const cards=myTeams.map(t=>{
+      const members=teamMembersOf(t.id);
+      return { key:t.id, name:t.name, members,
+        actual:teamActualOf(t.id,p), target:teamTargetOf(t.id,p),
+        explicit:hasTeamTarget(t.id) };
+    }).filter(c=>c.members.length||c.explicit);
+    if(loose.length) cards.push({ key:null, name:'Individuals', members:loose,
+      actual:loose.reduce((a,u)=>a+u.perf[p].actual,0),
+      target:loose.reduce((a,u)=>a+u.perf[p].target,0), explicit:false });
+    const team=[...new Map(cards.flatMap(c=>c.members).map(u=>[u.id,u])).values()];
+    const tActual=cards.reduce((a,c)=>a+c.actual,0);
+    const tTarget=cards.reduce((a,c)=>a+c.target,0);
     const tPct=tTarget>0?Math.round(tActual/tTarget*100):0;
     const tColor=pctColor(tPct);
     const onTarget=team.filter(u=>u.perf[p].actual>=u.perf[p].target).length;
@@ -4211,7 +4282,7 @@ function renderHomePerf(){
       <div class="home-perf-header">
         <div>
           <div class="home-perf-title">This Month - Team Performance</div>
-          <div class="home-perf-subtitle">${team.length} team members · ${onTarget} on or above target</div>
+          <div class="home-perf-subtitle">${cards.length} ${cards.length===1?'group':'groups'} · ${team.length} people · ${onTarget} on or above target</div>
         </div>
         <span class="home-perf-link" onclick="showPage('performance')">Full dashboard →</span>
       </div>
@@ -4230,7 +4301,7 @@ function renderHomePerf(){
         <div class="hkpi hk-orange">
           <div class="hkpi-label">On Target</div>
           <div class="hkpi-val" style="color:var(--success)">${onTarget} <span style="font-size:16px;font-weight:500;color:var(--muted)">/ ${team.length}</span></div>
-          <div class="hkpi-sub">${team.length>0?Math.round(onTarget/team.length*100):0}% of the team</div>
+          <div class="hkpi-sub">${team.length>0?Math.round(onTarget/team.length*100):0}% of the people</div>
         </div>
         <div class="hkpi hk-purple">
           <div class="hkpi-label">My Result</div>
@@ -4238,6 +4309,17 @@ function renderHomePerf(){
           <div class="hkpi-sub">Target ${fmt(me.perf[p].target)}</div>
         </div>
       </div>
+      ${cards.length?`<div class="home-kpi-grid team" style="margin-top:12px">
+        ${cards.map(c=>{
+          const cp=c.target>0?Math.round(c.actual/c.target*100):0; const cc=pctColor(cp);
+          return `<div class="hkpi ${c.key==null?'hk-purple':'hk-blue'}">
+            <div class="hkpi-label">${esc(dashFix(c.name))}</div>
+            <div class="hkpi-val" style="color:${cc};font-size:20px">${fmt(c.actual)}</div>
+            <div class="hkpi-sub">Target: ${fmt(c.target)}${c.explicit?' (team target)':''} · ${c.members.length} ${c.members.length===1?'person':'people'}</div>
+            <div class="hkpi-bar"><div class="hkpi-bar-fill" style="width:${Math.min(100,cp)}%;background:${cc}"></div></div>
+          </div>`;
+        }).join('')}
+      </div>`:''}
       <table class="home-team-table">
         ${sorted.map((u,i)=>{
           const up2=u.perf[p]; const pc=up2.target>0?Math.round(up2.actual/up2.target*100):0; const c=pctColor(pc);
@@ -5441,7 +5523,7 @@ function generateReport(){
     titleEl.textContent='Year-to-Date Report';
     metaEl.textContent='2026 · All periods';
     lastReportTitle=titleEl.textContent;
-    const rptTT=per=>{const t=teamTargetFor(me,per);return (t!=null)?t:perfUsers.reduce((a,u)=>a+u.perf[per].target,0);};
+    const rptTT=per=>aggregateTargetOf(perfUsers,per);
     const rows=[['Monthly',perfUsers.reduce((a,u)=>a+u.perf.monthly.actual,0),rptTT('monthly')],['Quarterly',perfUsers.reduce((a,u)=>a+u.perf.quarterly.actual,0),rptTT('quarterly')],['Annual',perfUsers.reduce((a,u)=>a+u.perf.annual.actual,0),rptTT('annual')]];
     lastReportData=rows.map(([l,a,t])=>({Period:l,Target:t,Actual:a,Achievement:`${t>0?Math.round(a/t*100):0}%`}));
     html+=`<div class="rpt-section"><div class="rpt-section-title">Year-to-Date - ${perfUsers.length} members</div>
