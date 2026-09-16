@@ -1970,15 +1970,24 @@ a{text-decoration:none;color:inherit}
         <div><div class="pf-label">Date & Time</div><div class="pf-value" id="meeting-view-date"></div></div>
         <div><div class="pf-label">Location</div><div class="pf-value" id="meeting-view-location"></div></div>
       </div>
+      <div class="form-group"><div class="pf-label">Organiser</div><div class="pf-value" id="meeting-view-organiser" style="font-size:13px;line-height:1.6"></div></div>
       <div class="form-group"><div class="pf-label">Attendees</div><div class="pf-value" id="meeting-view-attendees" style="font-size:13px;line-height:1.6"></div></div>
       <div class="form-group"><div class="pf-label">Description</div><div class="pf-value" id="meeting-view-notes" style="font-size:13px;color:var(--muted);line-height:1.6"></div></div>
-      <div class="form-group">
+      <div class="form-group" id="meeting-minutes-wrap">
         <label class="form-label">Meeting Minutes / Ata</label>
         <textarea class="form-textarea" id="meeting-view-minutes" placeholder="Add meeting minutes after the session..." style="min-height:120px"></textarea>
-        <div class="form-hint">Minutes are saved and visible to all attendees. Future integration with AI will auto-generate them.</div>
+        <div class="form-hint">Open minutes are readable by everyone invited. Only the organiser can write them.</div>
+      </div>
+      <div class="form-group" id="meeting-minutes-locked" style="display:none">
+        <label class="form-label">Meeting Minutes / Ata</label>
+        <div class="modal-alert alert-warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Private minutes - visible to the organiser only.</span></div>
       </div>
     </div>
-    <div class="modal-footer" style="justify-content:space-between">
+    <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;gap:8px">
+        <button class="btn-cancel" id="btn-edit-meeting" style="display:none">Edit</button>
+        <button class="btn-save danger-save" id="btn-delete-meeting" style="display:none">Delete</button>
+      </div>
       <button class="chat-action-btn btn-video" id="btn-start-call" style="font-family:'Rubik',sans-serif">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         Start Video Call
@@ -2011,6 +2020,10 @@ a{text-decoration:none;color:inherit}
       <div class="form-group">
         <label class="form-label">Attendees</label>
         <div id="nm-attendees-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px"></div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <select class="form-select" id="nm-team-select" style="flex:1"><option value="">Invite a whole team...</option></select>
+          <button class="btn-cancel" style="padding:9px 14px" onclick="inviteWholeTeam()">Invite team</button>
+        </div>
         <div style="display:flex;gap:8px">
           <select class="form-select" id="nm-attendee-select" style="flex:1">
             <option value="">Add attendee...</option>
@@ -2019,11 +2032,16 @@ a{text-decoration:none;color:inherit}
         </div>
         <div class="form-hint">Invites will be sent when Outlook integration is enabled.</div>
       </div>
+      <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px">
+        <input type="checkbox" id="nm-private" style="width:14px;height:14px;cursor:pointer">
+        Private minutes - only you will be able to read them
+      </label>
+      <div class="login-error" id="nm-error" style="margin-bottom:10px"></div>
       <div class="form-group"><label class="form-label">Description</label><textarea class="form-textarea" id="nm-notes" placeholder="Meeting agenda and notes..."></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal('modal-new-meeting')">Cancel</button>
-      <button class="btn-save" onclick="saveNewMeeting()">Create Meeting</button>
+      <button class="btn-save" id="btn-save-meeting" onclick="saveNewMeeting()">Save Meeting</button>
     </div>
   </div>
 </div>
@@ -2943,7 +2961,7 @@ function showPage(name){
   if(name==='team-profiles') renderTeamProfiles();
   if(name==='home') (async()=>{ await loadPerformance(); renderHomePerf(); })();
   if(name==='comms') renderCommsPage();
-  if(name==='calendar') renderCalendar();
+  if(name==='calendar') refreshCalendar();
   if(name==='orgchart') renderOrgChart();
   if(name==='reports') renderReportsPage();
   // Sync mobile nav highlight
@@ -5207,18 +5225,58 @@ function startGroupCall(groupName){
 // ═══════════════════════════════════════════════════
 // CALENDAR SYSTEM
 // ═══════════════════════════════════════════════════
-let calYear=2026, calMonth=4; // May 2026 (0-indexed)
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
 let calView='month';
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// Seed meetings data
-let meetings=[];  // no meetings backend yet - starts empty
-let nextMeetingId=8;
+// Meetings live in Supabase; this is the loaded month.
+let meetings=[];
 let calNewMeetingAttendees=[];
+let editingMeetingId=null;
+let loadingMeetings=false;
 
-function calNav(dir){calMonth+=dir;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
-function calToday(){calYear=2026;calMonth=4;renderCalendar();}
+// The server speaks meeting_date / meeting_time; the calendar speaks date / time.
+function mapMeeting(m){
+  return {
+    id:m.id, title:m.title||'', date:m.meeting_date||'', time:(m.meeting_time||'').slice(0,5),
+    duration:Number(m.duration)||60, type:m.type==='call'?'call':'meeting',
+    location:m.location||'', notes:m.notes||'',
+    attendees:Array.isArray(m.attendees)?m.attendees:[],
+    created_by:m.created_by,
+    minutes_private:!!m.minutes_private,
+    can_edit:!!m.can_edit,
+    minutes_visible:!!m.minutes_visible,
+    minutes_editable:!!m.minutes_editable,
+    has_minutes:!!m.has_minutes,
+    // absent entirely when the caller may not see it
+    minutes: Object.prototype.hasOwnProperty.call(m,'minutes') ? (m.minutes||'') : undefined
+  };
+}
+
+async function loadMeetings(){
+  loadingMeetings=true;
+  const r=await callDb('list_meetings',{ year:calYear, month:calMonth+1 });
+  meetings=(((r&&r.meetings)||[])).map(mapMeeting);
+  loadingMeetings=false;
+}
+
+async function refreshCalendar(){
+  await loadMeetings();
+  renderCalendar();
+}
+
+function calNav(dir){
+  calMonth+=dir;
+  if(calMonth<0){calMonth=11;calYear--;}
+  if(calMonth>11){calMonth=0;calYear++;}
+  refreshCalendar();
+}
+function calToday(){
+  const now=new Date();
+  calYear=now.getFullYear(); calMonth=now.getMonth();
+  refreshCalendar();
+}
 function setCalView(v,btn){calView=v;document.querySelectorAll('.cal-view-tab').forEach(t=>t.classList.remove('active'));if(btn)btn.classList.add('active');renderCalendar();}
 
 function renderCalendar(){
@@ -5230,9 +5288,8 @@ function renderCalendar(){
   renderCalMinutes();
 }
 
-function getMyMeetings(){
-  return meetings.filter(m=>m.attendees.includes(currentUserId));
-}
+// list_meetings already returns only what this person may see.
+function getMyMeetings(){ return meetings; }
 
 function renderMonthView(){
   const main=document.getElementById('cal-main');
@@ -5252,7 +5309,7 @@ function renderMonthView(){
     const dayMeetings=getMyMeetings().filter(m=>m.date===dateStr);
     html+=`<div class="cal-cell ${isToday?'today':''}" onclick="calDayClick('${dateStr}')">
       <div class="cal-cell-num">${day}</div>
-      ${dayMeetings.slice(0,2).map(m=>`<div class="cal-event-chip ce-${m.type}" onclick="event.stopPropagation();viewMeeting(${m.id})">${m.time} ${m.title}</div>`).join('')}
+      ${dayMeetings.slice(0,2).map(m=>`<div class="cal-event-chip ce-${m.type}" onclick="event.stopPropagation();viewMeeting('${esc(m.id)}')">${esc(m.time)} ${esc(dashFix(m.title))}</div>`).join('')}
       ${dayMeetings.length>2?`<div style="font-size:10px;color:var(--muted);padding:1px 4px">+${dayMeetings.length-2} more</div>`:''}
     </div>`;
   }
@@ -5266,7 +5323,7 @@ function renderMonthView(){
 
 function renderWeekView(){
   const main=document.getElementById('cal-main');
-  const today=new Date(2026,4,2); // today in demo
+  const today=new Date();
   const startOfWeek=new Date(today);
   startOfWeek.setDate(today.getDate()-today.getDay());
   let html='<div class="cal-grid">';
@@ -5281,7 +5338,7 @@ function renderWeekView(){
     const dayMeetings=getMyMeetings().filter(m=>m.date===dateStr);
     const isToday=d.getDate()===today.getDate()&&d.getMonth()===today.getMonth();
     html+=`<div class="cal-cell ${isToday?'today':''}" style="min-height:120px">
-      ${dayMeetings.map(m=>`<div class="cal-event-chip ce-${m.type}" onclick="viewMeeting(${m.id})">${m.time}<br>${m.title}</div>`).join('')}
+      ${dayMeetings.map(m=>`<div class="cal-event-chip ce-${m.type}" onclick="viewMeeting('${esc(m.id)}')">${esc(m.time)}<br>${esc(dashFix(m.title))}</div>`).join('')}
     </div>`;
   });
   html+='</div>';
@@ -5301,13 +5358,13 @@ function renderAgendaView(){
       <div class="agenda-date-header">${label}</div>
       ${evts.map(m=>{
         const attendeeUsers=m.attendees.map(id=>users.find(u=>u.id===id)).filter(Boolean);
-        return `<div class="agenda-event" onclick="viewMeeting(${m.id})">
+        return `<div class="agenda-event" onclick="viewMeeting('${esc(m.id)}')">
           <div class="ae-time">${m.time}</div>
           <div class="ae-dot" style="background:${m.type==='meeting'?'var(--blue)':'var(--success)'}"></div>
           <div>
-            <div class="ae-title">${m.title}</div>
+            <div class="ae-title">${esc(dashFix(m.title))}</div>
             <div class="ae-sub">${m.duration} min · ${m.location||'No location'} · ${attendeeUsers.length} attendees</div>
-            ${m.minutes?'<div style="font-size:11px;color:var(--success);font-weight:600;margin-top:3px">✓ Minutes saved</div>':''}
+            ${m.has_minutes?'<div style="font-size:11px;color:var(--success);font-weight:600;margin-top:3px">✓ Minutes saved</div>':''}
           </div>
         </div>`;
       }).join('')}
@@ -5326,7 +5383,7 @@ function renderCalUpcoming(){
     return `<div class="cal-upcoming-item">
       <div class="cui-dot" style="background:${m.type==='meeting'?'var(--blue)':'var(--success)'}"></div>
       <div>
-        <div class="cui-title">${m.title}</div>
+        <div class="cui-title">${esc(dashFix(m.title))}</div>
         <div class="cui-meta">${label} · ${m.time} · ${m.duration}m</div>
       </div>
     </div>`;
@@ -5335,62 +5392,138 @@ function renderCalUpcoming(){
 
 function renderCalMinutes(){
   const el=document.getElementById('cal-minutes-list');if(!el)return;
-  const withMinutes=meetings.filter(m=>m.minutes&&m.attendees.includes(currentUserId));
-  el.innerHTML=withMinutes.length?withMinutes.map(m=>`<div class="cal-minute-item" onclick="viewMeeting(${m.id})">
-    <div class="cmi-title">${m.title}</div>
-    <div class="cmi-date">${m.date} · ${m.time}</div>
+  const withMinutes=meetings.filter(m=>m.has_minutes&&m.minutes_visible);
+  el.innerHTML=withMinutes.length?withMinutes.map(m=>`<div class="cal-minute-item" onclick="viewMeeting('${esc(m.id)}')">
+    <div class="cmi-title">${esc(dashFix(m.title))}</div>
+    <div class="cmi-date">${esc(m.date)} · ${esc(m.time)}</div>
   </div>`).join(''):'<div style="font-size:12.5px;color:var(--muted);padding:4px 0">No minutes saved yet.</div>';
 }
 
 function calDayClick(dateStr){openNewMeeting(dateStr);}
 
 function viewMeeting(id){
-  const m=meetings.find(x=>x.id===id);if(!m)return;
-  const attendeeNames=m.attendees.map(uid=>{const u=users.find(x=>x.id===uid);return u?u.first+' '+u.last:'?';}).join(', ');
-  const canEdit=canUpdatePerf(); // supervisors+ can edit meetings
+  const m=meetings.find(x=>String(x.id)===String(id));if(!m)return;
+  const attendeeNames=m.attendees.map(uid=>{const u=users.find(x=>x.id===uid);return u?u.first+' '+u.last:'Unknown';}).join(', ');
+  const organiser=users.find(u=>u.id===m.created_by);
   document.getElementById('modal-meeting-title').textContent=m.title;
   document.getElementById('meeting-view-date').textContent=`${m.date} at ${m.time} (${m.duration} min)`;
   document.getElementById('meeting-view-location').textContent=m.location||'No location';
-  document.getElementById('meeting-view-attendees').textContent=attendeeNames;
+  document.getElementById('meeting-view-attendees').textContent=attendeeNames||'No attendees';
   document.getElementById('meeting-view-notes').textContent=m.notes||'No description.';
-  document.getElementById('meeting-view-minutes').value=m.minutes||'';
-  document.getElementById('meeting-view-minutes').readOnly=!canEdit;
-  document.getElementById('btn-save-minutes').style.display=canEdit?'block':'none';
+  const org=document.getElementById('meeting-view-organiser');
+  if(org) org.textContent=(organiser?organiser.first+' '+organiser.last:'Unknown')+(m.minutes_private?' · minutes are private':'');
+
+  // Minutes: shown only when the server said this caller may read them,
+  // editable only for the organiser.
+  const ta=document.getElementById('meeting-view-minutes');
+  const wrap=document.getElementById('meeting-minutes-wrap');
+  const locked=document.getElementById('meeting-minutes-locked');
+  if(m.minutes_visible){
+    if(wrap) wrap.style.display='';
+    if(locked) locked.style.display='none';
+    ta.value=m.minutes||'';
+    ta.readOnly=!m.minutes_editable;
+    ta.placeholder=m.minutes_editable?'Add meeting minutes after the session...':'No minutes yet.';
+  } else {
+    if(wrap) wrap.style.display='none';
+    if(locked) locked.style.display='';
+  }
+  document.getElementById('btn-save-minutes').style.display=m.minutes_editable?'':'none';
+  const editBtn=document.getElementById('btn-edit-meeting');
+  const delBtn=document.getElementById('btn-delete-meeting');
+  if(editBtn) editBtn.style.display=m.can_edit?'':'none';
+  if(delBtn) delBtn.style.display=m.can_edit?'':'none';
+  if(editBtn) editBtn.onclick=()=>openEditMeeting(m.id);
+  if(delBtn) delBtn.onclick=()=>deleteMeeting(m.id);
+
   document.getElementById('btn-start-call').onclick=()=>{
-    const other=m.attendees.find(id=>id!==currentUserId);
+    const other=m.attendees.find(uid=>uid!==currentUserId);
     closeModal('modal-meeting');
     if(other) startCall(other,'video'); else showToast('No one else on this meeting to call.','warning');
   };
-  document.getElementById('btn-save-minutes').onclick=()=>{
-    m.minutes=document.getElementById('meeting-view-minutes').value;
-    closeModal('modal-meeting');renderCalendar();
+  document.getElementById('btn-save-minutes').onclick=async()=>{
+    const r=await callDb('save_minutes',{ id:m.id, minutes:ta.value });
+    if(!r||!r.ok){ showToast(MEETING_ERRORS[r&&r.error]||'Could not save the minutes','error'); return; }
+    closeModal('modal-meeting');
+    await refreshCalendar();
     showToast('Meeting minutes saved.','success');
   };
   openBackdrop('modal-meeting');
 }
 
 function openNewMeeting(prefillDate=''){
+  editingMeetingId=null;
   calNewMeetingAttendees=[currentUserId];
+  document.querySelector('#modal-new-meeting .modal-title').textContent='New Meeting';
   document.getElementById('nm-title').value='';
-  document.getElementById('nm-date').value=prefillDate||`2026-${String(calMonth+1).padStart(2,'0')}-01`;
+  document.getElementById('nm-date').value=prefillDate||`${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
   document.getElementById('nm-time').value='10:00';
   document.getElementById('nm-duration').value='60';
   document.getElementById('nm-location').value='Google Meet';
   document.getElementById('nm-notes').value='';
-  // Populate attendee select
-  const sel=document.getElementById('nm-attendee-select');
-  sel.innerHTML='<option value="">Add attendee...</option>'+
-    users.filter(u=>u.id!==currentUserId).map(u=>`<option value="${u.id}">${u.first} ${u.last} - ${displayRole(u)}</option>`).join('');
+  document.getElementById('nm-private').checked=false;
+  fillMeetingPickers();
   renderNmAttendees();
+  clearNmError();
   openBackdrop('modal-new-meeting');
 }
+
+function openEditMeeting(id){
+  const m=meetings.find(x=>String(x.id)===String(id));
+  if(!m) return;
+  if(!m.can_edit){ showToast("Only the organiser can edit this meeting.",'warning'); return; }
+  editingMeetingId=m.id;
+  calNewMeetingAttendees=[...new Set([m.created_by, ...m.attendees])];
+  document.querySelector('#modal-new-meeting .modal-title').textContent='Edit Meeting';
+  document.getElementById('nm-title').value=m.title;
+  document.getElementById('nm-date').value=m.date;
+  document.getElementById('nm-time').value=m.time;
+  document.getElementById('nm-duration').value=m.duration;
+  document.getElementById('nm-location').value=m.location;
+  document.getElementById('nm-notes').value=m.notes;
+  document.getElementById('nm-private').checked=!!m.minutes_private;
+  fillMeetingPickers();
+  renderNmAttendees();
+  clearNmError();
+  closeModal('modal-meeting');
+  openBackdrop('modal-new-meeting');
+}
+
+function fillMeetingPickers(){
+  const sel=document.getElementById('nm-attendee-select');
+  sel.innerHTML='<option value="">Add attendee...</option>'+
+    users.filter(u=>u.id!==currentUserId)
+         .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} - ${esc(displayRole(u))}</option>`).join('');
+  const tsel=document.getElementById('nm-team-select');
+  if(tsel) tsel.innerHTML='<option value="">Invite a whole team...</option>'+
+    activeTeams().map(t=>`<option value="${esc(t.id)}">${esc(dashFix(t.name))}</option>`).join('');
+}
+
+// Expanding a team is done here rather than server-side - the directory is
+// already loaded, so it costs no round trip.
+function inviteWholeTeam(){
+  const tsel=document.getElementById('nm-team-select');
+  if(!tsel||!tsel.value){ showToast('Pick a team first.','error'); return; }
+  const members=users.filter(u=>String(u.team_id)===String(tsel.value));
+  if(!members.length){ showToast('That team has no members yet.','warning'); return; }
+  let added=0;
+  members.forEach(u=>{ if(!calNewMeetingAttendees.includes(u.id)){ calNewMeetingAttendees.push(u.id); added++; } });
+  renderNmAttendees();
+  const team=teamsById[tsel.value];
+  showToast(added?`${added} added from ${team?team.name:'the team'}`:'Everyone on that team is already invited','success');
+  tsel.value='';
+}
+
+function showNmError(m){const e=document.getElementById('nm-error');if(e){e.textContent=m;e.style.display='block';}}
+function clearNmError(){const e=document.getElementById('nm-error');if(e){e.textContent='';e.style.display='none';}}
 
 function renderNmAttendees(){
   const el=document.getElementById('nm-attendees-tags');if(!el)return;
   el.innerHTML=calNewMeetingAttendees.map(id=>{
     const u=users.find(x=>x.id===id);if(!u)return'';
-    return `<span class="attendee-tag" onclick="removeAttendee('${id}')" title="Remove">${u.first} ✕</span>`;
-  }).join('');
+    const organiser=id===currentUserId||(editingMeetingId&&id===(meetings.find(x=>String(x.id)===String(editingMeetingId))||{}).created_by);
+    return `<span class="attendee-tag" ${organiser?'':`onclick="removeAttendee('${esc(id)}')"`} title="${organiser?'Organiser':'Remove'}">${esc(u.first)}${organiser?'':' ✕'}</span>`;
+  }).join('')||'<span style="font-size:12px;color:var(--muted)">No attendees yet.</span>';
 }
 
 function addAttendee(){
@@ -5405,18 +5538,59 @@ function removeAttendee(id){
   renderNmAttendees();
 }
 
-function saveNewMeeting(){
+const MEETING_ERRORS={
+  out_of_scope:'Only the organiser can change this meeting',
+  forbidden:'Only the organiser can change this meeting',
+  missing_title:'Give the meeting a title',
+  bad_date:'Pick a valid date',
+  nothing_to_update:'Nothing to save'
+};
+
+async function saveNewMeeting(){
   const title=document.getElementById('nm-title').value.trim();
   const date=document.getElementById('nm-date').value;
-  const time=document.getElementById('nm-time').value;
+  const time=document.getElementById('nm-time').value||'09:00';
   const duration=parseInt(document.getElementById('nm-duration').value)||60;
   const location=document.getElementById('nm-location').value.trim();
   const notes=document.getElementById('nm-notes').value.trim();
-  if(!title||!date){showToast('Please fill in title and date.','error');return;}
-  meetings.push({id:nextMeetingId++,title,date,time,duration,type:'meeting',attendees:[...calNewMeetingAttendees],notes,minutes:'',location});
-  closeModal('modal-new-meeting');
-  renderCalendar();
-  showToast('Meeting created and invites sent.','success');
+  const minutes_private=document.getElementById('nm-private').checked;
+  clearNmError();
+  if(!title){showNmError('Give the meeting a title');return;}
+  if(!date){showNmError('Pick a valid date');return;}
+  const btn=document.getElementById('btn-save-meeting');
+  if(btn) btn.disabled=true;
+  try{
+    let r;
+    if(editingMeetingId){
+      r=await callDb('update_meeting',{ id:editingMeetingId, title, meeting_date:date, meeting_time:time,
+        duration, type:'meeting', location, notes, minutes_private });
+      if(r&&r.ok){
+        const ar=await callDb('set_attendees',{ id:editingMeetingId, attendee_ids:calNewMeetingAttendees });
+        if(!ar||!ar.ok) showToast('Meeting saved, but the attendee list did not update.','warning');
+      }
+    } else {
+      r=await callDb('create_meeting',{ title, meeting_date:date, meeting_time:time, duration,
+        type:'meeting', location, notes, minutes_private, attendee_ids:calNewMeetingAttendees });
+    }
+    if(!r||!r.ok){ showNmError(MEETING_ERRORS[r&&r.error]||'Could not save this meeting'); return; }
+    const wasEdit=!!editingMeetingId;
+    editingMeetingId=null;
+    closeModal('modal-new-meeting');
+    // Jump to the month the meeting actually lives in, or it appears to vanish.
+    const [yy,mm]=date.split('-').map(Number);
+    if(yy&&mm){ calYear=yy; calMonth=mm-1; }
+    await refreshCalendar();
+    showToast(wasEdit?'Meeting updated':'Meeting created and invites sent.','success');
+  } finally { if(btn) btn.disabled=false; }
+}
+
+async function deleteMeeting(id){
+  if(!confirm('Delete this meeting? Everyone invited loses it from their calendar.')) return;
+  const r=await callDb('delete_meeting',{ id });
+  if(!r||!r.ok){ showToast(MEETING_ERRORS[r&&r.error]||'Could not delete this meeting','error'); return; }
+  closeModal('modal-meeting');
+  await refreshCalendar();
+  showToast('Meeting deleted','warning');
 }
 
 // ═══════════════════════════════════════════════════

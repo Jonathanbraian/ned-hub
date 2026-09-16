@@ -112,6 +112,36 @@ async function gatesFor(me, tgt){
     doc: chefia
   };
 }
+// ── meetings ────────────────────────────────────────────────────
+const MEETING_EDITABLE = ['title','meeting_date','meeting_time','duration','type','location','notes','minutes_private'];
+// The organiser runs their own meeting; a director can step in.
+function canManageMeeting(me, meeting){
+  return meeting.created_by === me.id || me.role === 'director';
+}
+// A meeting's attendee ids, creator always included.
+async function attendeeIdsOf(meetingId, createdBy){
+  const { data } = await admin.from('meeting_attendees').select('user_id').eq('meeting_id', meetingId);
+  const ids = (data||[]).map(a=>a.user_id);
+  if(createdBy && !ids.includes(createdBy)) ids.unshift(createdBy);
+  return ids;
+}
+// Built field by field so private minutes can never ride along in the payload.
+function meetingForCaller(m, attendees, me){
+  const isCreator = m.created_by === me.id;
+  const isAttendee = attendees.includes(me.id);
+  const minutesVisible = m.minutes_private ? isCreator : (isCreator || isAttendee);
+  const out = {
+    id: m.id, title: m.title, meeting_date: m.meeting_date, meeting_time: m.meeting_time,
+    duration: m.duration, type: m.type, location: m.location, notes: m.notes,
+    minutes_private: !!m.minutes_private, created_by: m.created_by, attendees,
+    can_edit: canManageMeeting(me, m),
+    minutes_visible: minutesVisible,
+    minutes_editable: isCreator,
+    has_minutes: !!(m.minutes && String(m.minutes).trim())
+  };
+  if(minutesVisible) out.minutes = m.minutes || '';
+  return out;
+}
 const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Other'];
 function safeFileName(n){
   return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
@@ -792,6 +822,118 @@ exports.handler = async (event) => {
         if(row.file_url) await admin.storage.from('documents').remove([row.file_url]);
         const { error } = await admin.from('user_documents').delete().eq('id',p.doc_id);
         if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'list_meetings': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const now = new Date();
+        const year = Number(p.year) || now.getFullYear();
+        const month = Number(p.month) || (now.getMonth()+1);
+        if(!(month>=1 && month<=12) || !(year>=2000 && year<=2100)) return json(400,{error:'bad_input'});
+        const from = year + '-' + String(month).padStart(2,'0') + '-01';
+        const lastDay = new Date(year, month, 0).getDate();
+        const to = year + '-' + String(month).padStart(2,'0') + '-' + String(lastDay).padStart(2,'0');
+
+        const { data: mine } = await admin.from('meeting_attendees').select('meeting_id').eq('user_id', me.id);
+        const attendingIds = [...new Set((mine||[]).map(a=>a.meeting_id))];
+        const { data: rows, error } = await admin.from('meetings')
+          .select('*').gte('meeting_date', from).lte('meeting_date', to);
+        if(error) return json(500,{error:'list_failed', detail:error.message});
+        const visible = (rows||[]).filter(m => m.created_by === me.id || attendingIds.includes(m.id));
+        const out = [];
+        for(const m of visible){
+          out.push(meetingForCaller(m, await attendeeIdsOf(m.id, m.created_by), me));
+        }
+        out.sort((a,b)=> String(a.meeting_date).localeCompare(String(b.meeting_date))
+                      || String(a.meeting_time||'').localeCompare(String(b.meeting_time||'')));
+        return json(200,{ year, month, meetings: out });
+      }
+      case 'create_meeting': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const title = (p.title||'').toString().trim();
+        const meeting_date = (p.meeting_date||'').toString().trim();
+        if(!title) return json(400,{error:'missing_title'});
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(meeting_date)) return json(400,{error:'bad_date'});
+        const duration = Number(p.duration);
+        const { data, error } = await admin.from('meetings').insert({
+          title, meeting_date,
+          meeting_time: (p.meeting_time||'09:00').toString(),
+          duration: (Number.isFinite(duration) && duration > 0) ? duration : 60,
+          type: (p.type === 'call') ? 'call' : 'meeting',
+          location: (p.location||'').toString(),
+          notes: (p.notes||'').toString(),
+          minutes: '',
+          minutes_private: !!p.minutes_private,
+          created_by: me.id,
+          created_at: new Date().toISOString()
+        }).select('id').single();
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        const id = data && data.id;
+        const ids = [...new Set([me.id, ...(Array.isArray(p.attendee_ids) ? p.attendee_ids : [])])];
+        const { error: aErr } = await admin.from('meeting_attendees')
+          .insert(ids.map(uid=>({ meeting_id:id, user_id:uid })));
+        if(aErr){
+          await admin.from('meetings').delete().eq('id', id);
+          return json(500,{error:'attendees_failed', detail:aErr.message});
+        }
+        return json(200,{ ok:true, id });
+      }
+      case 'update_meeting': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: m } = await admin.from('meetings').select('id,created_by').eq('id',p.id).single();
+        if(!m) return json(404,{error:'not_found'});
+        if(!canManageMeeting(me, m)) return json(403,{error:'out_of_scope'});
+        const patch = {};
+        MEETING_EDITABLE.forEach(k=>{
+          if(!Object.prototype.hasOwnProperty.call(p, k)) return;
+          if(k === 'duration'){ const n = Number(p[k]); if(Number.isFinite(n) && n > 0) patch[k] = n; return; }
+          if(k === 'minutes_private'){ patch[k] = !!p[k]; return; }
+          if(k === 'type'){ patch[k] = (p[k] === 'call') ? 'call' : 'meeting'; return; }
+          patch[k] = (p[k]===null||p[k]===undefined) ? null : String(p[k]).trim();
+        });
+        if(patch.title !== undefined && patch.title === '') return json(400,{error:'missing_title'});
+        if(patch.meeting_date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(patch.meeting_date)) return json(400,{error:'bad_date'});
+        if(!Object.keys(patch).length) return json(400,{error:'nothing_to_update'});
+        const { error } = await admin.from('meetings').update(patch).eq('id',p.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, updated:Object.keys(patch) });
+      }
+      case 'delete_meeting': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: m } = await admin.from('meetings').select('id,created_by').eq('id',p.id).single();
+        if(!m) return json(404,{error:'not_found'});
+        if(!canManageMeeting(me, m)) return json(403,{error:'out_of_scope'});
+        await admin.from('meeting_attendees').delete().eq('meeting_id',p.id);
+        const { error } = await admin.from('meetings').delete().eq('id',p.id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'set_attendees': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: m } = await admin.from('meetings').select('id,created_by').eq('id',p.id).single();
+        if(!m) return json(404,{error:'not_found'});
+        if(!canManageMeeting(me, m)) return json(403,{error:'out_of_scope'});
+        // The organiser always stays on their own meeting.
+        const ids = [...new Set([m.created_by, ...(Array.isArray(p.attendee_ids) ? p.attendee_ids : [])])];
+        await admin.from('meeting_attendees').delete().eq('meeting_id',p.id);
+        const { error } = await admin.from('meeting_attendees')
+          .insert(ids.map(uid=>({ meeting_id:p.id, user_id:uid })));
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, attendees:ids });
+      }
+      case 'save_minutes': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: m } = await admin.from('meetings').select('id,created_by').eq('id',p.id).single();
+        if(!m) return json(404,{error:'not_found'});
+        // Writing minutes is the organiser's alone, private or not.
+        if(m.created_by !== me.id) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('meetings')
+          .update({ minutes: (p.minutes||'').toString() }).eq('id',p.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
         return json(200,{ ok:true });
       }
       default: return json(400, { error:'unknown_action' });
