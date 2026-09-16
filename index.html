@@ -2084,15 +2084,30 @@ a{text-decoration:none;color:inherit}
     <div class="modal-header"><div class="modal-title" id="uperf-title">Update Performance Results</div><button class="modal-close" onclick="closeModal('modal-update-perf')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="modal-body">
       <input type="hidden" id="uperf-uid">
-      <input type="hidden" id="uperf-period">
-      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Enter the actual sales value in EUR. Only supervisors, managers and directors can update results. The employee will see this reflected immediately in their performance dashboard.</span></div>
+      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Results are entered one month at a time. Quarterly and annual figures are added up from the months, so they are not editable. Only supervisors, managers and directors can update results.</span></div>
+      <div class="modal-row">
+        <div class="form-group"><label class="form-label">Month</label>
+          <select class="form-select" id="uperf-month" onchange="prefillUperf()">
+            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Year</label><input class="form-input" type="number" id="uperf-year" min="2000" max="2100" step="1" onchange="prefillUperf()"></div>
+      </div>
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Target (€)</label><input class="form-input" type="number" id="uperf-target" placeholder="0" min="0" step="500"></div>
         <div class="form-group"><label class="form-label">Actual Result (€)</label><input class="form-input" type="number" id="uperf-actual" placeholder="0" min="0" step="100"></div>
       </div>
       <div class="form-group"><label class="form-label">Notes (optional)</label><textarea class="form-textarea" id="uperf-notes" placeholder="Any context about this result..." style="min-height:60px"></textarea></div>
+      <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="uperf-set-base" style="width:14px;height:14px;cursor:pointer">
+        Also set as this person's base monthly target
+      </label>
+      <div class="login-error" id="uperf-error" style="margin-top:10px;margin-bottom:0"></div>
     </div>
-    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-update-perf')">Cancel</button><button class="btn-save mgr-save" onclick="savePerformanceUpdate()">Update Results</button></div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-update-perf')">Cancel</button><button class="btn-save mgr-save" id="btn-save-uperf" onclick="savePerformanceUpdate()">Update Results</button></div>
   </div>
 </div>
 
@@ -2217,6 +2232,7 @@ function mapProfileToUser(u){
     campus:u.campus, team:d(u.team), phone:u.phone||'', instagram:u.instagram||'',
     nationality:d(u.nationality)||'', language:d(u.language)||'', jobTitle:d(u.job_title)||'',
     status:u.status, reports_to:u.reports_to||null, photo:u.photo||'', bio:d(u.bio)||'',
+    monthly_target: (u.monthly_target!=null)?Number(u.monthly_target):null,
     perf: mkPerf(u.role, 0), certs:[], certDates:[], appraisals:[], documents:[]
   };
 }
@@ -2224,6 +2240,51 @@ function mapProfileToUser(u){
 async function loadDirectory(){
   const r = await callDb('get_directory');
   users = ((r && r.directory) || []).map(mapProfileToUser);
+}
+
+// ── REAL MONTHLY PERFORMANCE ────────────────────────────────────
+// sales_results holds one row per person per month. Quarterly and annual
+// figures are summed from those months, never stored.
+let perfYear = new Date().getFullYear();
+
+function effectiveTargetOf(u, eff){
+  if(eff && eff[u.id]!=null) return Number(eff[u.id]);
+  if(u.monthly_target!=null) return Number(u.monthly_target);
+  return ROLE_TARGETS[u.role]||0;
+}
+
+async function loadPerformance(){
+  const r = await callDb('get_performance', { year: perfYear });
+  const eff = (r&&r.effective_targets)||{};
+  const byUser = {};
+  ((r&&r.results)||[]).forEach(row=>{
+    (byUser[row.user_id] ||= {})[row.month] =
+      { target:Number(row.target), actual:Number(row.actual), notes:row.notes||'' };
+  });
+  const now=new Date(), M=(perfYear===now.getFullYear())?now.getMonth()+1:12, qs=Math.floor((M-1)/3)*3+1;
+  users.forEach(u=>{
+    const eT = effectiveTargetOf(u, eff);
+    const mm = byUser[u.id]||{};
+    const tOf=m=>(mm[m]?mm[m].target:eT), aOf=m=>(mm[m]?mm[m].actual:0);
+    let qt=0,qa=0; for(let m=qs;m<qs+3;m++){qt+=tOf(m);qa+=aOf(m);}
+    let at=0,aa=0; for(let m=1;m<=12;m++){at+=tOf(m);aa+=aOf(m);}
+    u.perf = {
+      monthly:  {target:tOf(M), actual:aOf(M), notes:(mm[M]&&mm[M].notes)||''},
+      quarterly:{target:qt, actual:qa, notes:''},
+      annual:   {target:at, actual:aa, notes:''}
+    };
+    u._months = mm; u._effTarget = eT; u._perfMonth = M;
+  });
+}
+
+// UI-only mirror of the gateway's inScope; the server still decides.
+function canUpdateFor(target){
+  const me = users.find(u=>u.id===currentUserId);
+  if(!me || !target || !canUpdatePerf()) return false;
+  if(me.role==='director') return true;
+  if(me.role==='manager') return target.role!=='director';
+  if(me.role==='supervisor') return target.reports_to===me.id || target.id===me.id;
+  return false;
 }
 
 // Avatar colours used to key off a numeric id; ids are UUIDs now.
@@ -2363,6 +2424,7 @@ function completeLogin(uid){
 // Load the real staff directory, then start the app as the signed-in person.
 async function completeLoginReal(profile){
   await loadDirectory();
+  await loadPerformance();
   currentUserId = profile.id; currentRole = profile.role;
   let me = users.find(x => x.id === profile.id);
   if(!me){ me = mapProfileToUser(profile); users.push(me); }
@@ -2533,9 +2595,9 @@ function showPage(name){
     else { renderUsers(); updateStats(); }
   }
   if(name==='my-profile') renderMyProfile();
-  if(name==='performance') renderPerformancePage();
+  if(name==='performance') (async()=>{ await loadPerformance(); renderPerformancePage(); })();
   if(name==='team-profiles') renderTeamProfiles();
-  if(name==='home') renderHomePerf();
+  if(name==='home') (async()=>{ await loadPerformance(); renderHomePerf(); })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') renderCalendar();
   if(name==='orgchart') renderOrgChart();
@@ -2569,6 +2631,12 @@ function switchPerfView(mode, btn){
   renderPerformancePage();
 }
 
+// Quarterly and annual figures are summed from the monthly rows.
+const PERIOD_NOTE={
+  quarterly:' Quarterly figures are added up from this quarter\'s months.',
+  annual:' Annual figures are added up from the whole year\'s months.'
+};
+
 function renderPerformancePage(){
   const me=users.find(u=>u.id===currentUserId);
   const p=currentPerfPeriod;
@@ -2590,7 +2658,7 @@ function renderPerformancePage(){
 
   // Individual roles — always show own perf
   if(['agent','specialist','executive','leader'].includes(me.role)){
-    document.getElementById('perf-page-desc').textContent='Your individual sales results against targets set by your manager.';
+    document.getElementById('perf-page-desc').textContent='Your individual sales results against targets set by your manager.'+(PERIOD_NOTE[p]||'');
     container.innerHTML=renderIndividualPerf(me,p);
     return;
   }
@@ -2600,21 +2668,21 @@ function renderPerformancePage(){
 
   // --- VIEW: FULL TEAM ---
   if(perfViewMode==='team'){
-    document.getElementById('perf-page-desc').textContent='Combined performance across your entire team.';
+    document.getElementById('perf-page-desc').textContent='Combined performance across your entire team.'+(PERIOD_NOTE[p]||'');
     container.innerHTML=renderFullTeamView(me, teamList, p, canUpdate);
     return;
   }
 
   // --- VIEW: BY CAMPUS ---
   if(perfViewMode==='campus'){
-    document.getElementById('perf-page-desc').textContent='Performance broken down by campus.';
+    document.getElementById('perf-page-desc').textContent='Performance broken down by campus.'+(PERIOD_NOTE[p]||'');
     container.innerHTML=renderByCampusView(me, teamList, p, canUpdate);
     return;
   }
 
   // --- VIEW: BY TEAM ---
   if(perfViewMode==='byteam'){
-    document.getElementById('perf-page-desc').textContent='Performance broken down by team within each campus.';
+    document.getElementById('perf-page-desc').textContent='Performance broken down by team within each campus.'+(PERIOD_NOTE[p]||'');
     const campF=document.getElementById('perf-filter-campus')?.value||'';
     const teamF=document.getElementById('perf-filter-team')?.value||'';
     const roleF=document.getElementById('perf-filter-role')?.value||'';
@@ -2627,7 +2695,7 @@ function renderPerformancePage(){
 
   // --- VIEW: INDIVIDUAL ---
   if(perfViewMode==='individual'){
-    document.getElementById('perf-page-desc').textContent='Individual results for each team member.';
+    document.getElementById('perf-page-desc').textContent='Individual results for each team member.'+(PERIOD_NOTE[p]||'');
     const campF=document.getElementById('perf-filter-campus')?.value||'';
     const teamF=document.getElementById('perf-filter-team')?.value||'';
     const roleF=document.getElementById('perf-filter-role')?.value||'';
@@ -2773,7 +2841,7 @@ function renderTeamTable(teamList, p, canUpdate){
       <td><span class="campus-chip">${CAMPUS_LABELS[u.campus]||u.campus}</span></td>
       <td class="right"><div class="eur-val">${fmt(up.actual)}</div><div class="eur-target">target ${fmt(up.target)}</div></td>
       <td style="min-width:140px"><div class="mini-bar-wrap"><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div><span class="pct-badge ${pctBadgeClass(pct)}">${pct}%</span></div></td>
-      <td class="right">${canUpdate?`<button class="update-btn" onclick="openUpdatePerf('${u.id}','${p}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Update</button>`:''}</td>
+      <td class="right">${(canUpdate&&p==='monthly'&&canUpdateFor(u))?`<button class="update-btn" onclick="openUpdatePerf('${u.id}')"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Update</button>`:''}</td>
     </tr>`;
   }).join('');
   return `<div class="team-perf-table-wrap">
@@ -2817,29 +2885,83 @@ function renderIndividualPerf(u, p){
     </div>`;
 }
 
-// Update perf modal
-function openUpdatePerf(uid, period){
+// Update perf modal - always writes one specific month
+const MONTH_NAMES=['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+
+function openUpdatePerf(uid){
   const u=users.find(x=>x.id===uid); if(!u) return;
+  const now=new Date();
   document.getElementById('uperf-uid').value=uid;
-  document.getElementById('uperf-period').value=period;
-  document.getElementById('uperf-title').textContent=`Update ${period.charAt(0).toUpperCase()+period.slice(1)} - ${u.first} ${u.last}`;
-  document.getElementById('uperf-target').value=u.perf[period].target;
-  document.getElementById('uperf-actual').value=u.perf[period].actual;
-  document.getElementById('uperf-notes').value=u.perf[period].notes||'';
+  document.getElementById('uperf-month').value=String(u._perfMonth||now.getMonth()+1);
+  document.getElementById('uperf-year').value=String(perfYear);
+  document.getElementById('uperf-set-base').checked=false;
+  document.getElementById('uperf-title').textContent=`Update Results - ${u.first} ${u.last}`;
+  clearUperfError();
+  prefillUperf();
   openBackdrop('modal-update-perf');
 }
 
-function savePerformanceUpdate(){
+// Fill target/actual/notes from the stored row for the chosen month, or fall
+// back to the person's effective target with a blank result.
+function prefillUperf(){
+  const u=users.find(x=>x.id===document.getElementById('uperf-uid').value);
+  if(!u) return;
+  const month=Number(document.getElementById('uperf-month').value);
+  const year=Number(document.getElementById('uperf-year').value);
+  const row=(year===perfYear && u._months) ? u._months[month] : null;
+  document.getElementById('uperf-target').value=row?row.target:(u._effTarget!=null?u._effTarget:effectiveTargetOf(u));
+  document.getElementById('uperf-actual').value=row?row.actual:'';
+  document.getElementById('uperf-notes').value=row?(row.notes||''):'';
+}
+
+function showUperfError(msg){
+  const e=document.getElementById('uperf-error');
+  if(e){e.textContent=msg;e.style.display='block';}
+}
+function clearUperfError(){
+  const e=document.getElementById('uperf-error');
+  if(e){e.textContent='';e.style.display='none';}
+}
+const SET_RESULT_ERRORS={
+  out_of_scope:"You can't update this person",
+  forbidden:"You can't update this person",
+  bad_numbers:'Enter valid amounts',
+  bad_input:'Pick a valid month and year',
+  not_found:'That person no longer exists'
+};
+
+async function savePerformanceUpdate(){
   const uid=document.getElementById('uperf-uid').value;
-  const period=document.getElementById('uperf-period').value;
-  const target=parseInt(document.getElementById('uperf-target').value)||0;
-  const actual=parseInt(document.getElementById('uperf-actual').value)||0;
-  const notes=document.getElementById('uperf-notes').value.trim();
   const u=users.find(x=>x.id===uid); if(!u) return;
-  u.perf[period]={target,actual,notes};
-  closeModal('modal-update-perf');
-  renderPerformancePage();
-  showToast(`${u.first} ${u.last}'s ${period} results updated.`,'success');
+  const month=Number(document.getElementById('uperf-month').value);
+  const year=Number(document.getElementById('uperf-year').value);
+  const targetRaw=document.getElementById('uperf-target').value;
+  const actualRaw=document.getElementById('uperf-actual').value;
+  const target=Number(targetRaw), actual=Number(actualRaw);
+  const notes=document.getElementById('uperf-notes').value.trim();
+  const setBase=document.getElementById('uperf-set-base').checked;
+  clearUperfError();
+  if(targetRaw===''||actualRaw===''||!(target>=0)||!(actual>=0)){ showUperfError('Enter valid amounts'); return; }
+  if(!(year>=2000&&year<=2100)){ showUperfError('Pick a valid month and year'); return; }
+  const btn=document.getElementById('btn-save-uperf');
+  if(btn) btn.disabled=true;
+  try{
+    const r=await callDb('set_result',{user_id:uid,year,month,target,actual,notes,set_base_target:setBase});
+    if(!r||!r.ok){ showUperfError(SET_RESULT_ERRORS[r&&r.error]||'Could not save this result'); return; }
+    closeModal('modal-update-perf');
+    // The page only loads perfYear, so say so rather than appear to do nothing.
+    showToast(year===perfYear ? 'Result saved'
+      : `Result saved for ${MONTH_NAMES[month-1]} ${year}. The dashboard is showing ${perfYear}.`,
+      year===perfYear?'success':'warning');
+    await loadPerformance();
+    renderPerformancePage();
+    if(document.getElementById('page-home')?.classList.contains('active')) renderHomePerf();
+  } catch(e){
+    showUperfError('Could not save this result');
+  } finally {
+    if(btn) btn.disabled=false;
+  }
 }
 
 // ═══════════════════════════════════════
@@ -2896,7 +3018,7 @@ function buildProfileHTML(u,isMyProfile){
 
   const editBtn=canEdit?`<button class="btn-action" onclick="openEditProfile('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Profile</button>`:'';
   const addDocBtn=canDoc?`<button class="btn-action secondary" onclick="openAddDoc('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Document</button>`:'';
-  const updatePerfBtn=(canUpdatePerf()&&u.id!==currentUserId)?`<button class="btn-action secondary" onclick="openUpdatePerf('${u.id}','monthly')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Update Performance</button>`:'';
+  const updatePerfBtn=(canUpdateFor(u)&&u.id!==currentUserId)?`<button class="btn-action secondary" onclick="openUpdatePerf('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Update Performance</button>`:'';
   const backBtn=!isMyProfile?`<button class="btn-action secondary" onclick="showPage('team-profiles')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Back</button>`:'';
 
   return `
@@ -3498,8 +3620,8 @@ function renderHomePerf(){
         <div class="hkpi hk-purple">
           <div class="hkpi-label">Annual Target</div>
           <div class="hkpi-val" style="color:var(--manager);font-size:20px">${fmt(me.perf.annual.target)}</div>
-          <div class="hkpi-sub">${Math.round(me.perf.annual.actual/me.perf.annual.target*100)}% YTD</div>
-          <div class="hkpi-bar"><div class="hkpi-bar-fill" style="width:${Math.min(100,Math.round(me.perf.annual.actual/me.perf.annual.target*100))}%;background:var(--manager)"></div></div>
+          <div class="hkpi-sub">${me.perf.annual.target>0?Math.round(me.perf.annual.actual/me.perf.annual.target*100):0}% YTD</div>
+          <div class="hkpi-bar"><div class="hkpi-bar-fill" style="width:${me.perf.annual.target>0?Math.min(100,Math.round(me.perf.annual.actual/me.perf.annual.target*100)):0}%;background:var(--manager)"></div></div>
         </div>
       </div>`;
   } else {
