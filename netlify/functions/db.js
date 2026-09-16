@@ -42,6 +42,20 @@ function validCampus(v){
   const c = String(v).toLowerCase();
   return ['dublin','limerick','both'].includes(c) ? c : false;
 }
+// Teams a caller can see figures for: leadership sees all, a supervisor or
+// leader sees the teams they lead plus the teams their people sit on.
+function accessibleTeamIds(me, allTeams, allProfs){
+  if(me.role==='director' || me.role==='manager') return allTeams.map(t=>t.id);
+  if(me.role==='supervisor' || me.role==='leader'){
+    const mine = new Set();
+    allTeams.forEach(t => { if(t.leader_id === me.id) mine.add(t.id); });
+    allProfs.forEach(u => {
+      if(u.team_id!=null && (u.reports_to === me.id || u.id === me.id)) mine.add(u.team_id);
+    });
+    return [...mine];
+  }
+  return [];
+}
 async function accessibleIds(me){
   const { data: all } = await admin.from('profiles').select('id,role,reports_to');
   if(me.role==='director') return all.map(u=>u.id);
@@ -77,7 +91,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_target,team_id')
+          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -178,25 +192,58 @@ exports.handler = async (event) => {
           .select('user_id,year,month,target,actual,notes').eq('year',year).in('user_id',ids);
         if(error) return json(500,{error:'perf_failed'});
         const { data: profs } = await admin.from('profiles')
-          .select('id,role,role_id,monthly_target,team_target').in('id',ids);
+          .select('id,role,role_id,monthly_target').in('id',ids);
         const { data: roleRows } = await admin.from('roles')
-          .select('id,base_level,individual_target,team_target');
+          .select('id,base_level,individual_target');
         const byRole = {}; (roleRows||[]).forEach(r=>{ byRole[r.id]=r; });
-        // One resolver, server-side:
-        //   individual = monthly_target ?? cargo.individual_target ?? ROLE_TARGETS[base] ?? 0
-        //   team       = team_target    ?? cargo.team_target       ?? (absent)
-        const eff = {}, effTeam = {};
+        // Individual ladder, unchanged:
+        //   monthly_target ?? cargo.individual_target ?? ROLE_TARGETS[base] ?? 0
+        const eff = {};
         (profs||[]).forEach(u=>{
           const cargo = (u.role_id!=null) ? byRole[u.role_id] : null;
           eff[u.id] = (u.monthly_target!=null) ? Number(u.monthly_target)
             : (cargo && cargo.individual_target!=null) ? Number(cargo.individual_target)
             : (ROLE_TARGETS[u.role]||0);
-          const tt = (u.team_target!=null) ? Number(u.team_target)
-            : (cargo && cargo.team_target!=null) ? Number(cargo.team_target)
-            : null;
-          if(tt!=null) effTeam[u.id] = tt;
         });
-        return json(200,{ year, results: rows||[], effective_targets: eff, effective_team_targets: effTeam });
+
+        // ── per-team figures ──────────────────────────────────────
+        // Target lives on the team; actual is the sum over its members.
+        const { data: allTeams } = await admin.from('teams')
+          .select('id,name,leader_id,campus,team_target,active');
+        const { data: allProfs } = await admin.from('profiles').select('id,team_id,reports_to');
+        const teamIds = accessibleTeamIds(me, allTeams||[], allProfs||[]);
+        const memberIds = (allProfs||[])
+          .filter(u => u.team_id!=null && teamIds.includes(u.team_id)).map(u => u.id);
+        // Team actuals need every member's rows, even ones outside the caller's
+        // per-person scope; the per-user payload below stays scoped to `ids`.
+        const extra = memberIds.filter(id => !ids.includes(id));
+        let teamRows = rows || [];
+        if(extra.length){
+          const { data: more } = await admin.from('sales_results')
+            .select('user_id,year,month,target,actual').eq('year',year).in('user_id',extra);
+          teamRows = teamRows.concat(more||[]);
+        }
+        const now = new Date();
+        const M = (year === now.getFullYear()) ? now.getMonth()+1 : 12;
+        const qs = Math.floor((M-1)/3)*3+1;
+        const teamOf = {}; (allProfs||[]).forEach(u => { teamOf[u.id] = u.team_id; });
+        const sums = {};
+        teamIds.forEach(id => { sums[id] = { monthly:0, quarterly:0, annual:0 }; });
+        teamRows.forEach(r => {
+          const tid = teamOf[r.user_id];
+          if(tid==null || !sums[tid]) return;
+          const a = Number(r.actual)||0;
+          if(r.month === M) sums[tid].monthly += a;
+          if(r.month >= qs && r.month < qs+3) sums[tid].quarterly += a;
+          sums[tid].annual += a;
+        });
+        const team_perf = (allTeams||[]).filter(t => teamIds.includes(t.id)).map(t => ({
+          team_id: t.id, name: t.name, leader_id: t.leader_id, campus: t.campus,
+          target: (t.team_target!=null) ? Number(t.team_target) : null,
+          actual: sums[t.id] || { monthly:0, quarterly:0, annual:0 }
+        }));
+
+        return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf });
       }
       case 'set_result': {
         const me = await callerProfile(caller);
@@ -305,15 +352,16 @@ exports.handler = async (event) => {
       }
       case 'set_team_target': {
         const me = await callerProfile(caller);
-        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
-        const uid = p.user_id;
-        if(!uid) return json(400,{error:'missing_id'});
+        if(!me) return json(403,{error:'forbidden'});
+        const teamId = p.team_id;
+        if(!teamId) return json(400,{error:'missing_id'});
         const team_target = numOrNull(p.team_target);
         if(team_target===false) return json(400,{error:'bad_number'});
-        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
-        if(!tgt) return json(404,{error:'not_found'});
-        if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
-        const { error } = await admin.from('profiles').update({ team_target }).eq('id',uid);
+        const { data: team } = await admin.from('teams').select('id,leader_id').eq('id',teamId).single();
+        if(!team) return json(404,{error:'not_found'});
+        // Managers and directors, or the team's own leader.
+        if(!isMgr(me.role) && team.leader_id !== me.id) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('teams').update({ team_target }).eq('id',teamId);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
       }
