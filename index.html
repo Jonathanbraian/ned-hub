@@ -35,7 +35,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300">
 <title>NED Sales Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -630,41 +630,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .chat-panel-thread-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;flex-shrink:0;min-height:42px;display:flex;align-items:center}
 .chat-panel-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0}
 
-/* ════════ CALL OVERLAY ════════ */
-.call-overlay{
-  position:fixed;inset:0;z-index:600;
-  background:rgba(10,15,40,.92);backdrop-filter:blur(8px);
-  display:none;align-items:center;justify-content:center;
-}
-.call-overlay.active{display:flex;animation:fadeIn .2s ease}
-.call-card{
-  background:linear-gradient(160deg,#1a1f4e,#0d1235);
-  border:1px solid rgba(255,255,255,.1);
-  border-radius:20px;padding:36px 32px;
-  width:100%;max-width:420px;
-  display:flex;flex-direction:column;align-items:center;
-  gap:14px;text-align:center;color:#fff;
-  box-shadow:0 32px 80px rgba(0,0,0,.5);
-}
-.call-avatar-wrap{width:80px;height:80px;border-radius:50%;border:3px solid rgba(255,255,255,.2);overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff}
-.call-avatar-wrap img{width:100%;height:100%;object-fit:cover}
-.call-name{font-size:22px;font-weight:700;letter-spacing:-.3px}
-.call-status{font-size:13px;color:rgba(255,255,255,.55)}
-.call-timer{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;color:#9CFFAC;letter-spacing:1px}
-.call-video-area{width:100%;height:160px;background:rgba(0,0,0,.4);border-radius:12px;border:1px solid rgba(255,255,255,.1);overflow:hidden;position:relative;display:flex;align-items:center;justify-content:center}
-.call-video-self{position:absolute;bottom:10px;right:10px;width:80px;height:60px;background:rgba(0,0,0,.5);border-radius:8px;border:1px solid rgba(255,255,255,.15);display:flex;flex-direction:column;align-items:center;justify-content:center}
-.call-transcript-wrap{width:100%;background:rgba(0,0,0,.3);border-radius:10px;padding:12px;text-align:left;max-height:120px;overflow-y:auto}
-.call-transcript-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:6px}
-.call-transcript{font-size:12.5px;color:rgba(255,255,255,.8);line-height:1.6}
-.call-controls{display:flex;gap:12px;align-items:center;margin-top:8px}
-.call-btn{width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
-.call-btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4)}
-.call-btn.active-btn{background:rgba(0,50,255,.4);border-color:var(--blue)}
-.call-btn-end{background:#DC2626!important;border-color:#DC2626!important}
-.call-btn-end:hover{background:#B91C1C!important}
-.call-btn-transcript{background:rgba(156,255,172,.1);border-color:rgba(156,255,172,.3)}
-.call-btn-transcript.active-btn{background:rgba(156,255,172,.25)}
-
 /* ════════ CALENDAR ════════ */
 .cal-wrap{max-width:1200px;margin:0 auto;padding:24px 36px}
 .cal-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
@@ -787,7 +752,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
   .chat-panel{width:100%}
   .chat-panel-contacts{display:none}
   .cal-grid .cal-cell{min-height:52px;padding:4px}
-  .call-card{margin:16px;border-radius:16px}
   .mgr-cards{grid-template-columns:1fr 1fr}
 }
 @media(max-width:380px){
@@ -1112,12 +1076,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .contact-info{flex:1;min-width:0}
 .contact-name{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .contact-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.contact-actions{display:flex;gap:4px;opacity:0;transition:opacity .12s}
-.comms-contact:hover .contact-actions{opacity:1}
-.ca-btn{width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .12s;flex-shrink:0}
-.ca-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--light-blue)}
-.ca-btn.ca-video:hover{border-color:var(--teal);color:var(--teal);background:rgba(0,167,181,.08)}
-.ca-btn.ca-call:hover{border-color:var(--success);color:var(--success);background:var(--success-bg)}
 .comms-group-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:10px 10px 5px}
 
 /* Chat area */
@@ -2010,7 +1968,10 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span style="font-size:14px;font-weight:700">Team Chat</span>
     </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="modal-close" title="Open full chat" onclick="openFullChat()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
     <button class="modal-close" onclick="toggleChatPanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
   </div>
   <div class="chat-panel-body">
     <!-- Left: contact list -->
@@ -2033,43 +1994,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
   </div>
 </div>
 <div id="chat-panel-backdrop" class="chat-panel-backdrop" onclick="toggleChatPanel()"></div>
-
-<!-- CALL OVERLAY -->
-<div id="call-overlay" class="call-overlay">
-  <div class="call-card">
-    <div class="call-avatar-wrap" id="call-avatar-wrap"></div>
-    <div class="call-name" id="call-name">Calling...</div>
-    <div class="call-status" id="call-status">Connecting...</div>
-    <div class="call-timer" id="call-timer" style="display:none">00:00</div>
-    <!-- Video area -->
-    <div class="call-video-area" id="call-video-area" style="display:none">
-      <div class="call-video-self" id="call-video-self">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-        <span style="font-size:11px;color:rgba(255,255,255,.6);margin-top:4px">Your camera</span>
-      </div>
-    </div>
-    <!-- Transcript -->
-    <div class="call-transcript-wrap" id="call-transcript-wrap" style="display:none">
-      <div class="call-transcript-label">Live Transcript</div>
-      <div class="call-transcript" id="call-transcript"></div>
-    </div>
-    <!-- Controls -->
-    <div class="call-controls">
-      <button class="call-btn" id="btn-mute" onclick="toggleMute()" title="Mute">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-      </button>
-      <button class="call-btn" id="btn-cam" onclick="toggleCamera()" title="Camera" style="display:none">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-      </button>
-      <button class="call-btn call-btn-transcript" onclick="toggleTranscript()" title="Transcript">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      </button>
-      <button class="call-btn call-btn-end" onclick="endCall()" title="End call">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.42 19.42 0 0 1 4.7 13.6 19.79 19.79 0 0 1 1.61 5a2 2 0 0 1 2-2.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
-      </button>
-    </div>
-  </div>
-</div>
 
 <!-- CALENDAR PAGE (inside #app) -->
 
@@ -2107,10 +2031,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
         <button class="btn-cancel" id="btn-edit-meeting" style="display:none">Edit</button>
         <button class="btn-save danger-save" id="btn-delete-meeting" style="display:none">Delete</button>
       </div>
-      <button class="chat-action-btn btn-video" id="btn-start-call" style="font-family:'Rubik',sans-serif">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-        Start Video Call
-      </button>
+      
       <div style="display:flex;gap:8px">
         <button class="btn-cancel" onclick="closeModal('modal-meeting')">Close</button>
         <button class="btn-save" id="btn-save-minutes">Save Minutes</button>
@@ -2472,6 +2393,21 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 const SUPABASE_URL = 'https://acwgfgsctgmuepeofdkj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjd2dmZ3NjdGdtdWVwZW9mZGtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1NDg3NTQsImV4cCI6MjEwNTEyNDc1NH0.KHVCNbr_C9064aWCF25wNymhvTA1qljK41MSv966lbk';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Realtime authorizes with whatever token the socket carries. Without this it
+// carries the anon key, RLS matches nothing, and postgres_changes deliver
+// silently nothing. Re-run it on every token refresh or the socket is dropped
+// roughly an hour after login.
+async function attachRealtimeAuth(){
+  try {
+    const { data:{ session } } = await sb.auth.getSession();
+    await sb.realtime.setAuth(session ? session.access_token : null);
+    return !!session;
+  } catch(e){ return false; }
+}
+sb.auth.onAuthStateChange((_event, session) => {
+  try { sb.realtime.setAuth(session ? session.access_token : null); } catch(e){}
+});
 
 async function callDb(action, payload = {}) {
   const { data:{ session } } = await sb.auth.getSession();
@@ -3006,6 +2942,7 @@ async function completeLoginReal(profile){
   if(!me){ me = mapProfileToUser(profile); users.push(me); }
   callDb('update_last_login');
   startApp(me);
+  startChat();          // realtime auth + subscribe + first thread load
 }
 
 function startApp(user){
@@ -3028,6 +2965,7 @@ function startApp(user){
     {id:'trainings',  label:'Trainings'},
     {id:'materials',  label:'Materials'},
     {id:'tools',      label:'Tools'},
+    {id:'comms',      label:'Team Chat'},
     {id:'mgr-handbook', label:'Sales Handbook'},
   ];
 
@@ -3148,6 +3086,10 @@ function updateNavAvatar(user){
 
 async function doLogout(){
   leaveVideoCall();
+  unsubscribeChat();
+  chatThreads=[]; Object.keys(chatMessages).forEach(k=>delete chatMessages[k]);
+  Object.keys(CHAT_SURFACES).forEach(k=>{ CHAT_SURFACES[k].open=null; });
+  updateChatBadge();
   await sb.auth.signOut();
   currentRole=null;currentUserId=null;pendingLoginProfile=null;
   document.getElementById('app').style.display='none';
@@ -5028,281 +4970,404 @@ function renderHomePerf(){
 }
 
 // ═══════════════════════════════════════════════════
-// COMMS SYSTEM
+// CHAT — one core, two surfaces
 // ═══════════════════════════════════════════════════
-// Presence states (simulated)
-const PRESENCE = {};
-// Simulated messages per thread (key: threadId)
-const MESSAGES = {};
-let currentThreadId = null;
-let myStatus = 'online';
+// Threads and messages live in Supabase. The browser READS them directly under
+// RLS (is_thread_member) and over realtime; every WRITE goes through db.js,
+// where the sender is the resolved caller rather than a claim we trust.
+//
+// The full page (#page-comms) and the slide-in panel (#chat-panel) are the same
+// engine pointed at different container ids - see CHAT_SURFACES below.
 
-// Status colors
-const STATUS_COLORS = {online:'var(--status-online)', away:'var(--status-away)', busy:'var(--status-busy)', offline:'var(--status-offline)'};
-const STATUS_LABELS = {online:'Online', away:'Away', busy:'Busy', offline:'Offline'};
+let chatThreads = [];            // from get_threads
+const chatMessages = {};         // thread_id -> [{id, sender_id, body, created_at}]
+let chatChannel = null;
+let chatLoading = false;
 
-function initPresence(){
-  // No presence backend yet: only our own status is real, everyone else reads
-  // as offline through the ||'offline' fallbacks.
-  PRESENCE[currentUserId]=myStatus;
+const CHAT_SURFACES = {
+  page: {
+    open: null,
+    list:  'comms-contact-list',
+    msgs:  'comms-messages',
+    input: 'comms-msg-input',
+    full:  true,
+  },
+  panel: {
+    open: null,
+    list:  'chat-panel-contacts',
+    msgs:  'cp-messages',
+    input: 'cp-msg-input',
+    full:  false,
+  },
+};
+
+const CHAT_ERRORS = {
+  forbidden:     'You are not a member of that conversation',
+  not_found:     'That conversation no longer exists',
+  empty_body:    'Type a message first',
+  body_too_long: 'That message is too long',
+  no_self_dm:    'You cannot message yourself',
+  missing_target:'Pick a conversation first',
+  send_failed:   'Could not send that message',
+};
+
+function threadById(id){ return chatThreads.find(t => String(t.id) === String(id)) || null; }
+
+// ── time formatting ──────────────────────────────────────────────
+function chatTime(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function chatDayKey(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+// Real separators from created_at, not the literal string 'Today' the demo used.
+function chatDayLabel(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  const today = new Date();
+  const y = new Date(); y.setDate(y.getDate()-1);
+  if(chatDayKey(iso) === chatDayKey(today.toISOString())) return 'Today';
+  if(chatDayKey(iso) === chatDayKey(y.toISOString())) return 'Yesterday';
+  return d.toLocaleDateString('en-IE',{ day:'numeric', month:'short', year:
+    d.getFullYear()===today.getFullYear() ? undefined : 'numeric' });
+}
+function chatPreview(t){
+  if(!t.last_message) return t.kind === 'group' ? 'No messages yet' : displayRole(users.find(u=>u.id===(t.other&&t.other.id))||{}) || 'No messages yet';
+  const who = t.kind === 'group' ? dashFix(t.last_message.sender_first || '?') + ': ' : '';
+  return who + dashFix(t.last_message.body);
 }
 
-function buildThreadId(uid1, uid2){
-  return 'dm_'+[String(uid1),String(uid2)].sort().join('_');
+// ── loading ──────────────────────────────────────────────────────
+async function loadThreads(){
+  if(chatLoading) return chatThreads;
+  chatLoading = true;
+  try {
+    const r = await callDb('get_threads');
+    chatThreads = (r && r.threads) || [];
+  } finally { chatLoading = false; }
+  chatThreads.sort((a,b) => {
+    const at = a.last_message ? a.last_message.created_at : '';
+    const bt = b.last_message ? b.last_message.created_at : '';
+    if(at !== bt) return String(bt).localeCompare(String(at));
+    if(a.kind !== b.kind) return a.kind === 'group' ? -1 : 1;
+    return String(a.name).localeCompare(String(b.name));
+  });
+  renderAllThreadLists();
+  updateChatBadge();
+  return chatThreads;
 }
 
-function getGroupThreadId(group){
-  return 'grp_'+group.replace(/\s+/g,'_');
+async function loadMessages(threadId){
+  const r = await callDb('get_messages', { thread_id: threadId });
+  if(!r || r.error){ return null; }
+  chatMessages[threadId] = r.messages || [];
+  return chatMessages[threadId];
 }
 
-// Seed some demo messages
-function initMessages(){
-  // No messages backend yet: threads start empty and fill as they are used.
+// ── rendering: thread list ───────────────────────────────────────
+function renderAllThreadLists(){
+  Object.keys(CHAT_SURFACES).forEach(renderThreadList);
 }
 
-function changeMyStatus(val){
-  myStatus=val;
-  PRESENCE[currentUserId]=val;
-  const dot=document.getElementById('my-status-dot');
-  if(dot){dot.style.background=STATUS_COLORS[val]||'var(--status-offline)';}
-  renderCommsContactList();
-}
+function renderThreadList(sk){
+  const sur = CHAT_SURFACES[sk];
+  const el = document.getElementById(sur.list);
+  if(!el) return;
+  const compact = !sur.full;
+  const groups = chatThreads.filter(t => t.kind === 'group');
+  const dms    = chatThreads.filter(t => t.kind === 'dm');
+  const filter = (sur.filter || '').toLowerCase();
+  const match = t => !filter || String(t.name).toLowerCase().includes(filter);
 
-function renderCommsPage(){
-  initPresence();
-  initMessages();
-  renderCommsContactList();
-  // Auto-open team group if leader+, else first DM
-  const me=users.find(u=>u.id===currentUserId);
-  const isLeader=['supervisor','manager','director','leader'].includes(me.role);
-  if(isLeader){
-    openGroupThread(teamNameOf(me)||'All');
-  } else {
-    const team=getTeamForUser(currentUserId);
-    // Find supervisor/leader
-    const sup=users.find(u=>u.id===me.reports_to);
-    if(sup) openDMThread(sup.id);
-    else if(team.length>0) openDMThread(team[0].id);
-  }
-}
-
-function renderCommsContactList(filter=''){
-  const me=users.find(u=>u.id===currentUserId);
-  const list=document.getElementById('comms-contact-list');
-  if(!list) return;
-  let html='';
-
-  // GROUP CHATS — only for leaders+
-  const isLeader=['supervisor','manager','director','leader'].includes(me.role);
-  if(isLeader){
-    html+='<div class="comms-group-label">Group Chats</div>';
-    // Build group list from team
-    const myTeam=getTeamForUser(currentUserId);
-    const groups=[...new Set(myTeam.map(u=>teamNameOf(u)).filter(Boolean))];
-    const myTeamName=teamNameOf(me);
-    if(myTeamName&&!groups.includes(myTeamName)) groups.unshift(myTeamName);
-    // Also add "All Team" for manager/director
-    if(['manager','director'].includes(me.role)) groups.unshift('All Team');
-    groups.forEach(grp=>{
-      const grpId=getGroupThreadId(grp);
-      const memberCount=myTeam.filter(u=>teamNameOf(u)===grp||grp==='All Team').length;
-      const lastMsg=MESSAGES[grpId]?.slice(-1)[0];
-      const active=currentThreadId===grpId?'active':'';
-      html+=`<div class="comms-contact ${active}" onclick="openGroupThread('${grp}')">
-        <div class="contact-avatar ua-purple" style="font-size:11px;border-radius:9px">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        </div>
-        <div class="contact-info">
-          <div class="contact-name">${grp}</div>
-          <div class="contact-preview">${lastMsg?(users.find(u=>u.id===lastMsg.uid)?.first||'?')+': '+lastMsg.text:memberCount+' members'}</div>
-        </div>
+  const row = t => {
+    const active = String(sur.open) === String(t.id) ? 'active' : '';
+    const unread = t.unread > 0
+      ? `<span class="unread-badge">${t.unread > 99 ? '99+' : t.unread}</span>` : '';
+    let avatar;
+    if(t.kind === 'group'){
+      avatar = `<div class="contact-avatar ua-purple" style="${compact?'width:30px;height:30px;border-radius:7px;font-size:10px':'font-size:11px;border-radius:9px'}">
+        <svg width="${compact?13:16}" height="${compact?13:16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       </div>`;
-    });
-  }
-
-  // DIRECT MESSAGES — everyone can talk to everyone
-  html+='<div class="comms-group-label">Direct Messages</div>';
-  const contacts=users.filter(u=>u.id!==currentUserId);
-
-  // Sort: online first, then by name
-  const sorted=[...contacts].sort((a,b)=>{
-    const pa=PRESENCE[a.id]||'offline'; const pb=PRESENCE[b.id]||'offline';
-    const order={online:0,away:1,busy:2,offline:3};
-    if(order[pa]!==order[pb]) return order[pa]-order[pb];
-    return a.first.localeCompare(b.first);
-  });
-
-  sorted.filter(u=>u&&(!filter||((u.first+' '+u.last).toLowerCase().includes(filter.toLowerCase())))).forEach(u=>{
-    const dmId=buildThreadId(currentUserId,u.id);
-    const presence=PRESENCE[u.id]||'offline';
-    const lastMsg=MESSAGES[dmId]?.slice(-1)[0];
-    const active=currentThreadId===dmId?'active':'';
-    const av=u.photo?`<img src="${u.photo}" alt="">`:`${getInitials(u)}`;
-    html+=`<div class="comms-contact ${active}" onclick="openDMThread('${u.id}')">
-      <div class="contact-avatar ${u.photo?'':avColor(u.id)}" style="position:relative">
-        ${av}
-        <span class="contact-status-dot cs-${presence}"></span>
-      </div>
+    } else {
+      const o = t.other || { id:'', first:'?', last:'', photo:'' };
+      const inner = o.photo ? `<img src="${esc(o.photo)}" alt="">` : esc(getInitials(o));
+      avatar = `<div class="contact-avatar ${o.photo?'':avColor(o.id)}" style="${compact?'width:30px;height:30px;font-size:11px;':''}position:relative">${inner}</div>`;
+    }
+    return `<div class="comms-contact ${active}" ${compact?'style="padding:7px 8px"':''} onclick="openThread('${sk}','${esc(t.id)}')">
+      ${avatar}
       <div class="contact-info">
-        <div class="contact-name">${u.first} ${u.last}${u.nickname?' ('+u.nickname+')':''}</div>
-        <div class="contact-preview">${lastMsg?lastMsg.text:displayRole(u)}</div>
+        <div class="contact-name" ${compact?'style="font-size:12px"':''}>${esc(dashFix(t.name))}</div>
+        ${compact?'':`<div class="contact-preview">${esc(chatPreview(t))}</div>`}
       </div>
-      <div class="contact-actions">
-        <button class="ca-btn ca-call" title="Call" onclick="event.stopPropagation();startCall(${u.id},'audio')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.22h3a2 2 0 0 1 2 1.72c.128.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91A16 16 0 0 0 14 16l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.572 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        </button>
-        <button class="ca-btn ca-video" title="Video call" onclick="event.stopPropagation();startCall(${u.id},'video')">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-        </button>
-      </div>
+      ${unread}
     </div>`;
-  });
+  };
 
-  list.innerHTML=html;
+  let html = '';
+  const gs = groups.filter(match), ds = dms.filter(match);
+  if(gs.length) html += `<div class="comms-group-label"${compact?' style="font-size:9px"':''}>Team Chats</div>` + gs.map(row).join('');
+  if(ds.length) html += `<div class="comms-group-label"${compact?' style="font-size:9px"':''}>Direct Messages</div>` + ds.map(row).join('');
+  if(!html) html = `<div style="padding:16px;font-size:12.5px;color:var(--muted)">No conversations yet.</div>`;
+  el.innerHTML = html;
 }
 
+// The full page has a search box; the panel does not.
 function filterCommsContacts(val){
-  renderCommsContactList(val);
+  CHAT_SURFACES.page.filter = val || '';
+  renderThreadList('page');
 }
 
-function openGroupThread(groupName){
-  const me=users.find(u=>u.id===currentUserId);
-  const grpId=getGroupThreadId(groupName);
-  currentThreadId=grpId;
-  if(!MESSAGES[grpId]) MESSAGES[grpId]=[];
-
-  // Header
-  const myTeam=getTeamForUser(currentUserId);
-  const count=myTeam.filter(u=>teamNameOf(u)===groupName||groupName==='All Team').length;
-  document.getElementById('chat-header-avatar').className='chat-header-avatar ua-purple';
-  document.getElementById('chat-header-avatar').innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
-  document.getElementById('chat-header-name').innerHTML=`${groupName} <span class="group-badge">${count+1} members</span>`;
-  document.getElementById('chat-header-sub').textContent='Group conversation';
-  document.getElementById('chat-header-actions').innerHTML=`
-    <button class="chat-action-btn btn-video" onclick="startGroupCall('${groupName}')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-      Group Call
-    </button>`;
-
-  renderMessages(grpId, true);
-  renderCommsContactList();
-}
-
-function openDMThread(targetId){
-  const target=users.find(u=>u.id===targetId);
-  if(!target) return;
-  const dmId=buildThreadId(currentUserId, targetId);
-  currentThreadId=dmId;
-  if(!MESSAGES[dmId]) MESSAGES[dmId]=[];
-  const presence=PRESENCE[targetId]||'offline';
-  const av=target.photo?`<img src="${target.photo}" alt="">`:`${getInitials(target)}`;
-
-  document.getElementById('chat-header-avatar').className='chat-header-avatar '+(target.photo?'':avColor(target.id));
-  document.getElementById('chat-header-avatar').innerHTML=av;
-  document.getElementById('chat-header-name').textContent=target.first+' '+target.last;
-  document.getElementById('chat-header-sub').innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${STATUS_COLORS[presence]};display:inline-block"></span>${STATUS_LABELS[presence]} · ${displayRole(target)}</span>`;
-  document.getElementById('chat-header-actions').innerHTML=`
-    <button class="chat-action-btn btn-wa" onclick="openWhatsApp('${targetId}')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-      WhatsApp
-    </button>
-    <button class="chat-action-btn btn-call" onclick="startCall('${targetId}','audio')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.22h3a2 2 0 0 1 2 1.72c.128.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91A16 16 0 0 0 14 16l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.572 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-      Call
-    </button>
-    <button class="chat-action-btn btn-video" onclick="startCall('${targetId}','video')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-      Video
-    </button>`;
-
-  renderMessages(dmId, false);
-  renderCommsContactList();
-}
-
-function renderMessages(threadId, isGroup){
-  const msgs=MESSAGES[threadId]||[];
-  const container=document.getElementById('comms-messages');
-  if(!msgs.length){
-    container.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted)"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span style="font-size:13px">No messages yet. Say hello!</span></div>';
+// ── rendering: one thread ────────────────────────────────────────
+function renderThread(sk){
+  const sur = CHAT_SURFACES[sk];
+  const el = document.getElementById(sur.msgs);
+  if(!el) return;
+  const t = threadById(sur.open);
+  const msgs = (sur.open && chatMessages[sur.open]) || [];
+  if(!t){
+    el.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">Select a conversation</div>`;
     return;
   }
-  let lastDate='';
-  container.innerHTML=msgs.map(msg=>{
-    const sender=users.find(u=>u.id===msg.uid)||{first:'?',last:'',id:0};
-    const isOwn=msg.uid===currentUserId;
-    const av=sender.photo?`<img src="${sender.photo}" alt="">`:`${getInitials(sender)}`;
-    let dateSep='';
-    if(msg.date&&msg.date!==lastDate){dateSep=`<div class="msg-date-sep">${msg.date}</div>`;lastDate=msg.date;}
-    return `${dateSep}<div class="msg-row ${isOwn?'own':''}">
-      <div class="msg-avatar ${sender.photo?'':avColor(sender.id)}">${av}</div>
+  if(!msgs.length){
+    el.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted)"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span style="font-size:13px">No messages yet. Say hello!</span></div>`;
+    return;
+  }
+  const compact = !sur.full;
+  const isGroup = t.kind === 'group';
+  let lastDay = '';
+  el.innerHTML = msgs.map(m => {
+    const sender = users.find(u => u.id === m.sender_id) || { first:'?', last:'', id:'', photo:'' };
+    const isOwn = m.sender_id === currentUserId;
+    const av = sender.photo ? `<img src="${esc(sender.photo)}" alt="">` : esc(getInitials(sender));
+    let sep = '';
+    const day = chatDayKey(m.created_at);
+    if(day && day !== lastDay){ sep = `<div class="msg-date-sep">${esc(chatDayLabel(m.created_at))}</div>`; lastDay = day; }
+    // Bodies are other people's input: every one of them goes through esc().
+    return `${sep}<div class="msg-row ${isOwn?'own':''}">
+      <div class="msg-avatar ${sender.photo?'':avColor(sender.id)}"${compact?' style="width:24px;height:24px;font-size:10px"':''}>${av}</div>
       <div>
-        ${!isOwn&&isGroup?`<div class="msg-name">${sender.first}</div>`:''}
-        <div class="msg-bubble ${isOwn?'own':'other'}">
-          ${msg.text}
-          <div class="msg-time ${isOwn?'':'other'}">${msg.time}</div>
-        </div>
+        ${(!isOwn && isGroup && !compact) ? `<div class="msg-name">${esc(dashFix(sender.first))}</div>` : ''}
+        <div class="msg-bubble ${isOwn?'own':'other'}"${compact?' style="font-size:12.5px;padding:7px 10px"':''}>${esc(m.body)}<div class="msg-time ${isOwn?'':'other'}"${compact?' style="font-size:10px"':''}>${esc(chatTime(m.created_at))}</div></div>
       </div>
     </div>`;
   }).join('');
-  container.scrollTop=container.scrollHeight;
+  el.scrollTop = el.scrollHeight;
 }
 
-function sendMessage(){
-  const input=document.getElementById('comms-msg-input');
-  const text=input.value.trim();
-  if(!text||!currentThreadId) return;
-  const now=new Date();
-  const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  if(!MESSAGES[currentThreadId]) MESSAGES[currentThreadId]=[];
-  MESSAGES[currentThreadId].push({uid:currentUserId, text, time, date:'Today'});
-  input.value=''; input.style.height='';
-  renderMessages(currentThreadId, currentThreadId.startsWith('grp_'));
-  renderCommsContactList();
+function renderThreadHeader(sk){
+  const sur = CHAT_SURFACES[sk];
+  const t = threadById(sur.open);
+  if(!sur.full){
+    const h = document.getElementById('cp-thread-header');
+    if(h) h.innerHTML = t
+      ? esc(dashFix(t.name))
+      : '<span style="color:var(--muted);font-size:13px">Select a conversation</span>';
+    return;
+  }
+  const avEl = document.getElementById('chat-header-avatar');
+  const nameEl = document.getElementById('chat-header-name');
+  const subEl = document.getElementById('chat-header-sub');
+  const actEl = document.getElementById('chat-header-actions');
+  if(!avEl || !nameEl || !subEl || !actEl) return;
+  if(!t){
+    avEl.className = 'chat-header-avatar ua-blue'; avEl.innerHTML = '';
+    nameEl.textContent = 'Select a conversation';
+    subEl.textContent = 'Choose a direct message or a team chat';
+    actEl.innerHTML = '';
+    return;
+  }
+  if(t.kind === 'group'){
+    avEl.className = 'chat-header-avatar ua-purple';
+    avEl.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    nameEl.textContent = dashFix(t.name);
+    subEl.textContent = 'Team conversation';
+    actEl.innerHTML = '';
+  } else {
+    const o = t.other || { id:'', first:'?', last:'', photo:'' };
+    const target = users.find(u => u.id === o.id);
+    avEl.className = 'chat-header-avatar ' + (o.photo ? '' : avColor(o.id));
+    avEl.innerHTML = o.photo ? `<img src="${esc(o.photo)}" alt="">` : esc(getInitials(o));
+    nameEl.textContent = dashFix(t.name);
+    subEl.textContent = target ? displayRole(target) : 'Direct message';
+    actEl.innerHTML = (target && target.phone)
+      ? `<button class="chat-action-btn btn-wa" onclick="openWhatsApp('${esc(o.id)}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          WhatsApp
+        </button>` : '';
+  }
 }
 
-function handleMsgKey(e){
-  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+// ── opening a thread ─────────────────────────────────────────────
+async function openThread(sk, threadId){
+  const sur = CHAT_SURFACES[sk];
+  if(!sur) return;
+  sur.open = threadId;
+  renderThreadHeader(sk);
+  renderThread(sk);
+  renderThreadList(sk);
+  const loaded = await loadMessages(threadId);
+  if(loaded === null){ showToast(CHAT_ERRORS.forbidden, 'error'); return; }
+  renderThread(sk);
+  const t = threadById(threadId);
+  if(t && t.unread){ t.unread = 0; renderAllThreadLists(); updateChatBadge(); }
+  callDb('mark_read', { thread_id: threadId });
 }
+
+// ── sending ──────────────────────────────────────────────────────
+// No local echo: the realtime INSERT renders it, so there is exactly one
+// source of truth and nothing to reconcile if the insert is rejected.
+async function sendCurrent(sk){
+  const sur = CHAT_SURFACES[sk];
+  const input = document.getElementById(sur.input);
+  if(!input) return;
+  const body = input.value.trim();
+  if(!body || !sur.open) return;
+  input.value = ''; input.style.height = '';
+  const r = await callDb('send_message', { thread_id: sur.open, body });
+  if(!r || !r.ok){
+    showToast(CHAT_ERRORS[r && r.error] || 'Could not send that message', 'error');
+    input.value = body;          // hand the text back rather than losing it
+    return;
+  }
+  // If realtime is not delivering (blocked socket, stale token), fall back to a
+  // reload so the sender still sees their own message.
+  setTimeout(() => {
+    const have = (chatMessages[r.thread_id] || []).some(m => String(m.id) === String(r.message.id));
+    if(!have) applyIncomingMessage(r.message, r.thread_id);
+  }, 1500);
+}
+
+function handleMsgKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendCurrent('page'); } }
+function handleCpMsgKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendCurrent('panel'); } }
+function sendMessage(){ sendCurrent('page'); }
+function sendCpMessage(){ sendCurrent('panel'); }
 
 function autoResizeTextarea(el){
   el.style.height='auto';
   el.style.height=Math.min(el.scrollHeight,100)+'px';
 }
-
 function addEmoji(){
   const emojis=['😊','🎉','👍','💪','🔥','✅','📈','🚀','👏','😄'];
   const el=document.getElementById('comms-msg-input');
-  if(el) el.value+=emojis[Math.floor(Math.random()*emojis.length)];
+  if(!el) return;
+  el.value+=emojis[Math.floor(Math.random()*emojis.length)];
   el.focus();
 }
 
-function startCall(uid, type){
-  const u=users.find(x=>x.id===uid);
-  if(!u) return;
-  if(type==='video'){
-    // Open Google Meet
-    const meetUrl='https://meet.google.com/new';
-    showToast(`Starting video call with ${u.first}...`,'success');
-    setTimeout(()=>window.open(meetUrl,'_blank'),500);
-  } else {
-    // Open WhatsApp call if phone exists
-    if(u.phone){
-      const clean=u.phone.replace(/[\s\-\(\)]/g,'');
-      window.open(`https://wa.me/${clean}`,'_blank');
-      showToast(`Opening WhatsApp for ${u.first}...`,'success');
-    } else {
-      showToast(`No phone number for ${u.first}.`,'warning');
-    }
+// ── realtime receive ─────────────────────────────────────────────
+// RLS has already filtered these to threads the viewer may read, so anything
+// that arrives is legitimately theirs.
+function applyIncomingMessage(row, threadId){
+  const tid = threadId || row.thread_id;
+  if(!tid) return;
+  const list = chatMessages[tid] || (chatMessages[tid] = []);
+  if(list.some(m => String(m.id) === String(row.id))) return;   // dedupe by id
+  list.push({ id:row.id, sender_id:row.sender_id, body:row.body, created_at:row.created_at });
+  list.sort((a,b) => Number(a.id) - Number(b.id));
+
+  const t = threadById(tid);
+  if(t){
+    t.last_message = { body:row.body, created_at:row.created_at, sender_id:row.sender_id,
+      sender_first: (users.find(u=>u.id===row.sender_id)||{}).first || '?' };
   }
+  let openSomewhere = false;
+  Object.keys(CHAT_SURFACES).forEach(sk => {
+    if(String(CHAT_SURFACES[sk].open) === String(tid)){
+      openSomewhere = true;
+      renderThread(sk);
+    }
+  });
+  if(openSomewhere){
+    if(t) t.unread = 0;
+    callDb('mark_read', { thread_id: tid });
+  } else if(t && row.sender_id !== currentUserId){
+    t.unread = (t.unread || 0) + 1;
+  }
+  renderAllThreadLists();
+  updateChatBadge();
 }
 
-function startGroupCall(groupName){
-  showToast(`Starting group call for ${groupName}...`,'success');
-  setTimeout(()=>window.open('https://meet.google.com/new','_blank'),500);
+async function onRealtimeMessage(payload){
+  const row = payload && payload.new;
+  if(!row || !row.id) return;
+  if(!threadById(row.thread_id)){
+    await loadThreads();            // a brand-new DM or team thread
+  }
+  applyIncomingMessage(row, row.thread_id);
 }
+
+function subscribeChat(){
+  if(chatChannel) return chatChannel;
+  if(!sb.channel) return null;
+  chatChannel = sb.channel('messages')
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, onRealtimeMessage)
+    .subscribe();
+  return chatChannel;
+}
+function unsubscribeChat(){
+  if(chatChannel){ try { sb.removeChannel(chatChannel); } catch(e){} chatChannel = null; }
+}
+
+function updateChatBadge(){
+  const total = chatThreads.reduce((n,t) => n + (t.unread||0), 0);
+  const dot = document.getElementById('chat-unread-dot');
+  if(dot) dot.classList.toggle('show', total > 0);
+}
+
+// ── boot + surfaces ──────────────────────────────────────────────
+async function startChat(){
+  if(!await attachRealtimeAuth()) return;
+  subscribeChat();
+  await loadThreads();
+}
+
+function defaultThreadId(){
+  if(!chatThreads.length) return null;
+  const unread = chatThreads.find(t => t.unread > 0);
+  if(unread) return unread.id;
+  const group = chatThreads.find(t => t.kind === 'group');
+  return (group || chatThreads[0]).id;
+}
+
+async function renderCommsPage(){
+  await loadThreads();
+  const sur = CHAT_SURFACES.page;
+  const want = threadById(sur.open) ? sur.open : defaultThreadId();
+  if(want) await openThread('page', want);
+  else { renderThreadHeader('page'); renderThread('page'); }
+}
+
+function openFullChat(){
+  if(document.getElementById('chat-panel').classList.contains('open')) toggleChatPanel();
+  showPage('comms');
+}
+
+async function toggleChatPanel(){
+  const panel=document.getElementById('chat-panel');
+  const backdrop=document.getElementById('chat-panel-backdrop');
+  const btn=document.getElementById('nav-icon-chat');
+  const isOpen=panel.classList.contains('open');
+  panel.classList.toggle('open',!isOpen);
+  backdrop.classList.toggle('open',!isOpen);
+  if(btn) btn.classList.toggle('active',!isOpen);
+  if(isOpen) return;
+  await loadThreads();
+  const sur = CHAT_SURFACES.panel;
+  const want = threadById(sur.open) ? sur.open : defaultThreadId();
+  if(want) await openThread('panel', want);
+  else { renderThreadHeader('panel'); renderThread('panel'); }
+}
+
+// Presence lands in the next phase; the selector stays as inert UI so the
+// layout does not shift when it becomes real.
+function changeMyStatus(){ /* phase 7b */ }
 
 function openWhatsApp(uid){
-  const u=users.find(x=>x.id===uid);
+  const u=users.find(x=>String(x.id)===String(uid));
   if(!u) return;
   if(u.phone){
     const clean=u.phone.replace(/[\s\-\(\)\+]/g,'');
@@ -5311,235 +5376,6 @@ function openWhatsApp(uid){
     showToast(`No phone number for ${u.first}.`,'warning');
   }
 }
-
-// ═══════════════════════════════════════════════════
-// CHAT PANEL (sidebar toggle)
-// ═══════════════════════════════════════════════════
-let cpCurrentThread = null;
-
-function toggleChatPanel(){
-  const panel=document.getElementById('chat-panel');
-  const backdrop=document.getElementById('chat-panel-backdrop');
-  const btn=document.getElementById('nav-icon-chat');
-  const isOpen=panel.classList.contains('open');
-  panel.classList.toggle('open',!isOpen);
-  backdrop.classList.toggle('open',!isOpen);
-  if(btn) btn.classList.toggle('active',!isOpen);
-  if(!isOpen){
-    initPresence();initMessages();
-    renderCpContactList();
-    const me=users.find(u=>u.id===currentUserId);
-    const team=getTeamForUser(currentUserId);
-    if(team.length>0) openCpDM(team[0].id);
-    else if(users.filter(u=>u.id!==currentUserId).length>0) openCpDM(users.find(u=>u.id!==currentUserId).id);
-  }
-}
-
-function renderCpContactList(){
-  const el=document.getElementById('chat-panel-contacts');if(!el)return;
-  const me=users.find(u=>u.id===currentUserId);
-  let html='';
-  // Groups
-  const isLeader=['supervisor','manager','director','leader'].includes(me.role);
-  if(isLeader){
-    const myTeam=getTeamForUser(currentUserId);
-    const groups=[...new Set(myTeam.map(u=>teamNameOf(u)).filter(Boolean))];
-    const myTeamName=teamNameOf(me);
-    if(myTeamName&&!groups.includes(myTeamName)) groups.unshift(myTeamName);
-    if(['manager','director'].includes(me.role)) groups.unshift('All Team');
-    groups.forEach(grp=>{
-      const grpId=getGroupThreadId(grp);
-      const active=cpCurrentThread===grpId?'active':'';
-      html+=`<div class="comms-contact ${active}" style="padding:7px 8px" onclick="openCpGroup('${grp}')">
-        <div class="contact-avatar ua-purple" style="width:30px;height:30px;border-radius:7px;font-size:10px">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
-        </div>
-        <div class="contact-info"><div class="contact-name" style="font-size:12px">${grp}</div></div>
-      </div>`;
-    });
-    html+='<div class="comms-group-label" style="font-size:9px">DMs</div>';
-  }
-  // DMs — everyone can talk to everyone
-  const contacts=users.filter(u=>u.id!==currentUserId);
-  contacts.sort((a,b)=>{const o={online:0,away:1,busy:2,offline:3};return (o[PRESENCE[a.id]]||3)-(o[PRESENCE[b.id]]||3);});
-  contacts.forEach(u=>{
-    if(!u)return;
-    const dmId=buildThreadId(currentUserId,u.id);
-    const pres=PRESENCE[u.id]||'offline';
-    const active=cpCurrentThread===dmId?'active':'';
-    html+=`<div class="comms-contact ${active}" style="padding:7px 8px" onclick="openCpDM('${u.id}')">
-      <div class="contact-avatar ${avColor(u.id)}" style="width:30px;height:30px;font-size:11px;position:relative">
-        ${u.photo?`<img src="${u.photo}" alt="">`:getInitials(u)}
-        <span class="contact-status-dot cs-${pres}"></span>
-      </div>
-      <div class="contact-info"><div class="contact-name" style="font-size:12px">${u.first}</div></div>
-    </div>`;
-  });
-  el.innerHTML=html;
-}
-
-function openCpGroup(grp){
-  const grpId=getGroupThreadId(grp);
-  cpCurrentThread=grpId;
-  if(!MESSAGES[grpId]) MESSAGES[grpId]=[];
-  document.getElementById('cp-thread-header').textContent=grp;
-  renderCpMessages();renderCpContactList();
-}
-
-function openCpDM(uid){
-  const u=users.find(x=>x.id===uid);if(!u)return;
-  const dmId=buildThreadId(currentUserId,uid);
-  cpCurrentThread=dmId;
-  if(!MESSAGES[dmId]) MESSAGES[dmId]=[];
-  document.getElementById('cp-thread-header').innerHTML=`${u.first} ${u.last} <span style="font-size:10px;font-weight:500;color:${STATUS_COLORS[PRESENCE[uid]||'offline']};margin-left:4px">● ${STATUS_LABELS[PRESENCE[uid]||'offline']}</span>`;
-  renderCpMessages();renderCpContactList();
-}
-
-function renderCpMessages(){
-  const el=document.getElementById('cp-messages');if(!el)return;
-  const msgs=MESSAGES[cpCurrentThread]||[];
-  if(!msgs.length){el.innerHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">No messages yet.</div>';return;}
-  el.innerHTML=msgs.map(msg=>{
-    const sender=users.find(u=>u.id===msg.uid)||{first:'?',last:'',id:0};
-    const isOwn=msg.uid===currentUserId;
-    return `<div class="msg-row ${isOwn?'own':''}">
-      <div class="msg-avatar ${avColor(sender.id)}" style="width:24px;height:24px;font-size:10px">${sender.photo?`<img src="${sender.photo}" alt="">`:getInitials(sender)}</div>
-      <div><div class="msg-bubble ${isOwn?'own':'other'}" style="font-size:12.5px;padding:7px 10px">${msg.text}<div class="msg-time ${isOwn?'':'other'}" style="font-size:10px">${msg.time}</div></div></div>
-    </div>`;
-  }).join('');
-  el.scrollTop=el.scrollHeight;
-}
-
-function sendCpMessage(){
-  const input=document.getElementById('cp-msg-input');
-  const text=input.value.trim();
-  if(!text||!cpCurrentThread)return;
-  const now=new Date();
-  const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  if(!MESSAGES[cpCurrentThread]) MESSAGES[cpCurrentThread]=[];
-  MESSAGES[cpCurrentThread].push({uid:currentUserId,text,time,date:'Today'});
-  input.value='';input.style.height='';
-  renderCpMessages();renderCpContactList();
-}
-
-function handleCpMsgKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendCpMessage();}}
-
-// ═══════════════════════════════════════════════════
-// NATIVE CALL SYSTEM
-// ═══════════════════════════════════════════════════
-let callTimer=null, callSeconds=0, isMuted=false, isCamOff=false, isVideoCall=false, showingTranscript=false;
-const TRANSCRIPT_SAMPLES={
-  Portuguese:['Olá, tudo bem?','Sim, estou bem, obrigado.','Vamos falar sobre os números do mês.','Os resultados estão acima do esperado!','Ótimo trabalho este mês.'],
-  English:['Hello, how are you?','Good thanks, ready for the call.','Let\'s review this month\'s targets.','Great results so far!','Keep up the excellent work.'],
-  Spanish:['Hola, ¿cómo estás?','Bien, gracias. ¿Y tú?','Revisemos los números del mes.','Los resultados son muy buenos.','Excelente trabajo este mes.'],
-};
-
-function startCall(uid, type){
-  const u=users.find(x=>x.id===uid);if(!u)return;
-  isVideoCall=(type==='video');
-  isMuted=false;isCamOff=false;showingTranscript=false;
-  // Setup overlay
-  const overlay=document.getElementById('call-overlay');
-  const avatarWrap=document.getElementById('call-avatar-wrap');
-  const nameEl=document.getElementById('call-name');
-  const statusEl=document.getElementById('call-status');
-  const timerEl=document.getElementById('call-timer');
-  const videoArea=document.getElementById('call-video-area');
-  const camBtn=document.getElementById('btn-cam');
-  const transcriptWrap=document.getElementById('call-transcript-wrap');
-  const transcriptEl=document.getElementById('call-transcript');
-  avatarWrap.className='call-avatar-wrap '+(u.photo?'':avColor(u.id));
-  avatarWrap.innerHTML=u.photo?`<img src="${u.photo}" alt="">`:getInitials(u);
-  nameEl.textContent=u.first+' '+u.last;
-  statusEl.textContent=type==='video'?'Starting video call...':'Calling...';
-  timerEl.style.display='none';timerEl.textContent='00:00';
-  videoArea.style.display=isVideoCall?'flex':'none';
-  camBtn.style.display=isVideoCall?'flex':'none';
-  transcriptWrap.style.display='none';transcriptEl.innerHTML='';
-  callSeconds=0;
-  overlay.classList.add('active');
-  clearInterval(callTimer);
-  // Simulate answer after 2s
-  setTimeout(()=>{
-    statusEl.textContent=type==='video'?'Video call connected':'Call connected';
-    timerEl.style.display='block';
-    callTimer=setInterval(()=>{
-      callSeconds++;
-      const m=String(Math.floor(callSeconds/60)).padStart(2,'0');
-      const s=String(callSeconds%60).padStart(2,'0');
-      timerEl.textContent=`${m}:${s}`;
-    },1000);
-  },2000);
-  // Simulate transcript if transcript is enabled
-  if(u.language){simulateTranscript(u);}
-}
-
-function simulateTranscript(u){
-  const lang=u.language?.includes('Portuguese')?'Portuguese':u.language?.includes('Spanish')?'Spanish':'English';
-  const lines=TRANSCRIPT_SAMPLES[lang]||TRANSCRIPT_SAMPLES.English;
-  lines.forEach((line,i)=>{
-    setTimeout(()=>{
-      const transcriptEl=document.getElementById('call-transcript');
-      if(transcriptEl){
-        const isMe=i%2===1;
-        const speaker=isMe?'You':u.first;
-        transcriptEl.innerHTML+=`<div style="margin-bottom:4px"><strong style="color:${isMe?'#9CFFAC':'rgba(255,255,255,.8)'};font-size:11px">${speaker}:</strong> ${line}</div>`;
-        transcriptEl.scrollTop=transcriptEl.scrollHeight;
-      }
-    },(i+1)*4000);
-  });
-}
-
-function toggleMute(){
-  isMuted=!isMuted;
-  const btn=document.getElementById('btn-mute');
-  btn.classList.toggle('active-btn',isMuted);
-  btn.style.opacity=isMuted?.5:1;
-  showToast(isMuted?'Microphone muted':'Microphone on',isMuted?'warning':'success');
-}
-
-function toggleCamera(){
-  isCamOff=!isCamOff;
-  const btn=document.getElementById('btn-cam');
-  btn.classList.toggle('active-btn',isCamOff);
-  btn.style.opacity=isCamOff?.5:1;
-  showToast(isCamOff?'Camera off':'Camera on',isCamOff?'warning':'success');
-}
-
-function toggleTranscript(){
-  showingTranscript=!showingTranscript;
-  document.getElementById('call-transcript-wrap').style.display=showingTranscript?'block':'none';
-  document.getElementById('btn-mute').nextElementSibling?.nextElementSibling?.classList?.toggle('active-btn',showingTranscript);
-}
-
-function endCall(){
-  clearInterval(callTimer);
-  const overlay=document.getElementById('call-overlay');
-  overlay.classList.remove('active');
-  // Save transcript if content exists
-  const transcriptEl=document.getElementById('call-transcript');
-  if(transcriptEl&&transcriptEl.innerHTML.trim()){
-    const nameEl=document.getElementById('call-name');
-    const timerEl=document.getElementById('call-timer');
-    const savedTranscripts=window._savedTranscripts||(window._savedTranscripts=[]);
-    savedTranscripts.push({
-      with:nameEl.textContent,
-      duration:timerEl.textContent,
-      date:'Today',
-      content:transcriptEl.innerHTML
-    });
-    showToast('Call ended · Transcript saved','success');
-  } else {
-    showToast('Call ended','success');
-  }
-}
-
-function startGroupCall(groupName){
-  showToast(`Starting group call for ${groupName}...`,'success');
-  // For group calls, open meet
-  setTimeout(()=>window.open('https://meet.google.com/new','_blank'),600);
-}
-
 // ═══════════════════════════════════════════════════
 // CALENDAR SYSTEM
 // ═══════════════════════════════════════════════════
@@ -5844,11 +5680,6 @@ function viewMeeting(id){
   if(editBtn) editBtn.onclick=()=>openEditMeeting(m.id);
   if(delBtn) delBtn.onclick=()=>deleteMeeting(m.id);
 
-  document.getElementById('btn-start-call').onclick=()=>{
-    const other=m.attendees.find(uid=>uid!==currentUserId);
-    closeModal('modal-meeting');
-    if(other) startCall(other,'video'); else showToast('No one else on this meeting to call.','warning');
-  };
   document.getElementById('btn-save-minutes').onclick=async()=>{
     const r=await callDb('save_minutes',{ id:m.id, minutes:ta.value });
     if(!r||!r.ok){ showToast(MEETING_ERRORS[r&&r.error]||'Could not save the minutes','error'); return; }
