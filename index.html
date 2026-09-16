@@ -1532,7 +1532,13 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
             </select>
           </div>
           <div class="comms-sidebar-head">
-            <div class="comms-sidebar-title">Conversations</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <div class="comms-sidebar-title">Conversations</div>
+              <button class="btn-add-user" style="padding:5px 10px;font-size:12px" onclick="openNewDm('page')" title="New conversation">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New
+              </button>
+            </div>
             <div class="comms-search">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input type="text" placeholder="Search..." oninput="filterCommsContacts(this.value)">
@@ -1962,6 +1968,23 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 </div>
 
 <!-- CHAT PANEL (slide-in from right) -->
+<!-- NEW CONVERSATION PICKER -->
+<div class="modal-backdrop" id="modal-new-dm">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">New conversation</div>
+      <button class="modal-close" onclick="closeModal('modal-new-dm')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body" style="padding-top:12px">
+      <div class="comms-search" style="margin-bottom:8px">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="newdm-search" placeholder="Search colleagues..." oninput="filterNewDm(this.value)" autocomplete="off">
+      </div>
+      <div id="newdm-list" style="max-height:46vh;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <div id="chat-panel" class="chat-panel">
   <div class="chat-panel-header">
     <div style="display:flex;align-items:center;gap:8px">
@@ -1969,6 +1992,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
       <span style="font-size:14px;font-weight:700">Team Chat</span>
     </div>
     <div style="display:flex;align-items:center;gap:4px">
+      <button class="modal-close" title="New conversation" onclick="openNewDm('panel')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       <button class="modal-close" title="Open full chat" onclick="openFullChat()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
     <button class="modal-close" onclick="toggleChatPanel()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
@@ -2407,6 +2431,9 @@ async function attachRealtimeAuth(){
 }
 sb.auth.onAuthStateChange((_event, session) => {
   try { sb.realtime.setAuth(session ? session.access_token : null); } catch(e){}
+  // The refreshed token has to reach the presence channel too, and a re-auth
+  // can drop the tracked meta, so re-assert it.
+  if(session && typeof trackPresence === 'function'){ try { trackPresence(); } catch(e){} }
 });
 
 async function callDb(action, payload = {}) {
@@ -3087,6 +3114,7 @@ function updateNavAvatar(user){
 async function doLogout(){
   leaveVideoCall();
   unsubscribeChat();
+  unsubscribePresence();
   chatThreads=[]; Object.keys(chatMessages).forEach(k=>delete chatMessages[k]);
   Object.keys(CHAT_SURFACES).forEach(k=>{ CHAT_SURFACES[k].open=null; });
   updateChatBadge();
@@ -5095,7 +5123,7 @@ function renderThreadList(sk){
     } else {
       const o = t.other || { id:'', first:'?', last:'', photo:'' };
       const inner = o.photo ? `<img src="${esc(o.photo)}" alt="">` : esc(getInitials(o));
-      avatar = `<div class="contact-avatar ${o.photo?'':avColor(o.id)}" style="${compact?'width:30px;height:30px;font-size:11px;':''}position:relative">${inner}</div>`;
+      avatar = `<div class="contact-avatar ${o.photo?'':avColor(o.id)}" style="${compact?'width:30px;height:30px;font-size:11px;':''}position:relative">${inner}${presenceDot(o.id)}</div>`;
     }
     return `<div class="comms-contact ${active}" ${compact?'style="padding:7px 8px"':''} onclick="openThread('${sk}','${esc(t.id)}')">
       ${avatar}
@@ -5108,6 +5136,20 @@ function renderThreadList(sk){
   };
 
   let html = '';
+  // A draft DM has no thread row yet - the thread is created by the first
+  // message, so it lives only in this surface until then.
+  if(sur.draft){
+    const d=sur.draft;
+    const inner = d.photo ? `<img src="${esc(d.photo)}" alt="">` : esc(getInitials(d));
+    html += `<div class="comms-group-label"${compact?' style="font-size:9px"':''}>New message</div>
+      <div class="comms-contact active" ${compact?'style="padding:7px 8px"':''}>
+        <div class="contact-avatar ${d.photo?'':avColor(d.id)}" style="${compact?'width:30px;height:30px;font-size:11px;':''}position:relative">${inner}${presenceDot(d.id)}</div>
+        <div class="contact-info">
+          <div class="contact-name" ${compact?'style="font-size:12px"':''}>${esc(dashFix(d.name))}</div>
+          ${compact?'':`<div class="contact-preview">Draft - not sent yet</div>`}
+        </div>
+      </div>`;
+  }
   const gs = groups.filter(match), ds = dms.filter(match);
   if(gs.length) html += `<div class="comms-group-label"${compact?' style="font-size:9px"':''}>Team Chats</div>` + gs.map(row).join('');
   if(ds.length) html += `<div class="comms-group-label"${compact?' style="font-size:9px"':''}>Direct Messages</div>` + ds.map(row).join('');
@@ -5128,6 +5170,10 @@ function renderThread(sk){
   if(!el) return;
   const t = threadById(sur.open);
   const msgs = (sur.open && chatMessages[sur.open]) || [];
+  if(!t && sur.draft){
+    el.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--muted)"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span style="font-size:13px">Say hello to ${esc(dashFix(sur.draft.name))}</span></div>`;
+    return;
+  }
   if(!t){
     el.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">Select a conversation</div>`;
     return;
@@ -5161,10 +5207,11 @@ function renderThread(sk){
 function renderThreadHeader(sk){
   const sur = CHAT_SURFACES[sk];
   const t = threadById(sur.open);
+  const draft = (!t && sur.draft) ? sur.draft : null;
   if(!sur.full){
     const h = document.getElementById('cp-thread-header');
-    if(h) h.innerHTML = t
-      ? esc(dashFix(t.name))
+    if(h) h.innerHTML = (t || draft)
+      ? esc(dashFix((t||draft).name)) + ((t && t.kind==='group') ? '' : ` <span class="contact-status-dot cs-${presenceOf((t&&t.other&&t.other.id)||(draft&&draft.id))}" style="position:static;display:inline-block;border:none;width:8px;height:8px;margin-left:5px"></span>`)
       : '<span style="color:var(--muted);font-size:13px">Select a conversation</span>';
     return;
   }
@@ -5173,6 +5220,14 @@ function renderThreadHeader(sk){
   const subEl = document.getElementById('chat-header-sub');
   const actEl = document.getElementById('chat-header-actions');
   if(!avEl || !nameEl || !subEl || !actEl) return;
+  if(!t && draft){
+    avEl.className = 'chat-header-avatar ' + (draft.photo ? '' : avColor(draft.id));
+    avEl.innerHTML = draft.photo ? `<img src="${esc(draft.photo)}" alt="">` : esc(getInitials(draft));
+    nameEl.textContent = dashFix(draft.name);
+    subEl.innerHTML = `${presenceDot(draft.id,'position:static;display:inline-block;border:none;width:8px;height:8px;margin-right:5px')}${esc(PRESENCE_LABELS[presenceOf(draft.id)])} - new conversation`;
+    actEl.innerHTML = '';
+    return;
+  }
   if(!t){
     avEl.className = 'chat-header-avatar ua-blue'; avEl.innerHTML = '';
     nameEl.textContent = 'Select a conversation';
@@ -5192,7 +5247,7 @@ function renderThreadHeader(sk){
     avEl.className = 'chat-header-avatar ' + (o.photo ? '' : avColor(o.id));
     avEl.innerHTML = o.photo ? `<img src="${esc(o.photo)}" alt="">` : esc(getInitials(o));
     nameEl.textContent = dashFix(t.name);
-    subEl.textContent = target ? displayRole(target) : 'Direct message';
+    subEl.innerHTML = `${presenceDot(o.id,'position:static;display:inline-block;border:none;width:8px;height:8px;margin-right:5px')}${esc(PRESENCE_LABELS[presenceOf(o.id)])}${target ? ' - ' + esc(displayRole(target)) : ''}`;
     actEl.innerHTML = (target && target.phone)
       ? `<button class="chat-action-btn btn-wa" onclick="openWhatsApp('${esc(o.id)}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -5205,6 +5260,7 @@ function renderThreadHeader(sk){
 async function openThread(sk, threadId){
   const sur = CHAT_SURFACES[sk];
   if(!sur) return;
+  sur.draft = null;
   sur.open = threadId;
   renderThreadHeader(sk);
   renderThread(sk);
@@ -5225,13 +5281,21 @@ async function sendCurrent(sk){
   const input = document.getElementById(sur.input);
   if(!input) return;
   const body = input.value.trim();
-  if(!body || !sur.open) return;
+  if(!body || (!sur.open && !sur.draft)) return;
   input.value = ''; input.style.height = '';
-  const r = await callDb('send_message', { thread_id: sur.open, body });
+  const r = sur.draft
+    ? await callDb('send_message', { to_user_id: sur.draft.id, body })
+    : await callDb('send_message', { thread_id: sur.open, body });
   if(!r || !r.ok){
     showToast(CHAT_ERRORS[r && r.error] || 'Could not send that message', 'error');
     input.value = body;          // hand the text back rather than losing it
     return;
+  }
+  if(sur.draft){
+    // The first message created the thread: adopt it and drop the draft.
+    sur.draft = null;
+    await loadThreads();
+    await openThread(sk, r.thread_id);
   }
   // If realtime is not delivering (blocked socket, stale token), fall back to a
   // reload so the sender still sees their own message.
@@ -5321,8 +5385,85 @@ function updateChatBadge(){
 // ── boot + surfaces ──────────────────────────────────────────────
 async function startChat(){
   if(!await attachRealtimeAuth()) return;
-  subscribeChat();
+  myPresenceMode = loadPresenceMode();
+  subscribeChat();          // postgres_changes on messages
+  subscribePresence();      // a separate channel; neither clobbers the other
+  syncStatusSelector();
   await loadThreads();
+}
+
+// ── NEW CONVERSATION PICKER ──────────────────────────────────────
+// Any active colleague may be messaged - this is an internal tool, and the
+// DM policy (auth.uid() in (user_a,user_b)) already allows any pair.
+let pickerSurface='page';
+let pickerFilter='';
+
+function dmCandidates(){
+  const f=pickerFilter.trim().toLowerCase();
+  return users
+    .filter(u => u && u.id !== currentUserId && u.status !== 'inactive')
+    .filter(u => {
+      if(!f) return true;
+      const hay=[u.first,u.last,u.nickname,displayRole(u),displayTeam(u)].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(f);
+    })
+    .sort((a,b) => {
+      const pa=PRESENCE_RANK[presenceOf(a.id)], pb=PRESENCE_RANK[presenceOf(b.id)];
+      const ra=(pa===undefined?9:pa), rb=(pb===undefined?9:pb);
+      if(ra!==rb) return ra-rb;                       // online people first
+      return String(a.first||'').localeCompare(String(b.first||''));
+    });
+}
+function existingDmWith(uid){
+  return chatThreads.find(t => t.kind==='dm' && t.other && String(t.other.id)===String(uid)) || null;
+}
+function renderPickerList(){
+  const el=document.getElementById('newdm-list');
+  if(!el) return;
+  const rows=dmCandidates();
+  if(!rows.length){ el.innerHTML='<div style="padding:18px;font-size:13px;color:var(--muted)">No colleagues match that.</div>'; return; }
+  el.innerHTML=rows.map(u=>{
+    const inner=u.photo?`<img src="${esc(u.photo)}" alt="">`:esc(getInitials(u));
+    const open=existingDmWith(u.id);
+    return `<div class="comms-contact" onclick="startDmWith('${esc(u.id)}')">
+      <div class="contact-avatar ${u.photo?'':avColor(u.id)}" style="position:relative">${inner}${presenceDot(u.id)}</div>
+      <div class="contact-info">
+        <div class="contact-name">${esc(dashFix(u.first+' '+u.last))}${u.nickname?' ('+esc(dashFix(u.nickname))+')':''}</div>
+        <div class="contact-preview">${esc(displayRole(u))} - ${esc(dashFix(displayTeam(u)))}</div>
+      </div>
+      ${open?'<span class="unread-badge" style="background:var(--border2);color:var(--text)">open</span>':''}
+    </div>`;
+  }).join('');
+}
+function openNewDm(sk){
+  pickerSurface = CHAT_SURFACES[sk] ? sk : 'page';
+  pickerFilter='';
+  const inp=document.getElementById('newdm-search');
+  if(inp) inp.value='';
+  renderPickerList();
+  openBackdrop('modal-new-dm');
+  if(inp) setTimeout(()=>inp.focus(),50);
+}
+function filterNewDm(v){ pickerFilter=v||''; renderPickerList(); }
+async function startDmWith(uid){
+  const u=users.find(x => String(x.id)===String(uid));
+  if(!u) return;
+  closeModal('modal-new-dm');
+  const sk=pickerSurface;
+  const existing=existingDmWith(uid);
+  if(existing){ await openThread(sk, existing.id); return; }
+  // No thread yet: hold a draft and let send_message's resolve-or-create make
+  // it real, so abandoning the picker never leaves an empty thread behind for
+  // the other person.
+  const sur=CHAT_SURFACES[sk];
+  sur.open=null;
+  sur.draft={ id:u.id, first:u.first, last:u.last, nickname:u.nickname||'', photo:u.photo||'',
+              name:((u.first||'')+' '+(u.last||'')).trim() };
+  renderThreadHeader(sk);
+  renderThread(sk);
+  renderThreadList(sk);
+  const inp=document.getElementById(sur.input);
+  if(inp) inp.focus();
 }
 
 function defaultThreadId(){
@@ -5362,9 +5503,150 @@ async function toggleChatPanel(){
   else { renderThreadHeader('panel'); renderThread('panel'); }
 }
 
-// Presence lands in the next phase; the selector stays as inert UI so the
-// layout does not shift when it becomes real.
-function changeMyStatus(){ /* phase 7b */ }
+// ── PRESENCE ─────────────────────────────────────────────────────
+// Realtime Presence only: nothing is written to the database, so a closed
+// laptop stops being "online" the moment its socket drops, with no heartbeat
+// table to sweep. The manual choice is cached in localStorage the way the
+// theme is - it is a per-browser preference, not account state.
+const PRESENCE_KEY='ned_presence';
+const IDLE_MS=5*60*1000;                       // 5 minutes of no activity -> away
+const PRESENCE_RANK={ online:0, busy:1, away:2 };
+const PRESENCE_LABELS={ online:'Online', away:'Away', busy:'Busy', offline:'Offline' };
+// select value -> mode. 'auto' follows activity; the rest are forced.
+const STATUS_MODES={ online:'auto', away:'away', busy:'busy', offline:'hidden' };
+const MODE_STATUS={ auto:'online', away:'away', busy:'busy', hidden:'offline' };
+
+let presenceChannel=null;
+let presenceState={};                          // uid -> 'online' | 'away' | 'busy'
+let myPresenceMode='auto';
+let myAutoStatus='online';                     // what activity says, when mode is auto
+let idleTimer=null;
+let presenceBound=false;
+
+function loadPresenceMode(){
+  try{
+    const v=localStorage.getItem(PRESENCE_KEY);
+    if(v==='auto'||v==='away'||v==='busy'||v==='hidden') return v;
+  }catch(e){}
+  return 'auto';
+}
+// Hidden means hidden: we never track at all, rather than broadcasting an
+// 'offline' that anyone reading the raw presence state could see through.
+function myTrackedStatus(){
+  if(myPresenceMode==='hidden') return null;
+  if(myPresenceMode==='away'||myPresenceMode==='busy') return myPresenceMode;
+  return myAutoStatus;
+}
+function presenceOf(uid){
+  if(!uid) return 'offline';
+  if(String(uid)===String(currentUserId)) return myTrackedStatus() || 'offline';
+  return presenceState[String(uid)] || 'offline';
+}
+function presenceDot(uid, extra){
+  return `<span class="contact-status-dot cs-${presenceOf(uid)}"${extra?' style="'+extra+'"':''} title="${esc(PRESENCE_LABELS[presenceOf(uid)])}"></span>`;
+}
+
+function rebuildPresence(){
+  const next={};
+  let state={};
+  try{ state = (presenceChannel && presenceChannel.presenceState()) || {}; }catch(e){ state={}; }
+  Object.keys(state).forEach(key=>{
+    const metas = state[key] || [];
+    // One person can be present from several tabs or devices; the liveliest
+    // of their metas is the one that should show.
+    let best=null;
+    metas.forEach(m=>{
+      const st=(m && m.status) || 'online';
+      if(PRESENCE_RANK[st]===undefined) return;
+      if(best===null || PRESENCE_RANK[st] < PRESENCE_RANK[best]) best=st;
+    });
+    const uid=(metas[0] && metas[0].uid) || key;
+    if(best) next[String(uid)]=best;
+  });
+  presenceState=next;
+  renderAllThreadLists();
+  renderThreadHeader('page');
+  renderPickerList();
+  syncStatusSelector();
+}
+
+async function trackPresence(){
+  if(!presenceChannel) return;
+  const status=myTrackedStatus();
+  try{
+    if(status===null) await presenceChannel.untrack();
+    else await presenceChannel.track({ uid:String(currentUserId), status });
+  }catch(e){}
+}
+
+function subscribePresence(){
+  if(presenceChannel) return presenceChannel;
+  if(!sb.channel || !currentUserId) return null;
+  // A separate channel from the messages one: different transport concern,
+  // and tearing one down must never take the other with it.
+  presenceChannel = sb.channel('presence', { config:{ presence:{ key:String(currentUserId) } } })
+    .on('presence', { event:'sync' },  rebuildPresence)
+    .on('presence', { event:'join' },  rebuildPresence)
+    .on('presence', { event:'leave' }, rebuildPresence)
+    .subscribe(status => { if(!status || status==='SUBSCRIBED') trackPresence(); });
+  bindPresenceActivity();
+  return presenceChannel;
+}
+function unsubscribePresence(){
+  if(presenceChannel){
+    try{ presenceChannel.untrack(); }catch(e){}
+    try{ sb.removeChannel(presenceChannel); }catch(e){}
+    presenceChannel=null;
+  }
+  presenceState={};
+  clearTimeout(idleTimer); idleTimer=null;
+}
+
+function goIdle(){
+  if(myAutoStatus==='away') return;
+  myAutoStatus='away';
+  if(myPresenceMode==='auto'){ trackPresence(); syncStatusSelector(); rebuildSelfDots(); }
+}
+function markActive(){
+  clearTimeout(idleTimer);
+  idleTimer=setTimeout(goIdle, IDLE_MS);
+  if(myAutoStatus!=='online'){
+    myAutoStatus='online';
+    if(myPresenceMode==='auto'){ trackPresence(); syncStatusSelector(); rebuildSelfDots(); }
+  }
+}
+function rebuildSelfDots(){ renderAllThreadLists(); renderThreadHeader('page'); renderPickerList(); }
+
+function bindPresenceActivity(){
+  if(presenceBound) return;
+  presenceBound=true;
+  ['mousemove','mousedown','keydown','touchstart','scroll'].forEach(ev =>
+    window.addEventListener(ev, markActive, { passive:true }));
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState==='hidden') goIdle(); else markActive();
+  });
+  // Closing the tab drops the socket anyway; untracking first makes the
+  // others' lists update immediately rather than on timeout.
+  window.addEventListener('pagehide', () => { try{ presenceChannel && presenceChannel.untrack(); }catch(e){} });
+  markActive();
+}
+
+function syncStatusSelector(){
+  const sel=document.getElementById('my-status-select');
+  const dot=document.getElementById('my-status-dot');
+  const value=Object.keys(STATUS_MODES).find(k => STATUS_MODES[k]===myPresenceMode) || 'online';
+  if(sel && sel.value!==value) sel.value=value;
+  if(dot) dot.className='my-status-dot cs-'+(myTrackedStatus()||'offline');
+}
+
+function changeMyStatus(val){
+  myPresenceMode = STATUS_MODES[val] || 'auto';
+  try{ localStorage.setItem(PRESENCE_KEY, myPresenceMode); }catch(e){}
+  if(myPresenceMode==='auto') markActive();
+  trackPresence();
+  syncStatusSelector();
+  rebuildSelfDots();
+}
 
 function openWhatsApp(uid){
   const u=users.find(x=>String(x.id)===String(uid));
