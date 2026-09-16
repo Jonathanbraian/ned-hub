@@ -1552,12 +1552,6 @@ a{text-decoration:none;color:inherit}
         </select>
         <select class="um-filter" id="perf-filter-role" onchange="renderPerformancePage()">
           <option value="">All Roles</option>
-          <option value="agent">Agent</option>
-          <option value="specialist">Specialist</option>
-          <option value="executive">Executive</option>
-          <option value="leader">Leader</option>
-          <option value="supervisor">Supervisor</option>
-          <option value="manager">Manager</option>
         </select>
       </div>
       <div id="perf-content"></div>
@@ -1793,13 +1787,28 @@ a{text-decoration:none;color:inherit}
       </div>
       <div class="um-toolbar">
         <div class="um-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B7A99" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="Search by name or email..." oninput="filterUsers(this.value)"></div>
-        <select class="um-filter" onchange="filterByRole(this.value)"><option value="">All roles</option><option value="agent">Agent</option><option value="specialist">Sales Specialist</option><option value="executive">Sales Executive</option><option value="leader">Team Leader</option><option value="supervisor">Supervisor</option><option value="manager">Manager</option><option value="director">Director</option></select>
+        <select class="um-filter" id="um-filter-role" onchange="filterByRole(this.value)"><option value="">All roles</option></select>
         <select class="um-filter" onchange="filterByCampus(this.value)"><option value="">All campuses</option><option value="dublin">Dublin</option><option value="limerick">Limerick</option><option value="both">Both</option></select>
         <button class="btn-add-user" onclick="openModal('add')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add User</button>
       </div>
       <div class="um-table-wrap"><table class="um-table">
         <thead><tr><th>User</th><th>Role</th><th>Campus / Team</th><th>Status</th><th>Password</th><th>Actions</th></tr></thead>
         <tbody id="users-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="page-roles" class="page">
+    <div class="mgr-grad-bar"></div>
+    <div class="mgr-ph"><div class="mgr-ph-inner" style="grid-template-columns:1fr;padding-bottom:36px"><div><div class="mgr-eyebrow">Management Area</div><h1>Cargos</h1><p class="ph-desc">Job titles used across the Sales Hub. Each cargo maps to one permission level and can carry its own individual and team monthly targets.</p></div></div></div>
+    <div class="um-wrap">
+      <div class="um-toolbar">
+        <div style="flex:1;font-size:13px;color:var(--muted)">The permission level decides what a holder can see and do. Changing it moves every holder of the cargo to that level.</div>
+        <button class="btn-add-user" onclick="openRoleModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New cargo</button>
+      </div>
+      <div class="um-table-wrap"><table class="um-table">
+        <thead><tr><th>Cargo</th><th>Permission level</th><th>Individual target</th><th>Team target</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="roles-tbody"></tbody>
       </table></div>
     </div>
   </div>
@@ -2016,6 +2025,51 @@ a{text-decoration:none;color:inherit}
 
 <!-- MODALS -->
 <!-- Add/Edit User -->
+<div class="modal-backdrop" id="modal-role">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-role-title">New Cargo</div><button class="modal-close" onclick="closeModal('modal-role')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="role-id">
+      <div class="form-group"><label class="form-label">Cargo name</label><input class="form-input" type="text" id="role-name" placeholder="e.g. Senior Sales Specialist"></div>
+      <div class="form-group"><label class="form-label">Permission level</label>
+        <select class="form-select" id="role-base">
+          <option value="agent">Agent</option>
+          <option value="specialist">Sales Specialist</option>
+          <option value="executive">Sales Executive</option>
+          <option value="leader">Team Leader</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="manager">Manager</option>
+          <option value="director">Director</option>
+        </select>
+        <div class="form-hint">This is what the cargo can do in the Hub, not what it is called.</div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label class="form-label">Individual target (&euro; / month)</label><input class="form-input" type="number" id="role-ind-target" placeholder="Leave blank for the level default" min="0" step="500"></div>
+        <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="role-team-target" placeholder="Leave blank for none" min="0" step="500"></div>
+      </div>
+      <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="role-active" style="width:14px;height:14px;cursor:pointer" checked>
+        Active - available when creating users
+      </label>
+      <div class="login-error" id="role-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-role')">Cancel</button><button class="btn-save mgr-save" id="btn-save-role" onclick="saveRole()">Save Cargo</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-team-target">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="mtt-title">Team Target</div><button class="modal-close" onclick="closeModal('modal-team-target')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="mtt-uid">
+      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>A monthly target for this leader's whole team. Quarterly is this figure times three, annual times twelve. Leave it blank to go back to adding up each member's own target.</span></div>
+      <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="mtt-value" placeholder="Blank to clear" min="0" step="1000"></div>
+      <div class="login-error" id="mtt-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-team-target')">Cancel</button><button class="btn-save mgr-save" id="btn-save-mtt" onclick="saveTeamTarget()">Save Team Target</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-user">
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modal-user-title">Add New User</div><button class="modal-close" onclick="closeModal('modal-user')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -2025,15 +2079,7 @@ a{text-decoration:none;color:inherit}
       <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" type="email" id="u-email" placeholder="alice.almeida@ned.ie"></div>
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Role</label>
-          <select class="form-select" id="u-role">
-            <option value="agent">Agent</option>
-            <option value="specialist">Sales Specialist</option>
-            <option value="executive">Sales Executive</option>
-            <option value="leader">Team Leader</option>
-            <option value="supervisor">Supervisor</option>
-            <option value="manager">Manager</option>
-            <option value="director">Director</option>
-          </select>
+          <select class="form-select" id="u-role"></select>
         </div>
         <div class="form-group"><label class="form-label">Campus</label><select class="form-select" id="u-campus"><option value="dublin">Dublin</option><option value="limerick">Limerick</option><option value="both">Both</option></select></div>
       </div>
@@ -2212,9 +2258,13 @@ const TEAMS_BY_CAMPUS = {
 const ALL_TEAMS = ['Team Brazil','Team Asia','Team Latam'];
 
 // Helper: build perf object by role
-function mkPerf(role, mActual){
-  const t={agent:14000,specialist:17000,executive:20000,leader:22000,supervisor:22000,manager:0,director:0};
-  const mt=t[role]||14000;
+// Pre-load placeholder. Uses the same ladder as the server so the figures do
+// not jump when loadPerformance() replaces them:
+//   person override -> cargo individual_target -> ROLE_TARGETS[base] -> 0
+function mkPerf(role, mActual, roleId){
+  const cargo = (roleId!=null) ? (rolesById[roleId]||null) : null;
+  const mt = (cargo && cargo.individual_target!=null)
+    ? Number(cargo.individual_target) : (ROLE_TARGETS[role]||0);
   return {
     monthly:  {target:mt,       actual:mActual,    notes:''},
     quarterly:{target:mt*3,     actual:Math.round(mActual*2.8), notes:''},
@@ -2233,8 +2283,48 @@ function mapProfileToUser(u){
     nationality:d(u.nationality)||'', language:d(u.language)||'', jobTitle:d(u.job_title)||'',
     status:u.status, reports_to:u.reports_to||null, photo:u.photo||'', bio:d(u.bio)||'',
     monthly_target: (u.monthly_target!=null)?Number(u.monthly_target):null,
-    perf: mkPerf(u.role, 0), certs:[], certDates:[], appraisals:[], documents:[]
+    role_id: u.role_id!=null?u.role_id:null,
+    team_target: (u.team_target!=null)?Number(u.team_target):null,
+    role_name: d((rolesById[u.role_id]||{}).name) || null,
+    perf: mkPerf(u.role, 0, u.role_id), certs:[], certDates:[], appraisals:[], documents:[]
   };
+}
+
+// ── CARGOS (roles) ──────────────────────────────────────────────
+// A cargo names the job and may carry its own targets; profiles.role stays
+// the base permission level and keeps driving every access decision.
+let dbRoles = [];
+let rolesById = {};
+
+async function loadRoles(){
+  const r = await callDb('get_roles');
+  dbRoles = (r && r.roles) || [];
+  rolesById = {};
+  dbRoles.forEach(x => { rolesById[x.id] = x; });
+  fillRoleFilters();
+}
+// Both role filters list cargos, so what you filter by matches what you see.
+function activeCargos(){ return dbRoles.filter(r=>r.active!==false); }
+function fillRoleFilters(){
+  const opts=activeCargos().map(r=>`<option value="${esc(r.id)}">${esc(dashFix(r.name))}</option>`).join('');
+  const um=document.getElementById('um-filter-role');
+  if(um){ const v=um.value; um.innerHTML='<option value="">All roles</option>'+opts; um.value=v; }
+  const pf=document.getElementById('perf-filter-role');
+  if(pf){ const v=pf.value; pf.innerHTML='<option value="">All Roles</option>'+opts; pf.value=v; }
+}
+function fillCargoSelect(selId, selected){
+  const sel=document.getElementById(selId);
+  if(!sel) return;
+  sel.innerHTML=activeCargos()
+    .map(r=>`<option value="${esc(r.id)}">${esc(dashFix(r.name))}</option>`).join('');
+  if(selected!=null) sel.value=String(selected);
+}
+
+function cargoOf(u){ return (u && u.role_id!=null) ? (rolesById[u.role_id]||null) : null; }
+// The displayed job name: cargo first, base-level label as the fallback.
+function displayRole(u){
+  return (u && u.role_name && String(u.role_name).trim())
+    ? u.role_name : ((u && ROLE_LABELS[u.role]) || (u && u.role) || '');
 }
 
 async function loadDirectory(){
@@ -2250,12 +2340,51 @@ let perfYear = new Date().getFullYear();
 function effectiveTargetOf(u, eff){
   if(eff && eff[u.id]!=null) return Number(eff[u.id]);
   if(u.monthly_target!=null) return Number(u.monthly_target);
+  const cargo = cargoOf(u);
+  if(cargo && cargo.individual_target!=null) return Number(cargo.individual_target);
   return ROLE_TARGETS[u.role]||0;
+}
+
+// ── TEAM TARGETS ────────────────────────────────────────────────
+// A leader's team is the whole subtree beneath them, not just direct reports.
+let effTeamTargets = {};
+
+function teamSubtreeOf(leaderId){
+  const out=[], seen=new Set([leaderId]);
+  let frontier=[leaderId];
+  while(frontier.length){
+    const next=[];
+    const fset=new Set(frontier);
+    users.forEach(u=>{
+      if(u.reports_to!=null && fset.has(u.reports_to) && !seen.has(u.id)){
+        seen.add(u.id); out.push(u); next.push(u.id);
+      }
+    });
+    frontier=next;
+  }
+  return out;
+}
+
+// monthly team target, or null when the leader has none set
+function effectiveTeamTargetOf(u){
+  if(!u) return null;
+  if(effTeamTargets[u.id]!=null) return Number(effTeamTargets[u.id]);
+  if(u.team_target!=null) return Number(u.team_target);
+  const cargo = cargoOf(u);
+  if(cargo && cargo.team_target!=null) return Number(cargo.team_target);
+  return null;
+}
+const PERIOD_MULT={monthly:1,quarterly:3,annual:12};
+// The leader's team target for a period, or null to fall back to summing members.
+function teamTargetFor(leader, p){
+  const m=effectiveTeamTargetOf(leader);
+  return (m==null) ? null : m*(PERIOD_MULT[p]||1);
 }
 
 async function loadPerformance(){
   const r = await callDb('get_performance', { year: perfYear });
   const eff = (r&&r.effective_targets)||{};
+  effTeamTargets = (r&&r.effective_team_targets)||{};
   const byUser = {};
   ((r&&r.results)||[]).forEach(row=>{
     (byUser[row.user_id] ||= {})[row.month] =
@@ -2314,6 +2443,10 @@ let perfViewMode='team'; // 'team' | 'campus' | 'byteam' | 'individual'
 // ═══════════════════════════════════════
 // ROLE CONFIGURATION
 // ═══════════════════════════════════════
+// Never let an unexpected role value white-screen the app.
+const ROLE_CFG_FALLBACK = {label:'Team Member', pill:'rp-agent', mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false};
+function roleCfg(role){ return ROLE_CFG[role] || ROLE_CFG_FALLBACK; }
+
 const ROLE_CFG = {
   agent:      {label:'Agent',           pill:'rp-agent',      mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false},
   specialist: {label:'Sales Specialist',pill:'rp-agent',      mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false},
@@ -2423,6 +2556,7 @@ function completeLogin(uid){
 
 // Load the real staff directory, then start the app as the signed-in person.
 async function completeLoginReal(profile){
+  await loadRoles();        // names resolve during mapping, so this comes first
   await loadDirectory();
   await loadPerformance();
   currentUserId = profile.id; currentRole = profile.role;
@@ -2436,11 +2570,11 @@ function startApp(user){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('change-pw-screen').style.display='none';
   document.getElementById('app').style.display='block';
-  const cfg=ROLE_CFG[currentRole];
+  const cfg=roleCfg(currentRole);
   // Pill
   const pill=document.getElementById('role-pill');
   pill.className='role-pill '+cfg.pill;
-  pill.textContent=ROLE_LABELS[currentRole];
+  pill.textContent=displayRole(users.find(x=>x.id===currentUserId))||ROLE_LABELS[currentRole];
   // Avatar
   updateNavAvatar(user);
   // Nav items
@@ -2468,6 +2602,7 @@ function startApp(user){
     ...(cfg.mgr ? [
       {divider:true},
       {id:'users', label:'User Management', icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'},
+      {id:'roles', label:'Cargos', icon:'<path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 7V5h6v2"/>'},
     ] : []),
   ] : [];
 
@@ -2590,6 +2725,10 @@ function showPage(name){
   const na=document.getElementById('nav-'+name);
   if(na) na.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
+  if(name==='roles'){
+    if(isUserAdmin()) (async()=>{ await loadRoles(); renderRoles(); })();
+    else renderRoles();
+  }
   if(name==='users'){
     if(isUserAdmin()) (async()=>{ await loadDbUsers(); renderUsers(); updateStats(); })();
     else { renderUsers(); updateStats(); }
@@ -2641,7 +2780,7 @@ function renderPerformancePage(){
   const me=users.find(u=>u.id===currentUserId);
   const p=currentPerfPeriod;
   const container=document.getElementById('perf-content');
-  const cfg=ROLE_CFG[currentRole];
+  const cfg=roleCfg(currentRole);
   const canUpdate=canUpdatePerf();
 
   // Show/hide view-mode tabs (supervisor+)
@@ -2688,7 +2827,7 @@ function renderPerformancePage(){
     const roleF=document.getElementById('perf-filter-role')?.value||'';
     if(campF) teamList=teamList.filter(u=>u.campus===campF||u.campus==='both');
     if(teamF) teamList=teamList.filter(u=>u.team===teamF);
-    if(roleF) teamList=teamList.filter(u=>u.role===roleF);
+    if(roleF) teamList=teamList.filter(u=>String(u.role_id)===String(roleF));
     container.innerHTML=renderByTeamView(me, teamList, p, canUpdate);
     return;
   }
@@ -2701,7 +2840,7 @@ function renderPerformancePage(){
     const roleF=document.getElementById('perf-filter-role')?.value||'';
     if(campF) teamList=teamList.filter(u=>u.campus===campF||u.campus==='both');
     if(teamF) teamList=teamList.filter(u=>u.team===teamF);
-    if(roleF) teamList=teamList.filter(u=>u.role===roleF);
+    if(roleF) teamList=teamList.filter(u=>String(u.role_id)===String(roleF));
     container.innerHTML=renderIndividualTableView(me, teamList, p, canUpdate);
     return;
   }
@@ -2710,7 +2849,8 @@ function renderPerformancePage(){
 // ── FULL TEAM VIEW ──────────────────────────────────────────────
 function renderFullTeamView(me, teamList, p, canUpdate){
   const teamActual=teamList.reduce((a,u)=>a+u.perf[p].actual,0);
-  const teamTarget=teamList.reduce((a,u)=>a+u.perf[p].target,0);
+  const setTeamTarget=teamTargetFor(me,p);
+  const teamTarget=(setTeamTarget!=null)?setTeamTarget:teamList.reduce((a,u)=>a+u.perf[p].target,0);
   const myActual=me.perf[p].actual; const myTarget=me.perf[p].target;
   const teamPct=teamTarget>0?Math.round(teamActual/teamTarget*100):0;
   const myPct=myTarget>0?Math.round(myActual/myTarget*100):0;
@@ -2721,7 +2861,7 @@ function renderFullTeamView(me, teamList, p, canUpdate){
       <div class="kpi-card kc-blue">
         <div class="kpi-label">Team Total</div>
         <div class="kpi-val">${fmt(teamActual)}</div>
-        <div class="kpi-sub">Target: ${fmt(teamTarget)}</div>
+        <div class="kpi-sub">Target: ${fmt(teamTarget)}${setTeamTarget!=null?' (team target)':' (sum of members)'}${canUpdateFor(me)?` <button class="update-btn" style="margin-left:6px;padding:1px 7px;font-size:10px" onclick="openTeamTarget('${esc(me.id)}')">Edit team target</button>`:''}</div>
         <div class="prog-wrap"><div class="prog-track"><div class="prog-fill" style="width:${Math.min(100,teamPct)}%;background:${pctColor(teamPct)}"></div></div></div>
         <div class="kpi-pct" style="color:${pctColor(teamPct)}">${teamPct}% of target</div>
       </div>
@@ -2809,7 +2949,8 @@ function renderIndividualTableView(me, teamList, p, canUpdate){
   const total=teamList.length;
   const onTarget=teamList.filter(u=>u.perf[p].actual>=u.perf[p].target).length;
   const totalActual=teamList.reduce((a,u)=>a+u.perf[p].actual,0);
-  const totalTarget=teamList.reduce((a,u)=>a+u.perf[p].target,0);
+  const setTotalTarget=teamTargetFor(me,p);
+  const totalTarget=(setTotalTarget!=null)?setTotalTarget:teamList.reduce((a,u)=>a+u.perf[p].target,0);
   const overallPct=totalTarget>0?Math.round(totalActual/totalTarget*100):0;
   return `
     <div class="kpi-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
@@ -2833,11 +2974,11 @@ function renderTeamTable(teamList, p, canUpdate){
           <div class="perf-avatar ${u.photo?'':avColor(u.id)}">${u.photo?`<img src="${u.photo}" alt="">`:getInitials(u)}</div>
           <div>
             <div style="font-weight:600;font-size:13.5px">${u.first} ${u.last}</div>
-            <div style="font-size:11.5px;color:var(--muted)">${u.jobTitle||ROLE_LABELS[u.role]} ${u.team?'· '+u.team:''}</div>
+            <div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} ${u.team?'· '+u.team:''}</div>
           </div>
         </div>
       </td>
-      <td><span class="role-badge ${ROLE_BADGE[u.role]}">${ROLE_LABELS[u.role]}</span></td>
+      <td><span class="role-badge ${ROLE_BADGE[u.role]}">${displayRole(u)}</span></td>
       <td><span class="campus-chip">${CAMPUS_LABELS[u.campus]||u.campus}</span></td>
       <td class="right"><div class="eur-val">${fmt(up.actual)}</div><div class="eur-target">target ${fmt(up.target)}</div></td>
       <td style="min-width:140px"><div class="mini-bar-wrap"><div class="mini-bar-track"><div class="mini-bar-fill" style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div><span class="pct-badge ${pctBadgeClass(pct)}">${pct}%</span></div></td>
@@ -3030,9 +3171,9 @@ function buildProfileHTML(u,isMyProfile){
       </div>
       <div>
         <div class="profile-name">${u.first} ${u.last}</div>
-        <div class="profile-job-title">${u.jobTitle||ROLE_LABELS[u.role]} ${u.team?'· '+u.team:''}</div>
+        <div class="profile-job-title">${displayRole(u)} ${u.team?'· '+u.team:''}</div>
         <div class="profile-meta-chips">
-          <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${ROLE_LABELS[u.role]}</span>
+          <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${displayRole(u)}</span>
           <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${CAMPUS_LABELS[u.campus]||u.campus}</span>
           ${u.phone?`<span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.22h3a2 2 0 0 1 2 1.72c.128.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91A16 16 0 0 0 14 16l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.572 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${u.phone}</span>`:''}
           ${u.instagram?`<span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>@${u.instagram}</span>`:''}
@@ -3063,7 +3204,7 @@ function buildProfileHTML(u,isMyProfile){
         </div>
         <div class="profile-section-card">
           <div class="ps-title">Role & Position</div>
-          <div class="profile-field"><div class="pf-label">Role</div><div class="pf-value"><span class="role-badge ${ROLE_BADGE[u.role]}">${ROLE_LABELS[u.role]}</span></div></div>
+          <div class="profile-field"><div class="pf-label">Role</div><div class="pf-value"><span class="role-badge ${ROLE_BADGE[u.role]}">${displayRole(u)}</span></div></div>
           <div class="profile-field"><div class="pf-label">Job Title</div><div class="pf-value ${u.jobTitle?'':'empty'}">${u.jobTitle||'Not set'}</div></div>
           <div class="profile-field"><div class="pf-label">Team</div><div class="pf-value ${u.team?'':'empty'}">${u.team||'Not assigned'}</div></div>
           <div class="profile-field"><div class="pf-label">Campus</div><div class="pf-value">${CAMPUS_LABELS[u.campus]||u.campus}</div></div>
@@ -3167,7 +3308,7 @@ function applyTeamFilter(){
 }
 
 function renderTeamProfiles(roleF=''){
-  const cfg=ROLE_CFG[currentRole];
+  const cfg=roleCfg(currentRole);
   let allTeam=getTeamForUser(currentUserId);
 
   // Apply campus filter
@@ -3218,7 +3359,7 @@ function buildTeamCard(u){
     <div class="tm-avatar ${u.photo?'':avColor(u.id)}">${avatarContent}</div>
     <div class="tm-name">${displayName}</div>
     <div class="tm-chips">
-      <span class="role-badge ${ROLE_BADGE[u.role]}" style="font-size:10px;padding:2px 7px">${ROLE_LABELS[u.role]}</span>
+      <span class="role-badge ${ROLE_BADGE[u.role]}" style="font-size:10px;padding:2px 7px">${displayRole(u)}</span>
     </div>
     <div style="width:100%;margin-top:2px">
       <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px"><span>${u.team||''}</span><span style="color:${color}">${pct}%</span></div>
@@ -3333,12 +3474,164 @@ function deleteDoc(uid,idx){
 // ═══════════════════════════════════════
 function isUserAdmin(){ return currentRole === 'manager' || currentRole === 'director'; }
 
+// ═══════════════════════════════════════
+// CARGOS (roles) - Manager / Director
+// ═══════════════════════════════════════
+function renderRoles(){
+  const tbody=document.getElementById('roles-tbody');
+  if(!tbody) return;
+  if(!isUserAdmin()){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Only managers and directors can manage cargos.</td></tr>';
+    return;
+  }
+  const holders={};
+  users.forEach(u=>{ if(u.role_id!=null) holders[u.role_id]=(holders[u.role_id]||0)+1; });
+  tbody.innerHTML=dbRoles.map(r=>{
+    const n=holders[r.id]||0;
+    return `
+    <tr>
+      <td><div class="user-name">${esc(dashFix(r.name))}</div><div class="user-email">${n} ${n===1?'person':'people'}</div></td>
+      <td><span class="role-badge ${ROLE_BADGE[r.base_level]||''}">${esc(ROLE_LABELS[r.base_level]||r.base_level)}</span></td>
+      <td class="right">${r.individual_target!=null?fmt(Number(r.individual_target)):'<span style="color:var(--muted)">Level default</span>'}</td>
+      <td class="right">${r.team_target!=null?fmt(Number(r.team_target)):'<span style="color:var(--muted)">None</span>'}</td>
+      <td><span class="status-dot"><span class="sdot ${r.active!==false?'sdot-active':'sdot-inactive'}"></span>${r.active!==false?'Active':'Inactive'}</span></td>
+      <td>
+        <div class="table-actions">
+          <button class="tact-btn edit" onclick="openRoleModal('${esc(r.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>
+          <button class="tact-btn reset" onclick="toggleRoleActive('${esc(r.id)}')">${r.active!==false?'Deactivate':'Activate'}</button>
+          <button class="tact-btn deact" onclick="deleteRole('${esc(r.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No cargos yet.</td></tr>';
+}
+
+function showRoleError(m){const e=document.getElementById('role-error');if(e){e.textContent=m;e.style.display='block';}}
+function clearRoleError(){const e=document.getElementById('role-error');if(e){e.textContent='';e.style.display='none';}}
+const ROLE_CRUD_ERRORS={
+  name_exists:'A cargo with that name already exists',
+  missing_name:'Give the cargo a name',
+  bad_base_level:'Pick a permission level',
+  bad_number:'Targets must be zero or more',
+  forbidden:"You don't have permission for this",
+  forbidden_role:"You can't manage a director-level cargo",
+  in_use:'This cargo is assigned to users - deactivate it instead',
+  not_found:'That cargo no longer exists'
+};
+
+function openRoleModal(id){
+  const r=id!=null?dbRoles.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('role-id').value=r?r.id:'';
+  document.getElementById('modal-role-title').textContent=r?'Edit Cargo':'New Cargo';
+  document.getElementById('role-name').value=r?r.name:'';
+  document.getElementById('role-base').value=r?r.base_level:'agent';
+  document.getElementById('role-ind-target').value=(r&&r.individual_target!=null)?r.individual_target:'';
+  document.getElementById('role-team-target').value=(r&&r.team_target!=null)?r.team_target:'';
+  document.getElementById('role-active').checked=r?r.active!==false:true;
+  clearRoleError();
+  openBackdrop('modal-role');
+}
+
+async function saveRole(){
+  const id=document.getElementById('role-id').value;
+  const name=document.getElementById('role-name').value.trim();
+  const base_level=document.getElementById('role-base').value;
+  const indRaw=document.getElementById('role-ind-target').value.trim();
+  const teamRaw=document.getElementById('role-team-target').value.trim();
+  const active=document.getElementById('role-active').checked;
+  clearRoleError();
+  if(!name){showRoleError('Give the cargo a name');return;}
+  if(indRaw!=='' && !(Number(indRaw)>=0)){showRoleError('Targets must be zero or more');return;}
+  if(teamRaw!=='' && !(Number(teamRaw)>=0)){showRoleError('Targets must be zero or more');return;}
+  const payload={name, base_level,
+    individual_target: indRaw===''?null:Number(indRaw),
+    team_target: teamRaw===''?null:Number(teamRaw)};
+  const btn=document.getElementById('btn-save-role');
+  btn.disabled=true;
+  try{
+    const r=id
+      ? await callDb('update_role', Object.assign({id:Number(id), active}, payload))
+      : await callDb('create_role', payload);
+    if(!r||!r.ok){showRoleError(ROLE_CRUD_ERRORS[r&&r.error]||'Could not save this cargo');return;}
+    closeModal('modal-role');
+    showToast(r.cascaded?'Cargo saved - holders moved to the new permission level':'Cargo saved','success');
+    await refreshAfterRoleChange();
+  }catch(e){ showRoleError('Could not save this cargo'); }
+  finally{ btn.disabled=false; }
+}
+
+async function toggleRoleActive(id){
+  const r=dbRoles.find(x=>String(x.id)===String(id)); if(!r) return;
+  const res=await callDb('update_role',{id:Number(r.id), name:r.name, base_level:r.base_level,
+    individual_target:r.individual_target, team_target:r.team_target, active:r.active===false});
+  if(!res||!res.ok){showToast(ROLE_CRUD_ERRORS[res&&res.error]||'Could not update this cargo','error');return;}
+  showToast(r.active===false?'Cargo activated':'Cargo deactivated','success');
+  await refreshAfterRoleChange();
+}
+
+async function deleteRole(id){
+  const r=dbRoles.find(x=>String(x.id)===String(id)); if(!r) return;
+  const res=await callDb('delete_role',{id:Number(r.id)});
+  if(!res||!res.ok){showToast(ROLE_CRUD_ERRORS[res&&res.error]||'Could not delete this cargo','error');return;}
+  showToast('Cargo deleted','success');
+  await refreshAfterRoleChange();
+}
+
+// A cargo change can rename people and move their permission level, so reload
+// the directory and the targets too.
+async function refreshAfterRoleChange(){
+  await loadRoles();
+  await loadDirectory();
+  await loadPerformance();
+  renderRoles();
+  if(document.getElementById('page-users')?.classList.contains('active')) await refreshUserManagement();
+  if(document.getElementById('page-performance')?.classList.contains('active')) renderPerformancePage();
+  if(document.getElementById('page-home')?.classList.contains('active')) renderHomePerf();
+}
+
+// ── team target on a leader ─────────────────────────────────────
+function openTeamTarget(uid){
+  const u=users.find(x=>x.id===uid); if(!u) return;
+  document.getElementById('mtt-uid').value=uid;
+  document.getElementById('mtt-title').textContent=`Team Target - ${u.first} ${u.last}`;
+  const cur=effectiveTeamTargetOf(u);
+  document.getElementById('mtt-value').value=(cur!=null)?cur:'';
+  const e=document.getElementById('mtt-error'); if(e){e.textContent='';e.style.display='none';}
+  openBackdrop('modal-team-target');
+}
+
+async function saveTeamTarget(){
+  const uid=document.getElementById('mtt-uid').value;
+  const raw=document.getElementById('mtt-value').value.trim();
+  const err=document.getElementById('mtt-error');
+  const fail=m=>{if(err){err.textContent=m;err.style.display='block';}};
+  if(raw!=='' && !(Number(raw)>=0)){fail('Enter a valid amount, or leave it blank to clear');return;}
+  const btn=document.getElementById('btn-save-mtt');
+  btn.disabled=true;
+  try{
+    const r=await callDb('set_team_target',{user_id:uid, team_target: raw===''?null:Number(raw)});
+    if(!r||!r.ok){
+      fail(r&&(r.error==='out_of_scope'||r.error==='forbidden')?"You can't set a team target for this person":'Could not save the team target');
+      return;
+    }
+    closeModal('modal-team-target');
+    showToast(raw===''?'Team target cleared':'Team target saved','success');
+    await loadDirectory();
+    await loadPerformance();
+    renderPerformancePage();
+    if(document.getElementById('page-home')?.classList.contains('active')) renderHomePerf();
+  }catch(e){ fail('Could not save the team target'); }
+  finally{ btn.disabled=false; }
+}
+
 async function loadDbUsers(){
   const r = await callDb('list_users');
   const rows = (r && r.users) || [];
   dbUsers = rows.map(u => ({
     id:u.id, first:dashFix(u.first), last:dashFix(u.last), nickname:dashFix(u.nickname)||'', email:u.email,
     role:u.role, campus:u.campus, team:dashFix(u.team), phone:u.phone||'',
+    role_id:u.role_id!=null?u.role_id:null,
+    role_name: dashFix((rolesById[u.role_id]||{}).name) || null,
     jobTitle:dashFix(u.job_title)||'', status:u.status, tempPw:u.must_change_password,
     reports_to:u.reports_to||null, photo:u.photo||''
   }));
@@ -3362,7 +3655,7 @@ function renderUsers(){
   let data=dbUsers.filter(u=>{
     const q=searchVal.toLowerCase();
     const ms=!q||(u.first+' '+u.last).toLowerCase().includes(q)||u.email.toLowerCase().includes(q);
-    const mr=!roleFilter||u.role===roleFilter;
+    const mr=!roleFilter||String(u.role_id)===String(roleFilter);
     const mc=!campusFilter||u.campus===campusFilter;
     return ms&&mr&&mc;
   });
@@ -3374,7 +3667,7 @@ function renderUsers(){
           <div><div class="user-name">${esc(u.first)} ${esc(u.last)}</div><div class="user-email">${esc(u.email)}</div></div>
         </div>
       </td>
-      <td><span class="role-badge ${ROLE_BADGE[u.role]}">${ROLE_LABELS[u.role]}</span></td>
+      <td><span class="role-badge ${ROLE_BADGE[u.role]}">${displayRole(u)}</span></td>
       <td><span class="campus-chip">${CAMPUS_LABELS[u.campus]||esc(u.campus)}</span>${u.team?` <span style="font-size:11px;color:var(--muted)">${esc(u.team)}</span>`:''}</td>
       <td><span class="status-dot"><span class="sdot ${u.status==='active'?'sdot-active':'sdot-inactive'}"></span>${u.status==='active'?'Active':'Inactive'}</span></td>
       <td>${u.tempPw?'<span class="temp-chip">Temporary</span>':`<span style="font-size:12px;color:var(--muted)">Set</span>`}</td>
@@ -3410,7 +3703,7 @@ function openModal(type,userId){
     document.getElementById('btn-save-user').textContent='Create User';
     document.getElementById('btn-save-user').className='btn-save';
     ['u-first','u-last','u-email','u-team','u-phone','u-pw'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('u-role').value='agent';
+    fillCargoSelect('u-role');
     document.getElementById('u-campus').value='dublin';
     document.getElementById('u-status').value='active';
     document.getElementById('pw-group').style.display='block';
@@ -3426,7 +3719,7 @@ function openModal(type,userId){
     document.getElementById('u-first').value=u.first;
     document.getElementById('u-last').value=u.last;
     document.getElementById('u-email').value=u.email;
-    document.getElementById('u-role').value=u.role;
+    fillCargoSelect('u-role', u.role_id);
     document.getElementById('u-campus').value=u.campus;
     document.getElementById('u-team').value=u.team||'';
     document.getElementById('u-phone').value=u.phone||'';
@@ -3459,7 +3752,7 @@ function fillReportsTo(){
   if(!sel) return;
   const LEADS=['leader','supervisor','manager','director'];
   const opts=dbUsers.filter(u=>LEADS.includes(u.role))
-    .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} &mdash; ${esc(ROLE_LABELS[u.role]||u.role)}</option>`)
+    .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} &mdash; ${esc(displayRole(u))}</option>`)
     .join('');
   sel.innerHTML='<option value="">&mdash; None (top level) &mdash;</option>'+opts;
   sel.value='';
@@ -3474,6 +3767,9 @@ function clearUserError(){
   if(e){e.textContent='';e.style.display='none';}
 }
 const CREATE_USER_ERRORS={
+  missing_role_id:'Pick a cargo for this person',
+  role_not_found:'That cargo no longer exists',
+  role_inactive:'That cargo is inactive',
   email_exists:'This email is already in use',
   auth_create_failed:'This email is already in use',
   weak_password:'Password must be at least 6 characters',
@@ -3486,7 +3782,7 @@ async function saveUser(){
   const first=document.getElementById('u-first').value.trim();
   const last=document.getElementById('u-last').value.trim();
   const email=document.getElementById('u-email').value.trim().toLowerCase();
-  const role=document.getElementById('u-role').value;
+  const roleId=document.getElementById('u-role').value;
   const campus=(document.getElementById('u-campus').value||'').toLowerCase();
   const team=document.getElementById('u-team').value.trim();
   const phone=document.getElementById('u-phone').value.trim();
@@ -3502,7 +3798,7 @@ async function saveUser(){
   btn.disabled=true;
   try{
     const r=await callDb('create_user',{user:{
-      first,last,email,role,campus,team,phone,status,
+      first,last,email,role_id: roleId?Number(roleId):null,campus,team,phone,status,
       password:pw, reports_to: reportsTo || null
     }});
     if(!r||!r.ok){
@@ -3511,7 +3807,10 @@ async function saveUser(){
     }
     closeModal('modal-user');
     showToast('User created','success');
+    await loadRoles();
     await refreshUserManagement();
+    await loadDirectory();
+    await loadPerformance();
   } catch(e){
     showUserError('Could not create user');
   } finally {
@@ -3626,9 +3925,11 @@ function renderHomePerf(){
       </div>`;
   } else {
     // TEAM widget
-    const team=getTeamForUser(me.id).filter(u=>!['manager','director'].includes(u.role));
+    // The subtree beneath this leader - the same population the team target covers.
+    const team=teamSubtreeOf(me.id);
     const tActual=team.reduce((a,u)=>a+u.perf[p].actual,0);
-    const tTarget=team.reduce((a,u)=>a+u.perf[p].target,0);
+    const setTTarget=teamTargetFor(me,p);
+    const tTarget=(setTTarget!=null)?setTTarget:team.reduce((a,u)=>a+u.perf[p].target,0);
     const tPct=tTarget>0?Math.round(tActual/tTarget*100):0;
     const tColor=pctColor(tPct);
     const onTarget=team.filter(u=>u.perf[p].actual>=u.perf[p].target).length;
@@ -3803,7 +4104,7 @@ function renderCommsContactList(filter=''){
       </div>
       <div class="contact-info">
         <div class="contact-name">${u.first} ${u.last}${u.nickname?' ('+u.nickname+')':''}</div>
-        <div class="contact-preview">${lastMsg?lastMsg.text:ROLE_LABELS[u.role]||''}</div>
+        <div class="contact-preview">${lastMsg?lastMsg.text:displayRole(u)}</div>
       </div>
       <div class="contact-actions">
         <button class="ca-btn ca-call" title="Call" onclick="event.stopPropagation();startCall(${u.id},'audio')">
@@ -3858,7 +4159,7 @@ function openDMThread(targetId){
   document.getElementById('chat-header-avatar').className='chat-header-avatar '+(target.photo?'':avColor(target.id));
   document.getElementById('chat-header-avatar').innerHTML=av;
   document.getElementById('chat-header-name').textContent=target.first+' '+target.last;
-  document.getElementById('chat-header-sub').innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${STATUS_COLORS[presence]};display:inline-block"></span>${STATUS_LABELS[presence]} · ${target.jobTitle||ROLE_LABELS[target.role]||''}</span>`;
+  document.getElementById('chat-header-sub').innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${STATUS_COLORS[presence]};display:inline-block"></span>${STATUS_LABELS[presence]} · ${displayRole(target)}</span>`;
   document.getElementById('chat-header-actions').innerHTML=`
     <button class="chat-action-btn btn-wa" onclick="openWhatsApp('${targetId}')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -4373,7 +4674,7 @@ function openNewMeeting(prefillDate=''){
   // Populate attendee select
   const sel=document.getElementById('nm-attendee-select');
   sel.innerHTML='<option value="">Add attendee...</option>'+
-    users.filter(u=>u.id!==currentUserId).map(u=>`<option value="${u.id}">${u.first} ${u.last} - ${ROLE_LABELS[u.role]}</option>`).join('');
+    users.filter(u=>u.id!==currentUserId).map(u=>`<option value="${u.id}">${u.first} ${u.last} - ${displayRole(u)}</option>`).join('');
   renderNmAttendees();
   openBackdrop('modal-new-meeting');
 }
@@ -4579,14 +4880,15 @@ const MOB_LEADER_ITEMS=[
   {id:'mgr-procedures', label:'Ldr Procedures',    icon:'<rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>'},
   {id:'mgr-handbook',   label:'Handbook',          icon:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'},
   {id:'users',          label:'Users',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
+  {id:'roles',          label:'Cargos',            icon:'<path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>'},
 ];
 
 function buildMobLeadersMenu(){
-  const cfg=currentRole?ROLE_CFG[currentRole]:null;
+  const cfg=currentRole?roleCfg(currentRole):null;
   if(!cfg) return;
   const grid=document.getElementById('mob-leaders-grid');
   if(!grid) return;
-  const items=MOB_LEADER_ITEMS.filter(item=>item.id!=='users'||cfg.mgr);
+  const items=MOB_LEADER_ITEMS.filter(item=>(item.id!=='users'&&item.id!=='roles')||cfg.mgr);
   grid.innerHTML=items.map(item=>`
     <div class="mob-leaders-item" onclick="closeMobLeaders();showPage('${item.id}')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg>
@@ -4650,7 +4952,7 @@ function selectReportType(type, card){
     const me=users.find(u=>u.id===currentUserId);
     const accessible=canUpdatePerf()?users:users.filter(u=>u.id===currentUserId);
     const sel=document.getElementById('rpt-person');
-    sel.innerHTML=accessible.map(u=>`<option value="${u.id}" ${u.id===currentUserId?'selected':''}>${u.first} ${u.last} - ${ROLE_LABELS[u.role]}</option>`).join('');
+    sel.innerHTML=accessible.map(u=>`<option value="${u.id}" ${u.id===currentUserId?'selected':''}>${u.first} ${u.last} - ${displayRole(u)}</option>`).join('');
   }
 }
 
@@ -4755,9 +5057,9 @@ function generateReport(){
     const pct=p.target>0?Math.round(p.actual/p.target*100):0;
     const color=pctColor(pct);
     titleEl.textContent=`Individual Report - ${u.first} ${u.last}`;
-    metaEl.textContent=`${ROLE_LABELS[u.role]} · ${CAMPUS_LABELS[u.campus]} · ${getPeriodLabel()}`;
+    metaEl.textContent=`${displayRole(u)} · ${CAMPUS_LABELS[u.campus]} · ${getPeriodLabel()}`;
     lastReportTitle=titleEl.textContent;
-    lastReportData=[{Name:`${u.first} ${u.last}`,Role:ROLE_LABELS[u.role],Campus:CAMPUS_LABELS[u.campus],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pct}%`,Period:getPeriodLabel()}];
+    lastReportData=[{Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pct}%`,Period:getPeriodLabel()}];
     if(incKpis){
       html+=`<div class="rpt-section"><div class="rpt-section-title">Performance Summary</div>
         <div class="rpt-kpi-row">
@@ -4791,7 +5093,7 @@ function generateReport(){
     const totalActual=perfUsers.reduce((a,u)=>a+getPerfForPeriod(u).actual,0);
     const totalPct=totalTarget>0?Math.round(totalActual/totalTarget*100):0;
     const onTarget=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual>=p.target;}).length;
-    lastReportData=perfUsers.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:ROLE_LABELS[u.role],Campus:CAMPUS_LABELS[u.campus],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Period:getPeriodLabel()};});
+    lastReportData=perfUsers.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Period:getPeriodLabel()};});
     if(incKpis){
       html+=`<div class="rpt-section"><div class="rpt-section-title">Team KPIs</div>
         <div class="rpt-kpi-row">
@@ -4834,13 +5136,13 @@ function generateReport(){
     metaEl.textContent=getPeriodLabel();
     lastReportTitle=titleEl.textContent;
     const sorted=[...perfUsers].sort((a,b)=>{const pa=getPerfForPeriod(a);const pb=getPerfForPeriod(b);return (pb.target>0?pb.actual/pb.target:0)-(pa.target>0?pa.actual/pa.target:0);});
-    lastReportData=sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Rank:i+1,Name:`${u.first} ${u.last}`,Role:ROLE_LABELS[u.role],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`};});
+    lastReportData=sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Rank:i+1,Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`};});
     html+=`<div class="rpt-section"><div class="rpt-section-title">Leaderboard - ${getPeriodLabel()}</div>
       ${sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;const numClass=i===0?'gold':i===1?'silver':i===2?'bronze':'';
         return `<div class="rpt-rank-row">
           <div class="rpt-rank-num ${numClass}">${medal}</div>
           <div class="perf-avatar ${avColor(u.id)}" style="width:34px;height:34px;font-size:13px">${getInitials(u)}</div>
-          <div style="flex:1"><div style="font-size:13.5px;font-weight:600">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted)">${ROLE_LABELS[u.role]} · ${u.team||''}</div></div>
+          <div style="flex:1"><div style="font-size:13.5px;font-weight:600">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} · ${u.team||''}</div></div>
           <div style="text-align:right"><div class="eur-val">${fmt(p.actual)}</div><div class="eur-target">target ${fmt(p.target)}</div></div>
           <span class="pct-badge ${pctBadgeClass(pc)}" style="margin-left:8px">${pc}%</span>
         </div>`;
@@ -4852,7 +5154,7 @@ function generateReport(){
     lastReportTitle=titleEl.textContent;
     const onTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual>=p.target;});
     const offTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual<p.target;}).sort((a,b)=>{const pa=getPerfForPeriod(a);const pb=getPerfForPeriod(b);return (pa.actual/pa.target)-(pb.actual/pb.target);});
-    lastReportData=[...onTgt,...offTgt].map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:ROLE_LABELS[u.role],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Status:p.actual>=p.target?'On Target':'Below Target'};});
+    lastReportData=[...onTgt,...offTgt].map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Status:p.actual>=p.target?'On Target':'Below Target'};});
     html+=`<div class="rpt-section"><div class="rpt-section-title">On Target (${onTgt.length})</div>
       ${onTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${u.team||''}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:var(--success)"></div></div><div class="rpt-bar-val" style="color:var(--success)">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:var(--success)">${pc}%</div></div>`;}).join('')}
     </div>
@@ -4864,7 +5166,8 @@ function generateReport(){
     titleEl.textContent='Year-to-Date Report';
     metaEl.textContent='2026 · All periods';
     lastReportTitle=titleEl.textContent;
-    const rows=[['Monthly',perfUsers.reduce((a,u)=>a+u.perf.monthly.actual,0),perfUsers.reduce((a,u)=>a+u.perf.monthly.target,0)],['Quarterly',perfUsers.reduce((a,u)=>a+u.perf.quarterly.actual,0),perfUsers.reduce((a,u)=>a+u.perf.quarterly.target,0)],['Annual',perfUsers.reduce((a,u)=>a+u.perf.annual.actual,0),perfUsers.reduce((a,u)=>a+u.perf.annual.target,0)]];
+    const rptTT=per=>{const t=teamTargetFor(me,per);return (t!=null)?t:perfUsers.reduce((a,u)=>a+u.perf[per].target,0);};
+    const rows=[['Monthly',perfUsers.reduce((a,u)=>a+u.perf.monthly.actual,0),rptTT('monthly')],['Quarterly',perfUsers.reduce((a,u)=>a+u.perf.quarterly.actual,0),rptTT('quarterly')],['Annual',perfUsers.reduce((a,u)=>a+u.perf.annual.actual,0),rptTT('annual')]];
     lastReportData=rows.map(([l,a,t])=>({Period:l,Target:t,Actual:a,Achievement:`${t>0?Math.round(a/t*100):0}%`}));
     html+=`<div class="rpt-section"><div class="rpt-section-title">Year-to-Date - ${perfUsers.length} members</div>
       ${rows.map(([lbl,actual,target])=>{const pc=target>0?Math.round(actual/target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${lbl}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
@@ -4898,7 +5201,7 @@ function renderReportsPage(){
   if(reportType==='individual'){
     const accessible=canUpdatePerf()?users:users.filter(u=>u.id===currentUserId);
     const sel=document.getElementById('rpt-person');
-    if(sel) sel.innerHTML=accessible.map(u=>`<option value="${u.id}" ${u.id===currentUserId?'selected':''}>${u.first} ${u.last} - ${ROLE_LABELS[u.role]}</option>`).join('');
+    if(sel) sel.innerHTML=accessible.map(u=>`<option value="${u.id}" ${u.id===currentUserId?'selected':''}>${u.first} ${u.last} - ${displayRole(u)}</option>`).join('');
   }
 }
 
@@ -4943,7 +5246,7 @@ function renderOrgChart(){
   // Card for a single person
   function card(u){
     const av=u.photo?`<img src="${u.photo}" alt="">`:`${getInitials(u)}`;
-    const roleLbl=ROLE_LABELS[u.role]||u.role;
+    const roleLbl=displayRole(u);
     const teamLbl=u.team&&u.team!=='All'?`<div style="font-size:9.5px;color:var(--muted);margin-top:1px">${u.team}</div>`:'';
     const campLbl=u.campus&&u.campus!=='both'?`<div style="font-size:9.5px;color:var(--muted)">${CAMPUS_LABELS[u.campus]||u.campus}</div>`:'';
     return `<div class="org-node-card ${u.role}" onclick="viewUserProfile('${u.id}')" title="${u.first} ${u.last}">
