@@ -200,6 +200,16 @@ exports.handler = async (event) => {
         if(error) return json(404, { error:'profile_not_found' });
         return json(200, { profile: data });
       }
+      case 'set_theme': {
+        // A self preference: the caller's own id is the only one this can touch,
+        // so it deliberately ignores any user_id in the payload.
+        const theme = String(p.theme == null ? '' : p.theme);
+        if(theme !== 'light' && theme !== 'dark') return json(400,{error:'bad_theme'});
+        const { error } = await admin.from('profiles')
+          .update({ theme }).eq('id', caller.id);
+        if(error) return json(500,{error:'save_failed'});
+        return json(200,{ ok:true, theme });
+      }
       case 'set_password_changed': {
         const { error } = await admin.from('profiles')
           .update({ must_change_password:false }).eq('id', caller.id);

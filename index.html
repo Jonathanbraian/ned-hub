@@ -14,6 +14,18 @@
 <!-- Windows -->
 <meta name="msapplication-TileColor" content="#0032FF">
 <meta name="msapplication-tap-highlight" content="no">
+<!-- Theme bootstrap: runs before the stylesheet parses, so a dark user never
+     sees a light flash. The cache is only a hint; the profile wins at login. -->
+<script>
+(function(){
+  var t='light';
+  try{ var s=localStorage.getItem('ned_theme'); if(s==='dark'||s==='light') t=s; }catch(e){}
+  document.documentElement.setAttribute('data-theme',t);
+  var c=(t==='dark')?'#0F1526':'#0032FF';
+  var m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content',c);
+  var k=document.querySelector('meta[name="msapplication-TileColor"]'); if(k) k.setAttribute('content',c);
+})();
+</script>
 <!-- Description -->
 <meta name="description" content="NED College Sales Hub - internal sales platform for the Dublin and Limerick teams.">
 <!-- Manifest -->
@@ -38,6 +50,72 @@
   --danger:#DC2626;--danger-bg:#FEF2F2;--danger-border:#FECACA;
   --success:#16A34A;--success-bg:#F0FDF4;--success-border:#BBF7D0;
   --warning:#D97706;--warning-bg:#FFFBEB;--warning-border:#FDE68A;
+  /* ── chrome ── */
+  --nav-bg:rgba(255,255,255,.97);
+  --row-hover:#FAFBFF;
+  --backdrop:rgba(15,27,61,.45);
+  --shadow-card:0 4px 16px rgba(0,50,255,.06);
+  --shadow-pop:0 12px 36px rgba(124,58,237,.14),0 2px 8px rgba(0,0,0,.06);
+  --shadow-modal:0 24px 64px rgba(0,50,255,.15);
+  --shadow-panel:0 -8px 32px rgba(0,0,0,.1);
+  /* Chip = toast + tooltip: a contrasting slab, NOT var(--text), which would
+     invert to near-white in dark and leave white text on white. */
+  --chip-bg:#0F1B3D;--chip-text:#FFFFFF;
+  /* Solid signal fills that always carry white text, in either theme. */
+  --solid-danger:#DC2626;--solid-success:#16A34A;--solid-warning:#D97706;
+  --on-brand:#FFFFFF;
+  /* ── brand variants that must stay legible against the page ── */
+  --teal-text:#006E78;--blue-deep:#2044CC;
+  --purple-soft:#A78BFA;--purple-tint:#EDE9FF;--purple-tint2:#F3EEFF;
+  --purple-deep:#6D28D9;--manager-hover:#6D28D9;--danger-hover:#B91C1C;
+  /* ── role colour map (pills .rp-*, badges .rb-*, org nodes) ── */
+  --role-agent:#0D7A30;--role-agent-bg:rgba(156,255,172,.2);--role-agent-border:rgba(156,255,172,.5);
+  --role-leader:#92400E;--role-leader-bg:rgba(252,211,77,.2);--role-leader-border:rgba(252,211,77,.5);
+  --role-supervisor:#9A3412;--role-supervisor-bg:rgba(251,146,60,.2);--role-supervisor-border:rgba(251,146,60,.4);
+  --role-director:#C2410C;--role-director-bg:#FFF7ED;--role-director-border:#FED7AA;
+  --org-supervisor-bg:rgba(251,146,60,.06);--org-leader-bg:rgba(252,211,77,.06);
+  /* ── status + accents ── */
+  --status-online:#16A34A;--status-away:#D97706;--status-busy:#DC2626;--status-offline:#9CA3AF;
+  --star:#FCD34D;
+  --rank-gold:#D97706;--rank-silver:#6B7A99;--rank-bronze:#C2410C;
+}
+/* ════════ DARK THEME ════════
+   Every token above is redefined here - nothing is left stuck light. Applied
+   via <html data-theme="dark">, set by the bootstrap script in <head>. */
+html[data-theme="dark"]{
+  --blue:#4D74FF;--blue-dark:#6B8CFF;
+  --teal:#2FC7D4;--mint:#9CFFAC;
+  --grad-bt:linear-gradient(-25deg,#2A4BFF,#00A7B5);
+  --grad-full:linear-gradient(-25deg,#2A4BFF,#00A7B5,#9CFFAC);
+  --bg:#0F1526;--surface:#161E33;
+  --border:#2A3550;--border2:#3B4870;
+  --text:#EAF0FF;--muted:#9AA8C7;--light-blue:#1B2440;
+  --manager:#C4B5FD;--manager-bg:#241C3D;--manager-border:#3C2F63;
+  --danger:#FF8A8A;--danger-bg:#33191C;--danger-border:#5A2A2E;
+  --success:#5FD98A;--success-bg:#12301F;--success-border:#245A38;
+  --warning:#F5B453;--warning-bg:#33260F;--warning-border:#5C441A;
+  --nav-bg:rgba(15,21,38,.94);
+  --row-hover:#1B2440;
+  --backdrop:rgba(3,7,18,.72);
+  --shadow-card:0 4px 16px rgba(0,0,0,.45);
+  --shadow-pop:0 12px 36px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.4);
+  --shadow-modal:0 24px 64px rgba(0,0,0,.66);
+  --shadow-panel:0 -8px 32px rgba(0,0,0,.55);
+  --chip-bg:#2A3550;--chip-text:#EAF0FF;
+  --solid-danger:#C0392F;--solid-success:#1B7F44;--solid-warning:#A9640C;
+  --on-brand:#FFFFFF;
+  --teal-text:#57D6E2;--blue-deep:#8AA4FF;
+  --purple-soft:#A78BFA;--purple-tint:#241C3D;--purple-tint2:#1E1834;
+  --purple-deep:#C4B5FD;--manager-hover:#8B5CF6;--danger-hover:#E15A5A;
+  --role-agent:#9CFFAC;--role-agent-bg:rgba(156,255,172,.12);--role-agent-border:rgba(156,255,172,.3);
+  --role-leader:#FCD34D;--role-leader-bg:rgba(252,211,77,.12);--role-leader-border:rgba(252,211,77,.32);
+  --role-supervisor:#FDBA74;--role-supervisor-bg:rgba(251,146,60,.14);--role-supervisor-border:rgba(251,146,60,.32);
+  --role-director:#FCA55D;--role-director-bg:#33240F;--role-director-border:#5C441A;
+  --org-supervisor-bg:rgba(251,146,60,.1);--org-leader-bg:rgba(252,211,77,.08);
+  --status-online:#5FD98A;--status-away:#F5B453;--status-busy:#FF8A8A;--status-offline:#64748B;
+  --star:#FCD34D;
+  --rank-gold:#F5B453;--rank-silver:#9AA8C7;--rank-bronze:#FCA55D;
+  color-scheme: dark;
 }
 body{font-family:'Rubik',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 a{text-decoration:none;color:inherit}
@@ -60,6 +138,11 @@ a{text-decoration:none;color:inherit}
 .form-textarea:focus{border-color:var(--blue);background:var(--surface)}
 .form-select{font-family:'Rubik',sans-serif;font-size:13px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:11px 36px 11px 14px;color:var(--text);outline:none;cursor:pointer;transition:border-color .15s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7A99' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;width:100%}
 .form-select:focus{border-color:var(--blue)}
+/* The chevron is baked into a data: URI, so it cannot follow --muted; dark
+   gets its own copy rather than staying a dim grey on a dark field. */
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] .um-filter,
+html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239AA8C7' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")}
 .input-wrap{position:relative}
 .input-wrap .form-input{padding-right:40px}
 .input-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted);background:none;border:none;display:flex;align-items:center}
@@ -87,7 +170,7 @@ a{text-decoration:none;color:inherit}
 
 /* ════════ APP ════════ */
 #app{display:none}
-.nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 36px;height:64px;gap:16px}
+.nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 36px;height:64px;gap:16px}
 .nav-logo{display:flex;align-items:center;gap:12px;flex-shrink:0;cursor:pointer}
 .nav-logo img{height:34px}
 .nav-div{width:1px;height:26px;background:var(--border)}
@@ -110,8 +193,8 @@ a{text-decoration:none;color:inherit}
   background:var(--manager-bg);
   transition:all .15s;user-select:none;
 }
-.nav-dropdown-trigger:hover{background:#EDE9FF;border-color:#A78BFA}
-.nav-dropdown-trigger.open{background:#EDE9FF;border-color:#A78BFA}
+.nav-dropdown-trigger:hover{background:var(--purple-tint);border-color:var(--purple-soft)}
+.nav-dropdown-trigger.open{background:var(--purple-tint);border-color:var(--purple-soft)}
 .nav-dropdown-trigger svg{transition:transform .2s}
 .nav-dropdown-trigger.open svg.chevron{transform:rotate(180deg)}
 .nav-dropdown-menu{
@@ -119,7 +202,7 @@ a{text-decoration:none;color:inherit}
   background:var(--surface);
   border:1.5px solid var(--manager-border);
   border-radius:12px;
-  box-shadow:0 12px 36px rgba(124,58,237,.14),0 2px 8px rgba(0,0,0,.06);
+  box-shadow:var(--shadow-pop);
   padding:6px;
   min-width:210px;
   z-index:200;
@@ -139,14 +222,14 @@ a{text-decoration:none;color:inherit}
 .nav-dd-item.active{background:var(--manager-bg);font-weight:600}
 .nav-dd-item svg{flex-shrink:0;opacity:.7}
 .nav-dd-divider{height:1px;background:var(--manager-border);margin:5px 2px}
-.nav-dd-section{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#A78BFA;padding:8px 12px 4px;}
+.nav-dd-section{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--purple-soft);padding:8px 12px 4px;}
 .nav-right{display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto}
 .role-pill{font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;letter-spacing:.5px;white-space:nowrap}
-.rp-agent{background:rgba(156,255,172,.2);color:#0D7A30;border:1px solid rgba(156,255,172,.5)}
-.rp-leader{background:rgba(252,211,77,.2);color:#92400E;border:1px solid rgba(252,211,77,.5)}
-.rp-supervisor{background:rgba(251,146,60,.2);color:#9A3412;border:1px solid rgba(251,146,60,.4)}
+.rp-agent{background:var(--role-agent-bg);color:var(--role-agent);border:1px solid var(--role-agent-border)}
+.rp-leader{background:var(--role-leader-bg);color:var(--role-leader);border:1px solid var(--role-leader-border)}
+.rp-supervisor{background:var(--role-supervisor-bg);color:var(--role-supervisor);border:1px solid var(--role-supervisor-border)}
 .rp-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
-.rp-director{background:#FFF7ED;color:#C2410C;border:1px solid #FED7AA}
+.rp-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
 .btn-logout{font-family:'Rubik',sans-serif;font-size:12px;font-weight:500;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .15s}
 .btn-logout:hover{background:var(--bg);color:var(--text)}
 .nav-avatar-btn{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid var(--border2);overflow:hidden;flex-shrink:0;transition:border-color .15s;background:var(--light-blue);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue)}
@@ -178,7 +261,7 @@ a{text-decoration:none;color:inherit}
 .badges{display:flex;gap:8px;flex-wrap:wrap}
 .badge{font-size:11px;font-weight:600;letter-spacing:.5px;padding:4px 13px;border-radius:20px}
 .b-blue{background:rgba(0,50,255,.08);color:var(--blue);border:1px solid rgba(0,50,255,.15)}
-.b-teal{background:rgba(0,167,181,.08);color:#006E78;border:1px solid rgba(0,167,181,.2)}
+.b-teal{background:rgba(0,167,181,.08);color:var(--teal-text);border:1px solid rgba(0,167,181,.2)}
 .page-hero{background:var(--surface);border-bottom:1px solid var(--border)}
 .page-hero-inner{max-width:1200px;margin:0 auto;padding:42px 36px;display:grid;grid-template-columns:1fr 320px;gap:36px;align-items:center}
 .page-hero-inner h1{font-size:34px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px}
@@ -194,9 +277,9 @@ a{text-decoration:none;color:inherit}
 .acard:hover::before{opacity:1}
 .ac1::before{background:var(--grad-bt)}.ac2::before{background:linear-gradient(-155deg,#00A7B5,#9CFFAC)}.ac3::before{background:var(--grad-full)}.ac4::before{background:linear-gradient(-25deg,#0032FF,#4060FF)}
 .ci{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center}
-.ci1{background:rgba(0,50,255,.08)}.ci2{background:rgba(0,167,181,.08)}.ci3{background:rgba(0,167,181,.1)}.ci4{background:rgba(0,50,255,.06)}
+.ci1{background:rgba(0,50,255,.08);color:var(--blue)}.ci2{background:rgba(0,167,181,.08);color:var(--teal)}.ci3{background:rgba(0,167,181,.1);color:var(--teal-text)}.ci4{background:rgba(0,50,255,.06);color:var(--blue-deep)}
 .ctag{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
-.ct1{color:var(--blue)}.ct2{color:#006E78}.ct3{color:#006E78}.ct4{color:#2044CC}
+.ct1{color:var(--blue)}.ct2{color:var(--teal-text)}.ct3{color:var(--teal-text)}.ct4{color:var(--blue-deep)}
 .acard h3{font-size:14px;font-weight:600}
 .acard p{font-size:12px;color:var(--muted);line-height:1.5;flex:1}
 .arrow{font-size:13px;font-weight:600;color:var(--muted);align-self:flex-end;transition:all .15s}
@@ -211,23 +294,23 @@ a{text-decoration:none;color:inherit}
 .dot{width:9px;height:9px;border-radius:50%}.d1{background:var(--blue)}.d2{background:var(--teal)}
 .dc-city{font-size:14px;font-weight:600}.dc-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
 .dc-arrow{margin-left:auto;color:var(--muted);font-size:16px}
-.mgr-band{background:linear-gradient(135deg,#F3EEFF,#EEF2FF);border-top:1px solid var(--manager-border);border-bottom:1px solid var(--manager-border)}
+.mgr-band{background:linear-gradient(135deg,var(--purple-tint2),var(--light-blue));border-top:1px solid var(--manager-border);border-bottom:1px solid var(--manager-border)}
 .mgr-band-inner{max-width:1200px;margin:0 auto;padding:34px 36px}
 .mgr-hdr{display:flex;align-items:center;gap:12px;margin-bottom:22px}
 .mgr-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#7C3AED,#A855F7);display:flex;align-items:center;justify-content:center}
-.mgr-title{font-size:20px;font-weight:700;color:var(--manager)}.mgr-sub{font-size:12.5px;color:#6D28D9;margin-top:2px}
+.mgr-title{font-size:20px;font-weight:700;color:var(--manager)}.mgr-sub{font-size:12.5px;color:var(--purple-deep);margin-top:2px}
 .mgr-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:13px}
 .mcard2{background:var(--surface);border:1.5px solid var(--manager-border);border-radius:12px;padding:20px 18px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden}
 .mcard2::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#7C3AED,#A855F7);opacity:0;transition:opacity .2s}
-.mcard2:hover{border-color:#A78BFA;box-shadow:0 8px 28px rgba(124,58,237,.12);transform:translateY(-2px)}
+.mcard2:hover{border-color:var(--purple-soft);box-shadow:var(--shadow-pop);transform:translateY(-2px)}
 .mcard2:hover::before{opacity:1}
-.mcard2-icon{width:36px;height:36px;border-radius:9px;background:var(--manager-bg);display:flex;align-items:center;justify-content:center}
+.mcard2-icon{width:36px;height:36px;border-radius:9px;background:var(--manager-bg);color:var(--manager);display:flex;align-items:center;justify-content:center}
 .mcard2-tag{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--manager)}
 .mcard2 h3{font-size:13.5px;font-weight:600}.mcard2 p{font-size:11.5px;color:var(--muted);line-height:1.5;flex:1}
-.mcard2-arrow{font-size:13px;font-weight:600;color:#A78BFA;align-self:flex-end;transition:all .15s}
+.mcard2-arrow{font-size:13px;font-weight:600;color:var(--purple-soft);align-self:flex-end;transition:all .15s}
 .mcard2:hover .mcard2-arrow{color:var(--manager);transform:translate(3px,-3px)}
 .coming-chip{position:absolute;top:8px;right:8px;font-size:10px;font-weight:600;letter-spacing:.5px;background:rgba(124,58,237,.1);color:var(--manager);border:1px solid var(--manager-border);border-radius:5px;padding:2px 7px}
-.mgr-ph{background:linear-gradient(135deg,#F3EEFF,#EEF2FF);border-bottom:1px solid var(--manager-border)}
+.mgr-ph{background:linear-gradient(135deg,var(--purple-tint2),var(--light-blue));border-bottom:1px solid var(--manager-border)}
 .mgr-ph-inner{max-width:1200px;margin:0 auto;padding:42px 36px;display:grid;grid-template-columns:1fr 300px;gap:36px;align-items:center}
 .mgr-eyebrow{font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--manager);margin-bottom:10px}
 .mgr-ph-inner h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px}
@@ -237,7 +320,7 @@ a{text-decoration:none;color:inherit}
 .pgroup-title{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--teal);margin-bottom:13px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .plist{display:flex;flex-direction:column;gap:9px}
 .pitem{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:17px 20px;display:flex;align-items:flex-start;gap:16px;transition:all .15s;cursor:pointer}
-.pitem:hover{border-color:var(--border2);box-shadow:0 4px 16px rgba(0,50,255,.06);background:#FAFBFF}
+.pitem:hover{border-color:var(--border2);box-shadow:var(--shadow-card);background:var(--row-hover)}
 .pnum{font-size:11px;font-weight:700;color:var(--blue);background:var(--light-blue);border-radius:6px;padding:3px 9px;flex-shrink:0;margin-top:2px;letter-spacing:.5px}
 .pcon{flex:1}.ptitle{font-size:14px;font-weight:600;margin-bottom:3px}.pdesc{font-size:12px;color:var(--muted);line-height:1.5}
 .pcta{flex-shrink:0;align-self:center;font-size:11px;font-weight:600;color:var(--blue);background:var(--light-blue);padding:6px 12px;border-radius:7px;white-space:nowrap;transition:background .15s}
@@ -320,7 +403,7 @@ a{text-decoration:none;color:inherit}
 .team-perf-table td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13.5px}
 .team-perf-table td.right{text-align:right}
 .team-perf-table tr:last-child td{border-bottom:none}
-.team-perf-table tbody tr:hover{background:#FAFBFF}
+.team-perf-table tbody tr:hover{background:var(--row-hover)}
 .perf-name-cell{display:flex;align-items:center;gap:10px}
 .perf-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
 .perf-avatar img{width:100%;height:100%;object-fit:cover}
@@ -344,8 +427,9 @@ a{text-decoration:none;color:inherit}
 .stat-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 .stat-val{font-size:28px;font-weight:700;letter-spacing:-.5px}
 .stat-sub{font-size:12px;color:var(--muted)}
-.sv-blue{color:var(--blue)}.sv-green{color:var(--success)}.sv-purple{color:var(--manager)}.sv-orange{color:#C2410C}
+.sv-blue{color:var(--blue)}.sv-green{color:var(--success)}.sv-purple{color:var(--manager)}.sv-orange{color:var(--role-director)}
 .um-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.um-search svg,.comms-search svg{color:var(--muted);flex-shrink:0}
 .um-search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 14px;flex:1;max-width:360px}
 .um-search input{font-family:'Rubik',sans-serif;font-size:13px;border:none;outline:none;background:transparent;color:var(--text);width:100%}
 .um-search input::placeholder{color:var(--muted)}
@@ -357,7 +441,7 @@ a{text-decoration:none;color:inherit}
 .um-table th{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:13px 16px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg)}
 .um-table td{font-size:13.5px;padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
 .um-table tr:last-child td{border-bottom:none}
-.um-table tbody tr:hover{background:#FAFBFF}
+.um-table tbody tr:hover{background:var(--row-hover)}
 .user-info{display:flex;align-items:center;gap:11px}
 .user-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
 .user-avatar img{width:100%;height:100%;object-fit:cover}
@@ -370,13 +454,13 @@ a{text-decoration:none;color:inherit}
 .ua-indigo{background:linear-gradient(-25deg,#4F46E5,#6366F1)}
 .user-name{font-size:13.5px;font-weight:600}.user-email{font-size:11.5px;color:var(--muted);margin-top:1px}
 .role-badge{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;letter-spacing:.3px}
-.rb-agent{background:rgba(156,255,172,.2);color:#0D7A30;border:1px solid rgba(156,255,172,.5)}
-.rb-leader{background:rgba(252,211,77,.2);color:#92400E;border:1px solid rgba(252,211,77,.5)}
-.rb-supervisor{background:rgba(251,146,60,.2);color:#9A3412;border:1px solid rgba(251,146,60,.4)}
+.rb-agent{background:var(--role-agent-bg);color:var(--role-agent);border:1px solid var(--role-agent-border)}
+.rb-leader{background:var(--role-leader-bg);color:var(--role-leader);border:1px solid var(--role-leader-border)}
+.rb-supervisor{background:var(--role-supervisor-bg);color:var(--role-supervisor);border:1px solid var(--role-supervisor-border)}
 .rb-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
-.rb-director{background:#FFF7ED;color:#C2410C;border:1px solid #FED7AA}
+.rb-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
 .status-dot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
-.sdot{width:7px;height:7px;border-radius:50%}.sdot-active{background:#16A34A}.sdot-inactive{background:#9CA3AF}
+.sdot{width:7px;height:7px;border-radius:50%}.sdot-active{background:var(--status-online)}.sdot-inactive{background:var(--status-offline)}
 .campus-chip{font-size:11px;font-weight:500;background:var(--bg);border:1px solid var(--border);padding:2px 9px;border-radius:5px;color:var(--muted)}
 .table-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .tact-btn{font-family:'Rubik',sans-serif;font-size:11.5px;font-weight:500;background:transparent;border:1px solid var(--border);border-radius:7px;padding:5px 11px;cursor:pointer;color:var(--muted);transition:all .15s;display:flex;align-items:center;gap:4px}
@@ -394,7 +478,7 @@ a{text-decoration:none;color:inherit}
 .profile-avatar-big{width:100px;height:100px;border-radius:50%;border:3px solid var(--border2);overflow:hidden;background:var(--light-blue);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:var(--blue);cursor:pointer;transition:border-color .15s}
 .profile-avatar-big:hover{border-color:var(--blue)}
 .profile-avatar-big img{width:100%;height:100%;object-fit:cover;display:block}
-.avatar-upload-btn{position:absolute;bottom:2px;right:2px;width:26px;height:26px;border-radius:50%;background:var(--blue);border:2px solid #fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.avatar-upload-btn{position:absolute;bottom:2px;right:2px;width:26px;height:26px;border-radius:50%;background:var(--blue);border:2px solid var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .profile-name{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
 .profile-job-title{font-size:15px;color:var(--muted);margin-bottom:12px}
 .profile-meta-chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -435,7 +519,7 @@ a{text-decoration:none;color:inherit}
 .appraisal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .appraisal-period{font-size:14px;font-weight:600;color:var(--text)}
 .appraisal-rating{display:flex;align-items:center;gap:4px}
-.rating-star{color:#FCD34D;font-size:16px}
+.rating-star{color:var(--star);font-size:16px}
 .rating-star.empty{color:var(--border)}
 .appraisal-body{font-size:13px;color:var(--muted);line-height:1.6}
 .appraisal-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
@@ -443,7 +527,7 @@ a{text-decoration:none;color:inherit}
 .doc-list{display:flex;flex-direction:column;gap:8px}
 .doc-item{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:12px;transition:all .15s}
 .doc-item:hover{background:var(--surface);border-color:var(--border2)}
-.doc-icon{width:32px;height:32px;border-radius:7px;background:rgba(0,50,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.doc-icon{width:32px;height:32px;border-radius:7px;background:rgba(0,50,255,.08);color:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .doc-name{font-size:13px;font-weight:600;color:var(--text);flex:1}
 .doc-meta{font-size:11px;color:var(--muted)}
 .doc-actions{display:flex;gap:6px}
@@ -469,9 +553,9 @@ a{text-decoration:none;color:inherit}
 .view-profile-btn:hover{background:rgba(0,50,255,.15)}
 
 /* ════════ MODALS ════════ */
-.modal-backdrop{position:fixed;inset:0;background:rgba(15,27,61,.45);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-backdrop{position:fixed;inset:0;background:var(--backdrop);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px}
 .modal-backdrop.open{display:flex;animation:fadeIn .15s ease}
-.modal{background:var(--surface);border-radius:16px;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,50,255,.15);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+.modal{background:var(--surface);border-radius:16px;width:100%;max-width:560px;box-shadow:var(--shadow-modal);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
 .modal-lg{max-width:720px}
 .modal-header{padding:22px 26px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .modal-title{font-size:17px;font-weight:700}
@@ -488,9 +572,9 @@ a{text-decoration:none;color:inherit}
 .btn-save{font-family:'Rubik',sans-serif;font-size:13px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:9px;padding:9px 22px;cursor:pointer;transition:background .15s}
 .btn-save:hover{background:var(--blue-dark)}
 .btn-save.mgr-save{background:var(--manager)}
-.btn-save.mgr-save:hover{background:#6D28D9}
+.btn-save.mgr-save:hover{background:var(--manager-hover)}
 .btn-save.danger-save{background:var(--danger)}
-.btn-save.danger-save:hover{background:#B91C1C}
+.btn-save.danger-save:hover{background:var(--danger-hover)}
 .modal-alert{display:flex;gap:10px;padding:12px 14px;border-radius:9px;margin-bottom:16px;font-size:13px;line-height:1.5}
 .alert-warn{background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning)}
 .alert-info{background:var(--light-blue);border:1px solid var(--border2);color:var(--blue)}
@@ -498,12 +582,12 @@ a{text-decoration:none;color:inherit}
 .modal-section-title:first-child{margin-top:0;padding-top:0;border-top:none}
 .star-input{display:flex;gap:4px;margin-top:4px}
 .star-input span{font-size:22px;cursor:pointer;color:var(--border);transition:color .1s}
-.star-input span.lit{color:#FCD34D}
+.star-input span.lit{color:var(--star)}
 
 /* Toast */
-.toast{position:fixed;bottom:28px;right:28px;z-index:600;background:var(--text);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:9px;box-shadow:0 8px 24px rgba(0,0,0,.2);transform:translateY(80px);opacity:0;transition:all .25s}
+.toast{position:fixed;bottom:28px;right:28px;z-index:600;background:var(--chip-bg);color:var(--chip-text);padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:9px;box-shadow:0 8px 24px rgba(0,0,0,.2);transform:translateY(80px);opacity:0;transition:all .25s}
 .toast.show{transform:translateY(0);opacity:1}
-.toast.success{background:#16A34A}.toast.warning{background:var(--warning)}.toast.error{background:var(--danger)}
+.toast.success{background:var(--solid-success);color:var(--on-brand)}.toast.warning{background:var(--solid-warning);color:var(--on-brand)}.toast.error{background:var(--solid-danger);color:var(--on-brand)}
 
 /* Footer */
 .footer{border-top:1px solid var(--border);background:var(--surface);padding:18px 36px;display:flex;align-items:center;justify-content:space-between}
@@ -519,10 +603,10 @@ a{text-decoration:none;color:inherit}
 .nav-icon-btn{position:relative;width:34px;height:34px;border-radius:8px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s;flex-shrink:0}
 .nav-icon-btn:hover{background:var(--surface);color:var(--text)}
 .nav-icon-btn.active{background:var(--blue);color:#fff}
-.nav-icon-btn .nav-icon-badge{position:absolute;top:3px;right:3px;width:8px;height:8px;background:#DC2626;border-radius:50%;border:2px solid var(--bg);display:none}
+.nav-icon-btn .nav-icon-badge{position:absolute;top:3px;right:3px;width:8px;height:8px;background:var(--solid-danger);border-radius:50%;border:2px solid var(--bg);display:none}
 .nav-icon-btn .nav-icon-badge.show{display:block}
 /* Tooltip */
-.nav-icon-btn::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:11px;font-weight:500;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:200}
+.nav-icon-btn::after{content:attr(data-tip);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--chip-bg);color:var(--chip-text);font-size:11px;font-weight:500;padding:4px 8px;border-radius:6px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:200}
 .nav-icon-btn:hover::after{opacity:1}
 .nav-chat-btn{position:relative;width:36px;height:36px;border-radius:9px;background:var(--light-blue);border:1.5px solid var(--border2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--blue);transition:all .15s;flex-shrink:0}
 .nav-chat-btn:hover{background:rgba(0,50,255,.15);border-color:var(--blue)}
@@ -734,7 +818,7 @@ a{text-decoration:none;color:inherit}
 }
 /* iOS standalone */
 @media all and (display-mode: standalone){
-  .nav{ background: rgba(255,255,255,.98); }
+  .nav{ background: var(--nav-bg); }
 }
 
 /* ── Mobile Bottom Navigation ── */
@@ -744,7 +828,7 @@ a{text-decoration:none;color:inherit}
   bottom: 0; left: 0; right: 0;
   height: var(--bottom-nav-h);
   padding-bottom: var(--safe-bottom);
-  background: rgba(255,255,255,.97);
+  background: var(--nav-bg);
   backdrop-filter: blur(16px);
   border-top: 1px solid var(--border);
   z-index: 200;
@@ -777,12 +861,12 @@ a{text-decoration:none;color:inherit}
 .mob-nav-label{ font-size: 10px; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
 .mob-nav-badge{
   position: absolute; top: 6px; right: calc(50% - 14px);
-  background: #DC2626; color: #fff;
+  background: var(--solid-danger); color: var(--on-brand);
   font-size: 9px; font-weight: 700;
   min-width: 16px; height: 16px;
   border-radius: 8px; padding: 0 4px;
   display: flex; align-items: center; justify-content: center;
-  border: 2px solid #fff;
+  border: 2px solid var(--surface);
 }
 
 /* ── Leaders mobile submenu ── */
@@ -796,7 +880,7 @@ a{text-decoration:none;color:inherit}
   padding: 12px 16px calc(8px + var(--safe-bottom));
   z-index: 199;
   display: none;
-  box-shadow: 0 -8px 32px rgba(0,0,0,.1);
+  box-shadow: var(--shadow-panel);
   animation: slideUp .2s ease;
 }
 @keyframes slideUp{ from{ transform: translateY(100%) } to{ transform: translateY(0) } }
@@ -890,9 +974,9 @@ a{text-decoration:none;color:inherit}
 .rpt-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 .rpt-rank-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg);border-radius:9px;margin-bottom:6px}
 .rpt-rank-num{font-size:18px;font-weight:800;color:var(--muted);width:28px;text-align:center}
-.rpt-rank-num.gold{color:#D97706}
-.rpt-rank-num.silver{color:#6B7A99}
-.rpt-rank-num.bronze{color:#C2410C}
+.rpt-rank-num.gold{color:var(--rank-gold)}
+.rpt-rank-num.silver{color:var(--rank-silver)}
+.rpt-rank-num.bronze{color:var(--rank-bronze)}
 @media(max-width:900px){
   .report-type-grid{grid-template-columns:repeat(2,1fr)}
   .report-params-row{grid-template-columns:1fr}
@@ -930,10 +1014,10 @@ a{text-decoration:none;color:inherit}
   position:relative;
 }
 .org-node-card:hover{border-color:var(--border2);box-shadow:0 4px 16px rgba(0,50,255,.1);transform:translateY(-2px)}
-.org-node-card.director{border-color:rgba(194,65,12,.4);background:#FFF7ED}
+.org-node-card.director{border-color:var(--role-director-border);background:var(--role-director-bg)}
 .org-node-card.manager{border-color:var(--manager-border);background:var(--manager-bg)}
-.org-node-card.supervisor{border-color:rgba(251,146,60,.4);background:rgba(251,146,60,.06)}
-.org-node-card.leader{border-color:rgba(252,211,77,.5);background:rgba(252,211,77,.06)}
+.org-node-card.supervisor{border-color:var(--role-supervisor-border);background:var(--org-supervisor-bg)}
+.org-node-card.leader{border-color:var(--role-leader-border);background:var(--org-leader-bg)}
 .org-node-card.agent,.org-node-card.specialist,.org-node-card.executive{background:var(--surface)}
 .org-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0}
 .org-avatar img{width:100%;height:100%;object-fit:cover}
@@ -1021,10 +1105,10 @@ a{text-decoration:none;color:inherit}
 .contact-avatar img{width:100%;height:100%;object-fit:cover}
 /* Online status dot */
 .contact-status-dot{position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;border:2px solid var(--surface)}
-.cs-online{background:#16A34A}
-.cs-away{background:#D97706}
-.cs-busy{background:#DC2626}
-.cs-offline{background:#9CA3AF}
+.cs-online{background:var(--status-online)}
+.cs-away{background:var(--status-away)}
+.cs-busy{background:var(--status-busy)}
+.cs-offline{background:var(--status-offline)}
 .contact-info{flex:1;min-width:0}
 .contact-name{font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .contact-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
@@ -1048,7 +1132,7 @@ a{text-decoration:none;color:inherit}
 .chat-action-btn:hover{background:var(--bg);color:var(--text)}
 .chat-action-btn.btn-video:hover{border-color:var(--teal);color:var(--teal);background:rgba(0,167,181,.06)}
 .chat-action-btn.btn-call:hover{border-color:var(--success);color:var(--success);background:var(--success-bg)}
-.chat-action-btn.btn-wa:hover{border-color:#16A34A;color:#16A34A;background:var(--success-bg)}
+.chat-action-btn.btn-wa:hover{border-color:var(--success);color:var(--success);background:var(--success-bg)}
 
 /* Messages */
 .comms-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
@@ -1173,6 +1257,9 @@ a{text-decoration:none;color:inherit}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span class="nav-icon-badge" id="chat-unread-dot"></span>
         </button>
+        <button class="nav-icon-btn" id="nav-icon-theme" data-tip="Dark mode" aria-label="Switch to dark mode" aria-pressed="false" onclick="toggleTheme()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
       </div>
       <div class="nav-avatar-btn" id="nav-avatar-btn" onclick="showPage('my-profile')" title="My Profile"></div>
       <button class="btn-logout" id="btn-install-app" onclick="openInstallGuide()" title="Install App" style="display:flex;align-items:center;gap:5px;background:var(--light-blue);color:var(--blue);border-color:var(--border2)">
@@ -1203,21 +1290,21 @@ a{text-decoration:none;color:inherit}
     <div class="sec">
       <div class="sec-head"><div class="sec-label">Quick Access</div><div class="sec-title">What are you looking for?</div></div>
       <div class="cards-grid">
-        <div class="acard ac1" onclick="showPage('procedures')"><div class="ci ci1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0032FF" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div><div class="ctag ct1">Procedures</div><h3>Sales Procedures</h3><p>Step-by-step guides and standard operating processes.</p><span class="arrow">↗</span></div>
-        <div class="acard ac2" onclick="showPage('tools')"><div class="ci ci2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00A7B5" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="ctag ct2">Tools</div><h3>Our Tools</h3><p>Platforms and software to support your daily workflow.</p><span class="arrow">↗</span></div>
-        <div class="acard ac3" onclick="showPage('trainings')"><div class="ci ci3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#006E78" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div><div class="ctag ct3">Trainings</div><h3>Our Trainings</h3><p>Learning paths, onboarding and skill development.</p><span class="arrow">↗</span></div>
-        <div class="acard ac4" onclick="showPage('materials')"><div class="ci ci4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2044CC" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="ctag ct4">Materials</div><h3>Sales Materials</h3><p>Decks, one-pagers and collateral ready to use.</p><span class="arrow">↗</span></div>
+        <div class="acard ac1" onclick="showPage('procedures')"><div class="ci ci1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div><div class="ctag ct1">Procedures</div><h3>Sales Procedures</h3><p>Step-by-step guides and standard operating processes.</p><span class="arrow">↗</span></div>
+        <div class="acard ac2" onclick="showPage('tools')"><div class="ci ci2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="ctag ct2">Tools</div><h3>Our Tools</h3><p>Platforms and software to support your daily workflow.</p><span class="arrow">↗</span></div>
+        <div class="acard ac3" onclick="showPage('trainings')"><div class="ci ci3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div><div class="ctag ct3">Trainings</div><h3>Our Trainings</h3><p>Learning paths, onboarding and skill development.</p><span class="arrow">↗</span></div>
+        <div class="acard ac4" onclick="showPage('materials')"><div class="ci ci4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="ctag ct4">Materials</div><h3>Sales Materials</h3><p>Decks, one-pagers and collateral ready to use.</p><span class="arrow">↗</span></div>
       </div>
     </div>
     <div id="home-mgr-band" style="display:none">
       <div class="mgr-band"><div class="mgr-band-inner">
         <div class="mgr-hdr"><div class="mgr-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="mgr-title">Management Area</div><div class="mgr-sub">Resources for Supervisors, Managers and Directors</div></div></div>
         <div class="mgr-cards">
-          <div class="mcard2" onclick="showPage('mgr-trainings')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div><div class="mcard2-tag">Leadership</div><h3>Trainings for Leaders</h3><p>Management development programmes.</p><span class="mcard2-arrow">↗</span></div>
-          <div class="mcard2" onclick="showPage('mgr-procedures')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><div class="mcard2-tag">Leadership</div><h3>Procedures for Leaders</h3><p>Internal management procedures.</p><span class="mcard2-arrow">↗</span></div>
-          <div class="mcard2" onclick="showPage('mgr-handbook')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div><div class="mcard2-tag">Reference</div><h3>Sales Handbook</h3><p>Complete standards and best practices.</p><span class="mcard2-arrow">↗</span></div>
-          <div class="mcard2" onclick="showPage('users')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="mcard2-tag">Admin</div><h3>User Management</h3><p>Create, edit and manage all user accounts.</p><span class="mcard2-arrow">↗</span></div>
-          <div class="mcard2"><div class="coming-chip">Coming soon</div><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div class="mcard2-tag">Analytics</div><h3>Advanced Dashboards</h3><p>Business intelligence and reporting.</p><span class="mcard2-arrow" style="color:#C4B5FD">↗</span></div>
+          <div class="mcard2" onclick="showPage('mgr-trainings')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div><div class="mcard2-tag">Leadership</div><h3>Trainings for Leaders</h3><p>Management development programmes.</p><span class="mcard2-arrow">↗</span></div>
+          <div class="mcard2" onclick="showPage('mgr-procedures')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><div class="mcard2-tag">Leadership</div><h3>Procedures for Leaders</h3><p>Internal management procedures.</p><span class="mcard2-arrow">↗</span></div>
+          <div class="mcard2" onclick="showPage('mgr-handbook')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div><div class="mcard2-tag">Reference</div><h3>Sales Handbook</h3><p>Complete standards and best practices.</p><span class="mcard2-arrow">↗</span></div>
+          <div class="mcard2" onclick="showPage('users')"><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="mcard2-tag">Admin</div><h3>User Management</h3><p>Create, edit and manage all user accounts.</p><span class="mcard2-arrow">↗</span></div>
+          <div class="mcard2"><div class="coming-chip">Coming soon</div><div class="mcard2-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div class="mcard2-tag">Analytics</div><h3>Advanced Dashboards</h3><p>Business intelligence and reporting.</p><span class="mcard2-arrow" style="color:var(--muted)">↗</span></div>
         </div>
       </div></div>
     </div>
@@ -1354,7 +1441,7 @@ a{text-decoration:none;color:inherit}
             <div class="report-output-meta" id="rpt-out-meta"></div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="chat-action-btn" onclick="exportReportExcel()" style="font-family:'Rubik',sans-serif;color:#16A34A;border-color:var(--success-border)">
+            <button class="chat-action-btn" onclick="exportReportExcel()" style="font-family:'Rubik',sans-serif;color:var(--success);border-color:var(--success-border)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               Export Excel
             </button>
@@ -1489,7 +1576,7 @@ a{text-decoration:none;color:inherit}
           <div class="comms-sidebar-head">
             <div class="comms-sidebar-title">Conversations</div>
             <div class="comms-search">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7A99" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
               <input type="text" placeholder="Search..." oninput="filterCommsContacts(this.value)">
             </div>
           </div>
@@ -1799,7 +1886,7 @@ a{text-decoration:none;color:inherit}
         <div class="stat-card"><div class="stat-label">Temp Passwords</div><div class="stat-val sv-orange" id="stat-temp">0</div><div class="stat-sub">Awaiting first login</div></div>
       </div>
       <div class="um-toolbar">
-        <div class="um-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B7A99" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="Search by name or email..." oninput="filterUsers(this.value)"></div>
+        <div class="um-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="Search by name or email..." oninput="filterUsers(this.value)"></div>
         <select class="um-filter" id="um-filter-role" onchange="filterByRole(this.value)"><option value="">All roles</option></select>
         <select class="um-filter" onchange="filterByCampus(this.value)"><option value="">All campuses</option><option value="dublin">Dublin</option><option value="limerick">Limerick</option><option value="both">Both</option></select>
         <button class="btn-add-user" onclick="openModal('add')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add User</button>
@@ -2456,6 +2543,64 @@ function mkPerf(role, mActual, roleId){
 // A Supabase profile row in the shape the pages expect. Performance results,
 // certificates, appraisals and documents have no backend yet, so they start
 // empty rather than fabricated.
+// ── THEME ───────────────────────────────────────────────────────
+// profiles.theme is the source of truth (it follows you between devices);
+// localStorage is only a cache so <head> can paint the right theme before
+// the first frame. A failed sync never undoes what the user just saw.
+const THEME_KEY='ned_theme';
+const THEME_META={light:'#0032FF', dark:'#0F1526'};
+const THEME_ICONS={
+  moon:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+  sun:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+};
+// Anything that is not exactly 'dark' is light - a missing or unknown
+// profiles.theme can never leave the page half-themed.
+function normTheme(t){ return t==='dark' ? 'dark' : 'light'; }
+function currentTheme(){ return document.documentElement.getAttribute('data-theme')==='dark' ? 'dark' : 'light'; }
+function applyTheme(t){
+  const theme=normTheme(t);
+  document.documentElement.setAttribute('data-theme', theme);
+  try{ localStorage.setItem(THEME_KEY, theme); }catch(e){}
+  const meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute('content', THEME_META[theme]);
+  const tile=document.querySelector('meta[name="msapplication-TileColor"]');
+  if(tile) tile.setAttribute('content', THEME_META[theme]);
+  syncThemeToggle(theme);
+  return theme;
+}
+function syncThemeToggle(theme){
+  const btn=document.getElementById('nav-icon-theme');
+  if(!btn) return;
+  const dark = theme==='dark';
+  btn.innerHTML = dark ? THEME_ICONS.sun : THEME_ICONS.moon;
+  btn.setAttribute('data-tip', dark ? 'Light mode' : 'Dark mode');
+  btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+  btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+}
+function toggleTheme(){
+  const next = currentTheme()==='dark' ? 'light' : 'dark';
+  applyTheme(next);      // instant: the user never waits on the network
+  persistTheme(next);    // then sync to the account, quietly
+}
+// Fire-and-forget with one silent retry. If both attempts fail the local
+// choice still stands; it just has not reached the other devices yet.
+async function persistTheme(theme){
+  if(!currentUserId) return;
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const r = await callDb('set_theme', { theme });
+      if(r && r.ok) return;
+    }catch(e){}
+    if(attempt===0) await new Promise(res=>setTimeout(res, 1200));
+  }
+}
+// The profile decides, so a theme set on another device wins over this
+// browser's cache. An absent value leaves the cached choice alone.
+function applyThemeFromProfile(profile){
+  const t = profile && profile.theme;
+  applyTheme((t==='dark'||t==='light') ? t : currentTheme());
+}
+
 function mapProfileToUser(u){
   const d = dashFix;
   return {
@@ -2835,7 +2980,7 @@ function checkStrPw(v){
   const lbl=document.getElementById('cpw-label');
   let s=0;
   if(v.length>=8)s++;if(/[A-Z]/.test(v))s++;if(/[0-9]/.test(v))s++;if(/[^A-Za-z0-9]/.test(v))s++;
-  const c=[{w:'0%',b:'transparent',t:''},{w:'30%',b:'#DC2626',t:'Weak'},{w:'55%',b:'#D97706',t:'Fair'},{w:'80%',b:'#16A34A',t:'Good'},{w:'100%',b:'#0032FF',t:'Strong'}][s];
+  const c=[{w:'0%',b:'transparent',t:''},{w:'30%',b:'var(--danger)',t:'Weak'},{w:'55%',b:'var(--warning)',t:'Fair'},{w:'80%',b:'var(--success)',t:'Good'},{w:'100%',b:'var(--blue)',t:'Strong'}][s];
   bar.style.width=c.w;bar.style.background=c.b;lbl.textContent=c.t;lbl.style.color=c.b;
 }
 
@@ -2849,6 +2994,7 @@ function completeLogin(uid){
 
 // Load the real staff directory, then start the app as the signed-in person.
 async function completeLoginReal(profile){
+  applyThemeFromProfile(profile);   // before any rendering, so nothing flashes
   await loadRoles();        // names resolve during mapping, so these come first
   await loadTeams();
   await loadLocations();
@@ -3056,7 +3202,7 @@ function showPage(name){
 // PERFORMANCE PAGE
 // ═══════════════════════════════════════
 function fmt(n){return '€'+n.toLocaleString('en-IE',{minimumFractionDigits:0,maximumFractionDigits:0});}
-function pctColor(p){return p>=100?'#16A34A':p>=80?'var(--blue)':p>=60?'var(--warning)':'var(--danger)';}
+function pctColor(p){return p>=100?'var(--success)':p>=80?'var(--blue)':p>=60?'var(--warning)':'var(--danger)';}
 function pctBadgeClass(p){return p>=100?'pct-over':p>=80?'pct-on':p>=60?'pct-low':'pct-behind';}
 
 function switchPeriod(period, btn){
@@ -3532,7 +3678,7 @@ function buildProfileHTML(u,isMyProfile){
 
   const docHTML=dDocs.length===0
     ?`<div style="padding:16px 0;text-align:center;color:var(--muted);font-size:13px">No documents added yet.</div>`
-    :dDocs.map(d=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0032FF" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="doc-name">${esc(dashFix(d.name||'Untitled'))}</div><div class="doc-meta">${esc(dashFix(d.category||'Other'))}${d.doc_date?' · '+esc(fmtDate(d.doc_date)):''}${d.notes?' · '+esc(dashFix(d.notes)):''}</div><div class="doc-actions">${d.has_file?`<button class="doc-btn" onclick="openDocument('${esc(d.id)}')">Open</button>`:''}<button class="doc-btn danger" onclick="deleteDocument('${esc(u.id)}','${esc(d.id)}')">Delete</button></div></div>`).join('');
+    :dDocs.map(d=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="doc-name">${esc(dashFix(d.name||'Untitled'))}</div><div class="doc-meta">${esc(dashFix(d.category||'Other'))}${d.doc_date?' · '+esc(fmtDate(d.doc_date)):''}${d.notes?' · '+esc(dashFix(d.notes)):''}</div><div class="doc-actions">${d.has_file?`<button class="doc-btn" onclick="openDocument('${esc(d.id)}')">Open</button>`:''}<button class="doc-btn danger" onclick="deleteDocument('${esc(u.id)}','${esc(d.id)}')">Delete</button></div></div>`).join('');
 
   const editBtn=canEdit?`<button class="btn-action" onclick="openEditProfile('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Profile</button>`:'';
   const addDocBtn='';
@@ -3783,7 +3929,7 @@ function openEditProfile(uid){
 function setAprStars(n){ currentStars=n; document.getElementById('apr-rating').value=n; updateAprStarUI(n); }
 function updateAprStarUI(n){
   const s=document.getElementById('apr-star-input'); if(!s) return;
-  s.querySelectorAll('span').forEach((sp,i)=>{ sp.style.color = i<n ? '#FCD34D' : 'var(--border)'; });
+  s.querySelectorAll('span').forEach((sp,i)=>{ sp.style.color = i<n ? 'var(--star)' : 'var(--border)'; });
 }
 
 const PROFILE_SAVE_ERRORS={
@@ -4892,7 +5038,7 @@ let currentThreadId = null;
 let myStatus = 'online';
 
 // Status colors
-const STATUS_COLORS = {online:'#16A34A', away:'#D97706', busy:'#DC2626', offline:'#9CA3AF'};
+const STATUS_COLORS = {online:'var(--status-online)', away:'var(--status-away)', busy:'var(--status-busy)', offline:'var(--status-offline)'};
 const STATUS_LABELS = {online:'Online', away:'Away', busy:'Busy', offline:'Offline'};
 
 function initPresence(){
@@ -4918,7 +5064,7 @@ function changeMyStatus(val){
   myStatus=val;
   PRESENCE[currentUserId]=val;
   const dot=document.getElementById('my-status-dot');
-  if(dot){dot.style.background=STATUS_COLORS[val]||'#9CA3AF';}
+  if(dot){dot.style.background=STATUS_COLORS[val]||'var(--status-offline)';}
   renderCommsContactList();
 }
 
@@ -5885,8 +6031,8 @@ function setupPWA(){
     scope:window.location.href,
     display:'standalone',
     orientation:'portrait-primary',
-    theme_color:'#0032FF',
-    background_color:'#F4F6FB',
+    theme_color: currentTheme()==='dark' ? '#0F1526' : '#0032FF',
+    background_color: currentTheme()==='dark' ? '#0F1526' : '#F4F6FB',
     categories:['business','productivity'],
     icons:[
       {src:LOGO,sizes:'72x72',  type:'image/png',purpose:'any maskable'},
@@ -6509,6 +6655,10 @@ function renderOrgChart(){
     ${rootCols.length===1?rootCols[0]:hbar(rootCols)}
   </div>`;
 }
+
+// ═══════════════════════════════════════════════════
+// The <head> bootstrap already set data-theme; match the button to it.
+syncThemeToggle(currentTheme());
 
 // ═══════════════════════════════════════════════════
 // Run PWA setup
