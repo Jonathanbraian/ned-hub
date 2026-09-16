@@ -19,6 +19,25 @@ async function callerProfile(caller){
   return data || null;
 }
 function isMgr(role){ return role === 'manager' || role === 'director'; }
+
+const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
+  supervisor:22000, manager:0, director:0 };
+function canUpdatePerf(role){ return role==='supervisor'||role==='manager'||role==='director'; }
+function inScope(me, tgt){
+  if(me.role==='director') return true;
+  if(me.role==='manager') return tgt.role!=='director';
+  if(me.role==='supervisor') return tgt.reports_to===me.id || tgt.id===me.id;
+  return false;
+}
+async function accessibleIds(me){
+  const { data: all } = await admin.from('profiles').select('id,role,reports_to');
+  if(me.role==='director') return all.map(u=>u.id);
+  if(me.role==='manager') return all.filter(u=>u.role!=='director').map(u=>u.id);
+  if(me.role==='supervisor'||me.role==='leader'){
+    const ids = all.filter(u=>u.reports_to===me.id).map(u=>u.id); ids.push(me.id); return ids;
+  }
+  return [me.id];
+}
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -45,7 +64,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio')
+          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -119,6 +138,51 @@ exports.handler = async (event) => {
         if(me.role === 'manager' && tgt.role === 'director') return json(403,{error:'forbidden'});
         const { error } = await admin.from('profiles').update({ status }).eq('id',targetId);
         if(error) return json(500,{error:'status_failed'});
+        return json(200,{ ok:true });
+      }
+      case 'get_performance': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const year = Number(p.year) || new Date().getFullYear();
+        const ids = await accessibleIds(me);
+        const { data: rows, error } = await admin.from('sales_results')
+          .select('user_id,year,month,target,actual,notes').eq('year',year).in('user_id',ids);
+        if(error) return json(500,{error:'perf_failed'});
+        const { data: profs } = await admin.from('profiles')
+          .select('id,role,monthly_target').in('id',ids);
+        const eff = {}; (profs||[]).forEach(u=>{
+          eff[u.id] = (u.monthly_target!=null)?Number(u.monthly_target):(ROLE_TARGETS[u.role]||0); });
+        return json(200,{ year, results: rows||[], effective_targets: eff });
+      }
+      case 'set_result': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const uid=p.user_id, year=Number(p.year), month=Number(p.month),
+          target=Number(p.target), actual=Number(p.actual), notes=(p.notes||'').toString();
+        if(!uid || !(month>=1&&month<=12) || !(year>=2000&&year<=2100)) return json(400,{error:'bad_input'});
+        if(!(target>=0)||!(actual>=0)) return json(400,{error:'bad_numbers'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('sales_results').upsert(
+          { user_id:uid, year, month, target, actual, notes,
+            updated_by:me.id, updated_at:new Date().toISOString() },
+          { onConflict:'user_id,year,month' });
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        if(p.set_base_target) await admin.from('profiles').update({monthly_target:target}).eq('id',uid);
+        return json(200,{ ok:true });
+      }
+      case 'set_monthly_target': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const uid=p.user_id;
+        const val=(p.monthly_target===null||p.monthly_target==='')?null:Number(p.monthly_target);
+        if(!uid) return json(400,{error:'missing_id'});
+        if(val!=null && !(val>=0)) return json(400,{error:'bad_number'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('profiles').update({monthly_target:val}).eq('id',uid);
+        if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
       }
       default: return json(400, { error:'unknown_action' });
