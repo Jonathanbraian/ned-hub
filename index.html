@@ -2222,6 +2222,7 @@ a{text-decoration:none;color:inherit}
       <input type="hidden" id="ep-uid">
       <div class="modal-section-title">Basic Information</div>
       <div class="modal-row"><div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" id="ep-first"></div><div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" id="ep-last"></div></div>
+      <div class="form-group"><label class="form-label">Nickname</label><input class="form-input" type="text" id="ep-nickname" placeholder="What people actually call them"></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Job Title</label><input class="form-input" type="text" id="ep-jobtitle" placeholder="e.g. Sales Specialist"></div><div class="form-group"><label class="form-label">Team</label>
         <select class="form-select" id="ep-team-select" style="display:none"></select>
         <input class="form-input" type="text" id="ep-team" readonly>
@@ -2230,20 +2231,56 @@ a{text-decoration:none;color:inherit}
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Nationality</label><input class="form-input" type="text" id="ep-nationality" placeholder="e.g. Brazil"></div><div class="form-group"><label class="form-label">Language</label><input class="form-input" type="text" id="ep-language" placeholder="e.g. Portuguese, English"></div></div>
       <div class="form-group"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
-      <div class="modal-section-title">Performance Appraisal</div>
-      <div class="form-hint" style="margin-bottom:10px">Recording appraisals arrives in the next phase - these fields are not saved yet.</div>
-      <div class="form-group"><label class="form-label">Period</label><input class="form-input" type="text" id="ep-apr-period" placeholder="e.g. Q1 2026 / Annual 2025"></div>
-      <div class="form-group"><label class="form-label">Rating</label>
-        <div class="star-input" id="star-input"><span onclick="setStars(1)">★</span><span onclick="setStars(2)">★</span><span onclick="setStars(3)">★</span><span onclick="setStars(4)">★</span><span onclick="setStars(5)">★</span></div>
-        <input type="hidden" id="ep-apr-rating" value="0">
-      </div>
-      <div class="form-group"><label class="form-label">Appraisal Notes</label><textarea class="form-textarea" id="ep-apr-notes" placeholder="Key feedback, highlights, areas for improvement..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-edit-profile')">Cancel</button><button class="btn-save mgr-save" onclick="saveProfile()">Save Profile</button></div>
   </div>
 </div>
 
 <!-- Add Document -->
+<div class="modal-backdrop" id="modal-appraisal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="apr-title">New Appraisal</div><button class="modal-close" onclick="closeModal('modal-appraisal')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="apr-uid"><input type="hidden" id="apr-id">
+      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Appraisals are visible to the person's managers, never to the person themselves.</span></div>
+      <div class="form-group"><label class="form-label">Period</label><input class="form-input" type="text" id="apr-period" placeholder="e.g. Q1 2026 / Annual 2025"></div>
+      <div class="form-group"><label class="form-label">Rating</label>
+        <div class="star-input" id="apr-star-input"><span onclick="setAprStars(1)">★</span><span onclick="setAprStars(2)">★</span><span onclick="setAprStars(3)">★</span><span onclick="setAprStars(4)">★</span><span onclick="setAprStars(5)">★</span></div>
+        <input type="hidden" id="apr-rating" value="0">
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="apr-notes" placeholder="Key feedback, highlights, areas for improvement..."></textarea></div>
+      <div class="form-group"><label class="form-label">Tags</label><input class="form-input" type="text" id="apr-tags" placeholder="Comma separated, e.g. closing, coaching"></div>
+      <div class="login-error" id="apr-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-appraisal')">Cancel</button><button class="btn-save mgr-save" id="btn-save-apr" onclick="saveAppraisal()">Save Appraisal</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-upload-doc">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Upload Document</div><button class="modal-close" onclick="closeModal('modal-upload-doc')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="ud-uid">
+      <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Files are stored privately and are only reachable through a short-lived link. Keep each file under 4MB.</span></div>
+      <div class="form-group"><label class="form-label">Document name</label><input class="form-input" type="text" id="ud-name" placeholder="e.g. Employment contract"></div>
+      <div class="modal-row">
+        <div class="form-group"><label class="form-label">Category</label>
+          <select class="form-select" id="ud-cat">
+            <option value="Contract">Contract</option><option value="Certificate">Certificate</option>
+            <option value="Appraisal">Appraisal</option><option value="Training">Training Record</option>
+            <option value="ID">ID / Compliance</option><option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="ud-date"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes (optional)</label><input class="form-input" type="text" id="ud-notes" placeholder="Anything worth remembering"></div>
+      <div class="form-group"><label class="form-label">File</label><input class="form-input" type="file" id="ud-file"></div>
+      <div class="login-error" id="ud-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-upload-doc')">Cancel</button><button class="btn-save mgr-save" id="btn-save-ud" onclick="saveDocumentUpload()">Upload</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-add-doc">
   <div class="modal">
     <div class="modal-header"><div class="modal-title">Add Document</div><button class="modal-close" onclick="closeModal('modal-add-doc')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -3359,24 +3396,41 @@ function buildProfileHTML(u,isMyProfile){
 
   const detail=detailOf(u.id)||{};
   const dCerts=detail.certs||[], dAppraisals=detail.appraisals||[], dDocs=detail.documents||[];
+  // The server decides what this viewer may see; these only shape the UI.
+  const canManageCerts=!!detail.can_manage_certs;
+  const showAppraisals=!!detail.can_see_appraisals;
+  const showDocuments=!!detail.can_see_documents;
+  const isSelfView=u.id===currentUserId;
   const catalogNames=(certCatalog.length?certCatalog.map(c=>c.name):CERT_LIST);
   const earnedByName={}; dCerts.forEach(c=>{ earnedByName[c.name]=c.date_earned; });
-  const certHTML=catalogNames.map(name=>{
-    const when=earnedByName[name];
-    const earned=when!==undefined;
-    return `<div class="cert-card ${earned?'earned':'pending'}"><div class="cert-icon ${earned?'earned':'pending'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${earned?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/>'}</svg></div><div><div class="cert-name">${esc(dashFix(name))}</div><div class="cert-date">${earned?'Completed'+(when?' · '+esc(fmtDate(when)):''):'Not yet completed'}</div></div></div>`;
+  const earnedIds={}; dCerts.forEach(c=>{ earnedIds[String(c.id)]=c; });
+  const certHTML=(certCatalog.length?certCatalog:catalogNames.map((n,i)=>({id:'n'+i,name:n}))).map(c=>{
+    const row=earnedIds[String(c.id)] || (earnedByName[c.name]!==undefined?{date_earned:earnedByName[c.name]}:null);
+    const earned=!!row;
+    const rm=(earned&&canManageCerts)
+      ? `<button class="doc-btn danger" style="margin-left:auto" onclick="removeCert('${esc(u.id)}','${esc(c.id)}')">Remove</button>` : '';
+    return `<div class="cert-card ${earned?'earned':'pending'}"><div class="cert-icon ${earned?'earned':'pending'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${earned?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/>'}</svg></div><div style="flex:1;min-width:0"><div class="cert-name">${esc(dashFix(c.name))}</div><div class="cert-date">${earned?'Completed'+(row.date_earned?' · '+esc(fmtDate(row.date_earned)):''):'Not yet completed'}</div></div>${rm}</div>`;
   }).join('');
-  const certDone=dCerts.length, certTotal=catalogNames.length;
+  const certDone=dCerts.length, certTotal=(certCatalog.length?certCatalog.length:catalogNames.length);
+  const certAdder=canManageCerts?`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+      <div class="form-group" style="flex:2;min-width:180px;margin:0"><label class="form-label">Course</label>
+        <select class="form-select" id="cert-add-select-${u.id}">${certCatalog.map(c=>`<option value="${esc(c.id)}">${esc(dashFix(c.name))}</option>`).join('')}</select>
+      </div>
+      <div class="form-group" style="flex:1;min-width:130px;margin:0"><label class="form-label">Completed on</label>
+        <input class="form-input" type="date" id="cert-add-date-${u.id}">
+      </div>
+      <button class="btn-save" style="padding:9px 14px" onclick="addCert('${esc(u.id)}')">Add</button>
+      ${isUserAdmin()?`<button class="btn-cancel" style="padding:9px 14px" onclick="addCatalogCourse('${esc(u.id)}')">+ New course</button>`:''}
+    </div>`:'';
 
   const appraisalHTML=dAppraisals.length===0
     ?`<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No appraisals recorded yet.</div>`
-    :dAppraisals.map(a=>`<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${esc(dashFix(a.period||''))}</div><div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=(a.rating||0)?'':'empty'}">★</span>`).join('')}</div></div><div class="appraisal-body">${esc(dashFix(a.notes||'No notes.'))}</div>${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(t=>`<span class="appraisal-tag">${esc(dashFix(t))}</span>`).join('')}</div>`:''}<div style="font-size:11px;color:var(--muted);margin-top:8px">${a.created_by_name?'By '+esc(a.created_by_name):''}${a.created_at?' · '+esc(fmtDate(a.created_at)):''}</div></div>`).join('');
+    :dAppraisals.map(a=>`<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${esc(dashFix(a.period||''))}</div><div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=(a.rating||0)?'':'empty'}">★</span>`).join('')}</div></div><div class="appraisal-body">${esc(dashFix(a.notes||'No notes.'))}</div>${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(t=>`<span class="appraisal-tag">${esc(dashFix(t))}</span>`).join('')}</div>`:''}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:8px"><span>${a.created_by_name?'By '+esc(a.created_by_name):''}${a.created_at?' · '+esc(fmtDate(a.created_at)):''}</span><button class="doc-btn" style="margin-left:auto" onclick="openAppraisal('${esc(u.id)}','${esc(a.id)}')">Edit</button><button class="doc-btn danger" onclick="deleteAppraisal('${esc(u.id)}','${esc(a.id)}')">Delete</button></div></div>`).join('');
 
   const docHTML=dDocs.length===0
     ?`<div style="padding:16px 0;text-align:center;color:var(--muted);font-size:13px">No documents added yet.</div>`
-    :dDocs.map(d=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0032FF" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="doc-name">${esc(dashFix(d.name||'Untitled'))}</div><div class="doc-meta">${esc(dashFix(d.category||'Other'))}${d.doc_date?' · '+esc(fmtDate(d.doc_date)):''}</div>${d.file_url?`<div class="doc-actions"><a class="doc-btn" href="${esc(d.file_url)}" target="_blank" rel="noopener">View</a></div>`:''}</div>`).join('');
-  // Adding and removing these records lands in the next phase.
-  const soonNote='<span style="font-size:11px;font-weight:500;color:var(--muted)">Adding and editing these arrives next</span>';
+    :dDocs.map(d=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0032FF" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="doc-name">${esc(dashFix(d.name||'Untitled'))}</div><div class="doc-meta">${esc(dashFix(d.category||'Other'))}${d.doc_date?' · '+esc(fmtDate(d.doc_date)):''}${d.notes?' · '+esc(dashFix(d.notes)):''}</div><div class="doc-actions">${d.has_file?`<button class="doc-btn" onclick="openDocument('${esc(d.id)}')">Open</button>`:''}<button class="doc-btn danger" onclick="deleteDocument('${esc(u.id)}','${esc(d.id)}')">Delete</button></div></div>`).join('');
 
   const editBtn=canEdit?`<button class="btn-action" onclick="openEditProfile('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Profile</button>`:'';
   const addDocBtn='';
@@ -3406,12 +3460,13 @@ function buildProfileHTML(u,isMyProfile){
       <div class="profile-header-actions">${editBtn}${addDocBtn}${updatePerfBtn}${backBtn}</div>
     </div>
     <div class="profile-tabs" id="profile-tabs-${u.id}">
-      <button class="profile-tab active" onclick="switchTab('${u.id}','overview')">Overview</button>
-      <button class="profile-tab" onclick="switchTab('${u.id}','performance')">Performance</button>
-      <button class="profile-tab" onclick="switchTab('${u.id}','certificates')">Certificates</button>
-      <button class="profile-tab" onclick="switchTab('${u.id}','appraisals')">Appraisals</button>
-      <button class="profile-tab" onclick="switchTab('${u.id}','documents')">Documents</button>
+      <button class="profile-tab active" data-tab="overview" onclick="switchTab('${u.id}','overview')">Overview</button>
+      <button class="profile-tab" data-tab="performance" onclick="switchTab('${u.id}','performance')">Performance</button>
+      <button class="profile-tab" data-tab="certificates" onclick="switchTab('${u.id}','certificates')">Certificates</button>
+      ${showAppraisals?`<button class="profile-tab" data-tab="appraisals" onclick="switchTab('${u.id}','appraisals')">Appraisals</button>`:''}
+      ${showDocuments?`<button class="profile-tab" data-tab="documents" onclick="switchTab('${u.id}','documents')">Documents</button>`:''}
     </div>
+    ${(!showAppraisals||!showDocuments)&&isSelfView?`<div class="form-hint" style="margin:-14px 0 18px">Appraisals and personal documents are visible to your managers only.</div>`:''}
     <div class="profile-tab-content active" id="tab-${u.id}-overview">
       <div class="profile-details-grid">
         <div class="profile-section-card">
@@ -3461,23 +3516,25 @@ function buildProfileHTML(u,isMyProfile){
     </div>
     <div class="profile-tab-content" id="tab-${u.id}-certificates">
       <div class="profile-section-card">
-        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>NED College Training Certificates - ${certDone} / ${certTotal} completed</span>${canEdit?soonNote:''}</div>
+        <div class="ps-title">NED College Training Certificates - ${certDone} / ${certTotal} completed</div>
         <div style="height:7px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px"><div style="height:100%;width:${certTotal>0?Math.round(certDone/certTotal*100):0}%;background:var(--grad-bt);border-radius:10px"></div></div>
+        ${certAdder}
         <div class="cert-grid">${certHTML}</div>
       </div>
     </div>
-    <div class="profile-tab-content" id="tab-${u.id}-appraisals">
+    ${showAppraisals?`<div class="profile-tab-content" id="tab-${u.id}-appraisals">
       <div class="profile-section-card">
-        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Performance Appraisals</span>${canEdit?soonNote:''}</div>
+        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Performance Appraisals</span><button class="btn-action" style="font-size:11px;padding:5px 12px" onclick="openAppraisal('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add appraisal</button></div>
         <div class="appraisal-list">${appraisalHTML}</div>
       </div>
-    </div>
-    <div class="profile-tab-content" id="tab-${u.id}-documents">
+    </div>`:''}
+    ${showDocuments?`<div class="profile-tab-content" id="tab-${u.id}-documents">
       <div class="profile-section-card">
-        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Documents & Files</span>${canDoc?soonNote:''}</div>
+        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Documents & Files</span><button class="btn-action" style="font-size:11px;padding:5px 12px" onclick="openUploadDoc('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Upload document</button></div>
         <div class="doc-list">${docHTML}</div>
+        <div class="form-hint" style="margin-top:12px">Files are private - opening one creates a link that expires after a minute.</div>
       </div>
-    </div>
+    </div>`:''}
   </div>`;
 }
 
@@ -3512,8 +3569,7 @@ function renderProfilePerfSection(u, p){
 function switchTab(uid, tabName){
   const wrap=document.querySelector(`#profile-tabs-${uid}`);
   if(!wrap) return;
-  const tabs=['overview','performance','certificates','appraisals','documents'];
-  wrap.querySelectorAll('.profile-tab').forEach((t,i)=>t.classList.toggle('active',tabs[i]===tabName));
+  wrap.querySelectorAll('.profile-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tabName));
   wrap.parentElement.querySelectorAll('.profile-tab-content').forEach(c=>c.classList.toggle('active',c.id===`tab-${uid}-${tabName}`));
 }
 
@@ -3599,6 +3655,7 @@ function openEditProfile(uid){
   document.getElementById('modal-edit-profile-title').textContent=`Edit Profile - ${u.first} ${u.last}`;
   document.getElementById('ep-first').value=u.first||'';
   document.getElementById('ep-last').value=u.last||'';
+  document.getElementById('ep-nickname').value=u.nickname||'';
   document.getElementById('ep-jobtitle').value=u.jobTitle||'';
   // Managers and directors move people between teams here; everyone else sees
   // the team read-only because membership is managed on the Teams page.
@@ -3617,15 +3674,15 @@ function openEditProfile(uid){
   document.getElementById('ep-nationality').value=u.nationality||'';
   document.getElementById('ep-language').value=u.language||'';
   document.getElementById('ep-bio').value=u.bio||'';
-  document.getElementById('ep-apr-period').value='';
-  document.getElementById('ep-apr-notes').value='';
-  document.getElementById('ep-apr-rating').value=0;
-  currentStars=0; updateStarUI(0);
   openBackdrop('modal-edit-profile');
 }
 
-function setStars(n){currentStars=n;document.getElementById('ep-apr-rating').value=n;updateStarUI(n);}
-function updateStarUI(n){const s=document.getElementById('star-input');if(!s)return;s.querySelectorAll('span').forEach((sp,i)=>{sp.style.color=i<n?'#FCD34D':'var(--border)'});}
+// Star widget for the appraisal editor.
+function setAprStars(n){ currentStars=n; document.getElementById('apr-rating').value=n; updateAprStarUI(n); }
+function updateAprStarUI(n){
+  const s=document.getElementById('apr-star-input'); if(!s) return;
+  s.querySelectorAll('span').forEach((sp,i)=>{ sp.style.color = i<n ? '#FCD34D' : 'var(--border)'; });
+}
 
 const PROFILE_SAVE_ERRORS={
   out_of_scope:"You can't edit this person's profile",
@@ -3641,6 +3698,7 @@ async function saveProfile(){
   const fields={
     first: document.getElementById('ep-first').value.trim(),
     last: document.getElementById('ep-last').value.trim(),
+    nickname: document.getElementById('ep-nickname').value.trim(),
     job_title: document.getElementById('ep-jobtitle').value.trim(),
     phone: document.getElementById('ep-phone').value.trim(),
     instagram: document.getElementById('ep-instagram').value.trim().replace('@',''),
@@ -3725,6 +3783,164 @@ async function handleAvatarChange(event,uid){
   if(uid===currentUserId){ await renderMyProfile(); updateNavAvatar(users.find(x=>x.id===currentUserId)); }
   else await viewUserProfile(uid);
   showToast('Profile photo updated.','success');
+}
+
+// ═══════════════════════════════════════
+// PROFILE SUB-RECORDS - certs, appraisals, documents
+// ═══════════════════════════════════════
+const SUBREC_ERRORS={
+  out_of_scope:"You don't have permission for this",
+  forbidden:"You don't have permission for this",
+  bad_rating:'Pick a rating from 1 to 5',
+  missing_period:'Give the appraisal a period',
+  missing_name:'Give it a name',
+  name_exists:'A course with that name already exists',
+  file_too_large:'That file is too large - keep it under 4MB',
+  missing_file:'Choose a file to upload',
+  cert_not_found:'That course no longer exists'
+};
+function subrecFail(r, fallback){
+  showToast(SUBREC_ERRORS[r&&r.error]||fallback,'error');
+}
+
+// Re-fetch the profile and re-render whichever page is showing it.
+async function refreshProfile(uid, tab){
+  await loadProfileDetail(uid);
+  const u=users.find(x=>x.id===uid);
+  const host=(uid===currentUserId && document.getElementById('page-my-profile')?.classList.contains('active'))
+    ? document.getElementById('my-profile-content')
+    : document.getElementById('view-profile-content');
+  if(host && u) host.innerHTML=buildProfileHTML(u, uid===currentUserId);
+  if(tab) switchTab(uid, tab);
+}
+
+// ── certificates ──
+async function addCert(uid){
+  const sel=document.getElementById('cert-add-select-'+uid);
+  const dt=document.getElementById('cert-add-date-'+uid);
+  if(!sel||!sel.value){ showToast('Pick a course first.','error'); return; }
+  const r=await callDb('add_user_cert',{ user_id:uid, cert_id:Number(sel.value), date_earned: dt&&dt.value?dt.value:null });
+  if(!r||!r.ok){ subrecFail(r,'Could not add that certificate'); return; }
+  showToast('Certificate added','success');
+  await refreshProfile(uid,'certificates');
+}
+async function removeCert(uid, certId){
+  const r=await callDb('remove_user_cert',{ user_id:uid, cert_id:Number(certId) });
+  if(!r||!r.ok){ subrecFail(r,'Could not remove that certificate'); return; }
+  showToast('Certificate removed','warning');
+  await refreshProfile(uid,'certificates');
+}
+async function addCatalogCourse(uid){
+  const name=prompt('Name of the new course');
+  if(name===null) return;
+  if(!name.trim()){ showToast('Give the course a name.','error'); return; }
+  const r=await callDb('add_cert_catalog',{ name:name.trim() });
+  if(!r||!r.ok){ subrecFail(r,'Could not add that course'); return; }
+  await loadCertCatalog();
+  showToast('Course added','success');
+  await refreshProfile(uid,'certificates');
+}
+
+// ── appraisals ──
+function openAppraisal(uid, aprId){
+  const d=detailOf(uid)||{};
+  const a=aprId?(d.appraisals||[]).find(x=>String(x.id)===String(aprId)):null;
+  document.getElementById('apr-uid').value=uid;
+  document.getElementById('apr-id').value=a?a.id:'';
+  document.getElementById('apr-title').textContent=a?'Edit Appraisal':'New Appraisal';
+  document.getElementById('apr-period').value=a?(a.period||''):'';
+  document.getElementById('apr-notes').value=a?(a.notes||''):'';
+  document.getElementById('apr-tags').value=a&&a.tags?a.tags.join(', '):'';
+  const rating=a?(a.rating||0):0;
+  document.getElementById('apr-rating').value=rating;
+  currentStars=rating; updateAprStarUI(rating);
+  const e=document.getElementById('apr-error'); if(e){e.textContent='';e.style.display='none';}
+  openBackdrop('modal-appraisal');
+}
+async function saveAppraisal(){
+  const uid=document.getElementById('apr-uid').value;
+  const id=document.getElementById('apr-id').value;
+  const period=document.getElementById('apr-period').value.trim();
+  const rating=Number(document.getElementById('apr-rating').value)||0;
+  const notes=document.getElementById('apr-notes').value.trim();
+  const tags=document.getElementById('apr-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const err=document.getElementById('apr-error');
+  const fail=m=>{ if(err){err.textContent=m;err.style.display='block';} };
+  if(!period){ fail('Give the appraisal a period'); return; }
+  if(!(rating>=1&&rating<=5)){ fail('Pick a rating from 1 to 5'); return; }
+  const btn=document.getElementById('btn-save-apr'); btn.disabled=true;
+  try{
+    const r=id
+      ? await callDb('update_appraisal',{ id:Number(id), period, rating, notes, tags })
+      : await callDb('create_appraisal',{ user_id:uid, period, rating, notes, tags });
+    if(!r||!r.ok){ fail(SUBREC_ERRORS[r&&r.error]||'Could not save this appraisal'); return; }
+    closeModal('modal-appraisal');
+    showToast(id?'Appraisal updated':'Appraisal added','success');
+    await refreshProfile(uid,'appraisals');
+  } finally { btn.disabled=false; }
+}
+async function deleteAppraisal(uid, aprId){
+  if(!confirm('Delete this appraisal? This cannot be undone.')) return;
+  const r=await callDb('delete_appraisal',{ id:Number(aprId) });
+  if(!r||!r.ok){ subrecFail(r,'Could not delete that appraisal'); return; }
+  showToast('Appraisal deleted','warning');
+  await refreshProfile(uid,'appraisals');
+}
+
+// ── documents (private bucket) ──
+const DOC_MAX_BYTES=4*1024*1024;
+function openUploadDoc(uid){
+  document.getElementById('ud-uid').value=uid;
+  ['ud-name','ud-date','ud-notes'].forEach(id=>{ document.getElementById(id).value=''; });
+  document.getElementById('ud-cat').value='Contract';
+  document.getElementById('ud-file').value='';
+  const e=document.getElementById('ud-error'); if(e){e.textContent='';e.style.display='none';}
+  openBackdrop('modal-upload-doc');
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const rd=new FileReader();
+    rd.onerror=()=>reject(new Error('read_failed'));
+    rd.onload=e=>resolve(String(e.target.result).replace(/^data:[^;]+;base64,/,''));
+    rd.readAsDataURL(file);
+  });
+}
+async function saveDocumentUpload(){
+  const uid=document.getElementById('ud-uid').value;
+  const name=document.getElementById('ud-name').value.trim();
+  const category=document.getElementById('ud-cat').value;
+  const doc_date=document.getElementById('ud-date').value||null;
+  const notes=document.getElementById('ud-notes').value.trim();
+  const file=document.getElementById('ud-file').files[0];
+  const err=document.getElementById('ud-error');
+  const fail=m=>{ if(err){err.textContent=m;err.style.display='block';} };
+  if(!name){ fail('Give the document a name'); return; }
+  if(!file){ fail('Choose a file to upload'); return; }
+  if(file.size>DOC_MAX_BYTES){ fail('That file is too large - keep it under 4MB'); return; }
+  const btn=document.getElementById('btn-save-ud'); btn.disabled=true;
+  try{
+    let b64;
+    try { b64=await fileToBase64(file); }
+    catch(e){ fail('That file could not be read'); return; }
+    const r=await callDb('upload_document',{ user_id:uid, name, category, doc_date, notes,
+      filename:file.name, content_type:file.type||'application/octet-stream', data_base64:b64 });
+    if(!r||!r.ok){ fail(SUBREC_ERRORS[r&&r.error]||'Could not upload that document'); return; }
+    closeModal('modal-upload-doc');
+    showToast('Document uploaded','success');
+    await refreshProfile(uid,'documents');
+  } finally { btn.disabled=false; }
+}
+async function openDocument(docId){
+  const r=await callDb('get_document_url',{ doc_id:Number(docId) });
+  if(!r||!r.url){ subrecFail(r,'Could not open that document'); return; }
+  window.open(r.url,'_blank','noopener');
+}
+async function deleteDocument(uid, docId){
+  if(!confirm('Delete this document? The file is removed as well.')) return;
+  const r=await callDb('delete_document',{ doc_id:Number(docId) });
+  if(!r||!r.ok){ subrecFail(r,'Could not delete that document'); return; }
+  showToast('Document deleted','warning');
+  await refreshProfile(uid,'documents');
 }
 
 // Documents
