@@ -29,6 +29,13 @@ function inScope(me, tgt){
   if(me.role==='supervisor') return tgt.reports_to===me.id || tgt.id===me.id;
   return false;
 }
+const ROLE_LEVELS = ['agent','specialist','executive','leader','supervisor','manager','director'];
+// null / '' clears the value; a bad number returns false so callers can 400.
+function numOrNull(v){
+  if(v===null || v===undefined || v==='') return null;
+  const n = Number(v);
+  return (Number.isFinite(n) && n>=0) ? n : false;
+}
 async function accessibleIds(me){
   const { data: all } = await admin.from('profiles').select('id,role,reports_to');
   if(me.role==='director') return all.map(u=>u.id);
@@ -64,7 +71,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target')
+          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_target')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -85,10 +92,17 @@ exports.handler = async (event) => {
         const email = (b.email||'').trim().toLowerCase();
         const first = (b.first||'').trim();
         const last  = (b.last||'').trim();
-        const role  = (b.role||'').trim();
         const password = b.password || '';
-        const ROLES = ['agent','specialist','executive','leader','supervisor','manager','director'];
+        const ROLES = ROLE_LEVELS;
         if(!email || !first || !last) return json(400,{error:'missing_fields'});
+        // The cargo decides the base permission level; every existing check then
+        // runs against that base exactly as before.
+        if(!b.role_id) return json(400,{error:'missing_role_id'});
+        const { data: cargo } = await admin.from('roles')
+          .select('id,base_level,active').eq('id', b.role_id).single();
+        if(!cargo) return json(404,{error:'role_not_found'});
+        if(cargo.active === false) return json(400,{error:'role_inactive'});
+        const role = cargo.base_level;
         if(!ROLES.includes(role)) return json(400,{error:'bad_role'});
         if(password.length < 6) return json(400,{error:'weak_password'});
         if(me.role === 'manager' && role === 'director') return json(403,{error:'forbidden_role'});
@@ -100,7 +114,7 @@ exports.handler = async (event) => {
         const campus = ['dublin','limerick','both'].includes((b.campus||'').toLowerCase())
           ? (b.campus).toLowerCase() : 'dublin';
         const { error: pErr } = await admin.from('profiles').insert({
-          id:newId, first, last, email, role, campus,
+          id:newId, first, last, email, role, campus, role_id: cargo.id,
           team: b.team || 'All', phone: b.phone || '',
           reports_to: b.reports_to || null,
           status: (b.status === 'inactive') ? 'inactive' : 'active',
@@ -148,10 +162,25 @@ exports.handler = async (event) => {
           .select('user_id,year,month,target,actual,notes').eq('year',year).in('user_id',ids);
         if(error) return json(500,{error:'perf_failed'});
         const { data: profs } = await admin.from('profiles')
-          .select('id,role,monthly_target').in('id',ids);
-        const eff = {}; (profs||[]).forEach(u=>{
-          eff[u.id] = (u.monthly_target!=null)?Number(u.monthly_target):(ROLE_TARGETS[u.role]||0); });
-        return json(200,{ year, results: rows||[], effective_targets: eff });
+          .select('id,role,role_id,monthly_target,team_target').in('id',ids);
+        const { data: roleRows } = await admin.from('roles')
+          .select('id,base_level,individual_target,team_target');
+        const byRole = {}; (roleRows||[]).forEach(r=>{ byRole[r.id]=r; });
+        // One resolver, server-side:
+        //   individual = monthly_target ?? cargo.individual_target ?? ROLE_TARGETS[base] ?? 0
+        //   team       = team_target    ?? cargo.team_target       ?? (absent)
+        const eff = {}, effTeam = {};
+        (profs||[]).forEach(u=>{
+          const cargo = (u.role_id!=null) ? byRole[u.role_id] : null;
+          eff[u.id] = (u.monthly_target!=null) ? Number(u.monthly_target)
+            : (cargo && cargo.individual_target!=null) ? Number(cargo.individual_target)
+            : (ROLE_TARGETS[u.role]||0);
+          const tt = (u.team_target!=null) ? Number(u.team_target)
+            : (cargo && cargo.team_target!=null) ? Number(cargo.team_target)
+            : null;
+          if(tt!=null) effTeam[u.id] = tt;
+        });
+        return json(200,{ year, results: rows||[], effective_targets: eff, effective_team_targets: effTeam });
       }
       case 'set_result': {
         const me = await callerProfile(caller);
@@ -182,6 +211,93 @@ exports.handler = async (event) => {
         if(!tgt) return json(404,{error:'not_found'});
         if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
         const { error } = await admin.from('profiles').update({monthly_target:val}).eq('id',uid);
+        if(error) return json(500,{error:'save_failed'});
+        return json(200,{ ok:true });
+      }
+      case 'get_roles': {
+        const { data, error } = await admin.from('roles')
+          .select('id,name,base_level,individual_target,team_target,active').order('name',{ascending:true});
+        if(error) return json(500,{error:'roles_failed'});
+        return json(200,{ roles:data||[] });
+      }
+      case 'create_role': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const name = (p.name||'').toString().trim();
+        const base_level = (p.base_level||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        if(!ROLE_LEVELS.includes(base_level)) return json(400,{error:'bad_base_level'});
+        // A manager may not mint a director tier, mirroring create_user.
+        if(me.role==='manager' && base_level==='director') return json(403,{error:'forbidden_role'});
+        const individual_target = numOrNull(p.individual_target);
+        const team_target = numOrNull(p.team_target);
+        if(individual_target===false || team_target===false) return json(400,{error:'bad_number'});
+        const { data, error } = await admin.from('roles')
+          .insert({ name, base_level, individual_target, team_target, active:true })
+          .select('id').single();
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'create_failed', detail:error.message});
+        }
+        return json(200,{ ok:true, id:data && data.id });
+      }
+      case 'update_role': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const id = p.id;
+        if(!id) return json(400,{error:'missing_id'});
+        const name = (p.name||'').toString().trim();
+        const base_level = (p.base_level||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        if(!ROLE_LEVELS.includes(base_level)) return json(400,{error:'bad_base_level'});
+        const individual_target = numOrNull(p.individual_target);
+        const team_target = numOrNull(p.team_target);
+        if(individual_target===false || team_target===false) return json(400,{error:'bad_number'});
+        const { data: existing } = await admin.from('roles').select('id,base_level').eq('id',id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        // A manager may neither create a director tier nor edit one.
+        if(me.role==='manager' && (base_level==='director' || existing.base_level==='director'))
+          return json(403,{error:'forbidden_role'});
+        const { error } = await admin.from('roles')
+          .update({ name, base_level, individual_target, team_target, active: p.active !== false })
+          .eq('id',id);
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'update_failed', detail:error.message});
+        }
+        // Holders' permission tier follows the cargo.
+        if(existing.base_level !== base_level){
+          const { error: cErr } = await admin.from('profiles').update({ role: base_level }).eq('role_id', id);
+          if(cErr) return json(500,{error:'cascade_failed', detail:cErr.message});
+        }
+        return json(200,{ ok:true, cascaded: existing.base_level !== base_level });
+      }
+      case 'delete_role': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const id = p.id;
+        if(!id) return json(400,{error:'missing_id'});
+        const { data: existing } = await admin.from('roles').select('id,base_level').eq('id',id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        // Permission before state, so the caller gets the honest reason.
+        if(me.role==='manager' && existing.base_level==='director') return json(403,{error:'forbidden_role'});
+        const { data: holders } = await admin.from('profiles').select('id').eq('role_id', id);
+        if(holders && holders.length) return json(409,{error:'in_use', count:holders.length});
+        const { error } = await admin.from('roles').delete().eq('id',id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'set_team_target': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const team_target = numOrNull(p.team_target);
+        if(team_target===false) return json(400,{error:'bad_number'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('profiles').update({ team_target }).eq('id',uid);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
       }
