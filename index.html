@@ -2222,11 +2222,16 @@ a{text-decoration:none;color:inherit}
       <input type="hidden" id="ep-uid">
       <div class="modal-section-title">Basic Information</div>
       <div class="modal-row"><div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" id="ep-first"></div><div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" id="ep-last"></div></div>
-      <div class="modal-row"><div class="form-group"><label class="form-label">Job Title</label><input class="form-input" type="text" id="ep-jobtitle" placeholder="e.g. Sales Specialist"></div><div class="form-group"><label class="form-label">Team</label><input class="form-input" type="text" id="ep-team" placeholder="e.g. Team Brazil Dublin"></div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Job Title</label><input class="form-input" type="text" id="ep-jobtitle" placeholder="e.g. Sales Specialist"></div><div class="form-group"><label class="form-label">Team</label>
+        <select class="form-select" id="ep-team-select" style="display:none"></select>
+        <input class="form-input" type="text" id="ep-team" readonly>
+        <div class="form-hint" id="ep-team-hint">Managed in Teams</div>
+      </div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Nationality</label><input class="form-input" type="text" id="ep-nationality" placeholder="e.g. Brazil"></div><div class="form-group"><label class="form-label">Language</label><input class="form-input" type="text" id="ep-language" placeholder="e.g. Portuguese, English"></div></div>
       <div class="form-group"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
       <div class="modal-section-title">Performance Appraisal</div>
+      <div class="form-hint" style="margin-bottom:10px">Recording appraisals arrives in the next phase - these fields are not saved yet.</div>
       <div class="form-group"><label class="form-label">Period</label><input class="form-input" type="text" id="ep-apr-period" placeholder="e.g. Q1 2026 / Annual 2025"></div>
       <div class="form-group"><label class="form-label">Rating</label>
         <div class="star-input" id="star-input"><span onclick="setStars(1)">★</span><span onclick="setStars(2)">★</span><span onclick="setStars(3)">★</span><span onclick="setStars(4)">★</span><span onclick="setStars(5)">★</span></div>
@@ -2383,6 +2388,19 @@ function fillCargoSelect(selId, selected){
 // nothing renders it any more.
 let dbTeams = [];
 let teamsById = {};
+
+let certCatalog = [];
+async function loadCertCatalog(){
+  const r = await callDb('get_cert_catalog');
+  certCatalog = (r && r.catalog) || [];
+}
+// ISO date -> "12 Mar 2026"; anything unparseable comes back untouched.
+function fmtDate(v){
+  if(!v) return '';
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'});
+}
 
 async function loadTeams(){
   const r = await callDb('get_teams');
@@ -2701,6 +2719,7 @@ function completeLogin(uid){
 async function completeLoginReal(profile){
   await loadRoles();        // names resolve during mapping, so these come first
   await loadTeams();
+  await loadCertCatalog();
   await loadDirectory();
   await loadPerformance();
   currentUserId = profile.id; currentRole = profile.role;
@@ -3273,24 +3292,57 @@ async function savePerformanceUpdate(){
 // ═══════════════════════════════════════
 function getInitials(u){return((u.first||'?')[0]+((u.last||'?')[0]||'')).toUpperCase()}
 
+// Mirrors canEditProfileOf in db.js; the server still decides.
+// Supervisors and leaders are limited to their own reports_to subtree - they
+// used to be able to edit any junior anywhere in the company.
 function canEditProfile(targetId){
+  if(targetId===currentUserId) return true;
+  const t=users.find(u=>u.id===targetId);
+  if(!t) return false;
   if(currentRole==='director') return true;
-  if(currentRole==='manager'){const t=users.find(u=>u.id===targetId);return t&&t.role!=='director';}
-  if(currentRole==='supervisor'||currentRole==='leader'){const t=users.find(u=>u.id===targetId);return t&&['agent','specialist','executive','leader'].includes(t.role);}
-  return targetId===currentUserId;
+  if(currentRole==='manager') return t.role!=='director';
+  if(currentRole==='supervisor'||currentRole==='leader')
+    return teamSubtreeOf(currentUserId).some(x=>x.id===targetId);
+  return false;
 }
+function canViewProfile(targetId){ return canEditProfile(targetId); }
 
 function canAddDocuments(targetId){return canEditProfile(targetId);}
 
-function renderMyProfile(){
-  const me=users.find(u=>u.id===currentUserId);
-  document.getElementById('my-profile-content').innerHTML=buildProfileHTML(me,true);
+// Certificates, appraisals and documents come from the database per profile.
+let profileDetail = {};   // user_id -> { profile, certs, appraisals, documents }
+
+const PROFILE_LOADING='<div style="padding:60px;text-align:center;color:var(--muted)">Loading profile…</div>';
+
+async function loadProfileDetail(uid){
+  const r = await callDb('get_profile_detail', { user_id: uid });
+  if(!r || !r.profile) return null;
+  profileDetail[uid] = r;
+  // Keep the directory copy in step with what the profile just returned.
+  const i = users.findIndex(u=>u.id===uid);
+  if(i>=0) users[i] = Object.assign({}, users[i], mapProfileToUser(r.profile));
+  return r;
 }
 
-function viewUserProfile(uid){
-  const u=users.find(x=>x.id===uid);
-  document.getElementById('view-profile-content').innerHTML=buildProfileHTML(u,false);
+function detailOf(uid){ return profileDetail[uid] || null; }
+
+async function renderMyProfile(){
+  const el=document.getElementById('my-profile-content');
+  el.innerHTML=PROFILE_LOADING;
+  await loadProfileDetail(currentUserId);
+  const me=users.find(u=>u.id===currentUserId);
+  el.innerHTML=buildProfileHTML(me,true);
+}
+
+async function viewUserProfile(uid){
+  if(!canViewProfile(uid)){ showToast("You don't have access to that profile.",'warning'); return; }
+  const el=document.getElementById('view-profile-content');
+  el.innerHTML=PROFILE_LOADING;
   showPage('view-profile');
+  const r=await loadProfileDetail(uid);
+  if(!r){ el.innerHTML='<div style="padding:60px;text-align:center;color:var(--muted)">Profile not available.</div>'; return; }
+  const u=users.find(x=>x.id===uid);
+  el.innerHTML=buildProfileHTML(u,uid===currentUserId);
 }
 
 function buildProfileHTML(u,isMyProfile){
@@ -3303,25 +3355,31 @@ function buildProfileHTML(u,isMyProfile){
   const color=pctColor(pct);
 
   const avatarInner=u.photo?`<img src="${u.photo}" alt="">`:`<span>${getInitials(u)}</span>`;
-  const avatarUploadBtn=isMyProfile?`<div class="avatar-upload-btn" onclick="triggerAvatarUpload('${u.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><input type="file" id="avatar-file-input-${u.id}" accept="image/*" onchange="handleAvatarChange(event,${u.id})" style="display:none">`:'';
+  const avatarUploadBtn=canEdit?`<div class="avatar-upload-btn" onclick="triggerAvatarUpload('${u.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><input type="file" id="avatar-file-input-${u.id}" accept="image/*" onchange="handleAvatarChange(event,'${u.id}')" style="display:none">`:'';
 
-  const certHTML=CERT_LIST.map((c,i)=>{
-    const earned=u.certs.includes(i);
-    const idx=u.certs.indexOf(i);
-    const dateStr=earned&&u.certDates[idx]?u.certDates[idx]:'';
-    return `<div class="cert-card ${earned?'earned':'pending'}"><div class="cert-icon ${earned?'earned':'pending'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${earned?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/>'}</svg></div><div><div class="cert-name">${c}</div><div class="cert-date">${earned?'Completed · '+dateStr:'Not yet completed'}</div></div></div>`;
+  const detail=detailOf(u.id)||{};
+  const dCerts=detail.certs||[], dAppraisals=detail.appraisals||[], dDocs=detail.documents||[];
+  const catalogNames=(certCatalog.length?certCatalog.map(c=>c.name):CERT_LIST);
+  const earnedByName={}; dCerts.forEach(c=>{ earnedByName[c.name]=c.date_earned; });
+  const certHTML=catalogNames.map(name=>{
+    const when=earnedByName[name];
+    const earned=when!==undefined;
+    return `<div class="cert-card ${earned?'earned':'pending'}"><div class="cert-icon ${earned?'earned':'pending'}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${earned?'<polyline points="20 6 9 17 4 12"/>':'<circle cx="12" cy="12" r="10"/>'}</svg></div><div><div class="cert-name">${esc(dashFix(name))}</div><div class="cert-date">${earned?'Completed'+(when?' · '+esc(fmtDate(when)):''):'Not yet completed'}</div></div></div>`;
   }).join('');
+  const certDone=dCerts.length, certTotal=catalogNames.length;
 
-  const appraisalHTML=u.appraisals.length===0
+  const appraisalHTML=dAppraisals.length===0
     ?`<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No appraisals recorded yet.</div>`
-    :u.appraisals.map(a=>`<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${a.period}</div><div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=a.rating?'':'empty'}">★</span>`).join('')}</div></div><div class="appraisal-body">${a.notes||'No notes.'}</div>${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(t=>`<span class="appraisal-tag">${t}</span>`).join('')}</div>`:''}</div>`).join('');
+    :dAppraisals.map(a=>`<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${esc(dashFix(a.period||''))}</div><div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=(a.rating||0)?'':'empty'}">★</span>`).join('')}</div></div><div class="appraisal-body">${esc(dashFix(a.notes||'No notes.'))}</div>${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(t=>`<span class="appraisal-tag">${esc(dashFix(t))}</span>`).join('')}</div>`:''}<div style="font-size:11px;color:var(--muted);margin-top:8px">${a.created_by_name?'By '+esc(a.created_by_name):''}${a.created_at?' · '+esc(fmtDate(a.created_at)):''}</div></div>`).join('');
 
-  const docHTML=u.documents.length===0
+  const docHTML=dDocs.length===0
     ?`<div style="padding:16px 0;text-align:center;color:var(--muted);font-size:13px">No documents added yet.</div>`
-    :u.documents.map((d,i)=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0032FF" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="doc-name">${d.name}</div><div class="doc-meta">${d.cat} · ${d.date}</div>${canDoc?`<div class="doc-actions"><button class="doc-btn" onclick="showToast('Opening document...','success')">View</button><button class="doc-btn danger" onclick="deleteDoc('${u.id}',${i})">Remove</button></div>`:''}</div>`).join('');
+    :dDocs.map(d=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0032FF" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="doc-name">${esc(dashFix(d.name||'Untitled'))}</div><div class="doc-meta">${esc(dashFix(d.category||'Other'))}${d.doc_date?' · '+esc(fmtDate(d.doc_date)):''}</div>${d.file_url?`<div class="doc-actions"><a class="doc-btn" href="${esc(d.file_url)}" target="_blank" rel="noopener">View</a></div>`:''}</div>`).join('');
+  // Adding and removing these records lands in the next phase.
+  const soonNote='<span style="font-size:11px;font-weight:500;color:var(--muted)">Adding and editing these arrives next</span>';
 
   const editBtn=canEdit?`<button class="btn-action" onclick="openEditProfile('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit Profile</button>`:'';
-  const addDocBtn=canDoc?`<button class="btn-action secondary" onclick="openAddDoc('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Document</button>`:'';
+  const addDocBtn='';
   const updatePerfBtn=(canUpdateFor(u)&&u.id!==currentUserId)?`<button class="btn-action secondary" onclick="openUpdatePerf('${u.id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Update Performance</button>`:'';
   const backBtn=!isMyProfile?`<button class="btn-action secondary" onclick="showPage('team-profiles')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Back</button>`:'';
 
@@ -3403,22 +3461,21 @@ function buildProfileHTML(u,isMyProfile){
     </div>
     <div class="profile-tab-content" id="tab-${u.id}-certificates">
       <div class="profile-section-card">
-        <div class="ps-title">NED College Training Certificates - ${u.certs.length} / ${CERT_LIST.length} completed</div>
-        <div style="height:7px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px"><div style="height:100%;width:${Math.round(u.certs.length/CERT_LIST.length*100)}%;background:var(--grad-bt);border-radius:10px"></div></div>
+        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>NED College Training Certificates - ${certDone} / ${certTotal} completed</span>${canEdit?soonNote:''}</div>
+        <div style="height:7px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px"><div style="height:100%;width:${certTotal>0?Math.round(certDone/certTotal*100):0}%;background:var(--grad-bt);border-radius:10px"></div></div>
         <div class="cert-grid">${certHTML}</div>
       </div>
     </div>
     <div class="profile-tab-content" id="tab-${u.id}-appraisals">
       <div class="profile-section-card">
-        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Performance Appraisals</span>${canEdit?`<button class="btn-action" style="font-size:11px;padding:5px 12px" onclick="openEditProfile('${u.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Appraisal</button>`:''}</div>
+        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Performance Appraisals</span>${canEdit?soonNote:''}</div>
         <div class="appraisal-list">${appraisalHTML}</div>
       </div>
     </div>
     <div class="profile-tab-content" id="tab-${u.id}-documents">
       <div class="profile-section-card">
-        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Documents & Files</span>${canDoc?`<button class="btn-action" style="font-size:11px;padding:5px 12px" onclick="openAddDoc('${u.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add</button>`:''}</div>
+        <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Documents & Files</span>${canDoc?soonNote:''}</div>
         <div class="doc-list">${docHTML}</div>
-        ${canDoc?`<div class="add-doc-zone" onclick="openAddDoc('${u.id}')"><p><strong>+ Add a document</strong><br>Contracts, certificates, appraisals, ID and more</p></div>`:''}
       </div>
     </div>
   </div>`;
@@ -3543,7 +3600,18 @@ function openEditProfile(uid){
   document.getElementById('ep-first').value=u.first||'';
   document.getElementById('ep-last').value=u.last||'';
   document.getElementById('ep-jobtitle').value=u.jobTitle||'';
-  document.getElementById('ep-team').value=u.team||'';
+  // Managers and directors move people between teams here; everyone else sees
+  // the team read-only because membership is managed on the Teams page.
+  const tSel=document.getElementById('ep-team-select'), tTxt=document.getElementById('ep-team'), tHint=document.getElementById('ep-team-hint');
+  if(isUserAdmin()){
+    fillTeamSelect('ep-team-select', u.team_id, '- Individual (no team) -');
+    tSel.style.display=''; tTxt.style.display='none';
+    tHint.textContent='Changing this moves the person between teams.';
+  } else {
+    tSel.style.display='none'; tTxt.style.display='';
+    tTxt.value=displayTeam(u);
+    tHint.textContent='Managed in Teams';
+  }
   document.getElementById('ep-phone').value=u.phone||'';
   document.getElementById('ep-instagram').value=u.instagram||'';
   document.getElementById('ep-nationality').value=u.nationality||'';
@@ -3559,46 +3627,111 @@ function openEditProfile(uid){
 function setStars(n){currentStars=n;document.getElementById('ep-apr-rating').value=n;updateStarUI(n);}
 function updateStarUI(n){const s=document.getElementById('star-input');if(!s)return;s.querySelectorAll('span').forEach((sp,i)=>{sp.style.color=i<n?'#FCD34D':'var(--border)'});}
 
-function saveProfile(){
+const PROFILE_SAVE_ERRORS={
+  out_of_scope:"You can't edit this person's profile",
+  forbidden:"You can't edit this person's profile",
+  name_required:'First and last name are required',
+  nothing_to_update:'Nothing to save'
+};
+
+async function saveProfile(){
   const uid=document.getElementById('ep-uid').value;
   const u=users.find(x=>x.id===uid); if(!u) return;
-  u.first=document.getElementById('ep-first').value.trim()||u.first;
-  u.last=document.getElementById('ep-last').value.trim()||u.last;
-  u.jobTitle=document.getElementById('ep-jobtitle').value.trim();
-  u.team=document.getElementById('ep-team').value.trim();
-  u.phone=document.getElementById('ep-phone').value.trim();
-  u.instagram=document.getElementById('ep-instagram').value.trim().replace('@','');
-  u.nationality=document.getElementById('ep-nationality').value.trim();
-  u.language=document.getElementById('ep-language').value.trim();
-  u.bio=document.getElementById('ep-bio').value.trim();
-  const aprPeriod=document.getElementById('ep-apr-period').value.trim();
-  const aprNotes=document.getElementById('ep-apr-notes').value.trim();
-  const aprRating=parseInt(document.getElementById('ep-apr-rating').value)||0;
-  if(aprPeriod&&aprRating>0) u.appraisals.unshift({period:aprPeriod,rating:aprRating,notes:aprNotes,tags:[]});
+  // Only descriptive fields travel; role, email, status and targets live elsewhere.
+  const fields={
+    first: document.getElementById('ep-first').value.trim(),
+    last: document.getElementById('ep-last').value.trim(),
+    job_title: document.getElementById('ep-jobtitle').value.trim(),
+    phone: document.getElementById('ep-phone').value.trim(),
+    instagram: document.getElementById('ep-instagram').value.trim().replace('@',''),
+    nationality: document.getElementById('ep-nationality').value.trim(),
+    language: document.getElementById('ep-language').value.trim(),
+    bio: document.getElementById('ep-bio').value.trim()
+  };
+  if(!fields.first||!fields.last){ showToast('First and last name are required.','error'); return; }
+  const r=await callDb('update_profile',{ user_id:uid, fields });
+  if(!r||!r.ok){ showToast(PROFILE_SAVE_ERRORS[r&&r.error]||'Could not save this profile','error'); return; }
+
+  // Team membership is a separate action, and only admins see the picker.
+  const tSel=document.getElementById('ep-team-select');
+  if(isUserAdmin() && tSel && tSel.style.display!=='none'){
+    const want=tSel.value?Number(tSel.value):null;
+    if(String(want)!==String(u.team_id||'')){
+      const tr=await callDb('set_member_team',{ user_id:uid, team_id:want });
+      if(!tr||!tr.ok) showToast('Profile saved, but the team could not be changed.','warning');
+    }
+  }
+
   closeModal('modal-edit-profile');
-  if(uid===currentUserId){renderMyProfile();updateNavAvatar(u);}
-  else viewUserProfile(uid);
-  renderTeamProfiles();renderUsers();
-  showToast(`${u.first} ${u.last}'s profile updated.`,'success');
+  await loadTeams();
+  await loadDirectory();
+  await loadProfileDetail(uid);
+  const fresh=users.find(x=>x.id===uid)||u;
+  if(uid===currentUserId){ await renderMyProfile(); updateNavAvatar(fresh); }
+  else await viewUserProfile(uid);
+  renderTeamProfiles();
+  if(document.getElementById('page-users')?.classList.contains('active')) await refreshUserManagement();
+  showToast(`${fresh.first} ${fresh.last}'s profile updated.`,'success');
 }
 
-// Avatar
+// Avatar - downscaled in the browser, then stored in Supabase Storage.
 function triggerAvatarUpload(uid){document.getElementById(`avatar-file-input-${uid}`).click();}
-function handleAvatarChange(event,uid){
-  const file=event.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const u=users.find(x=>x.id===uid);if(!u)return;
-    u.photo=e.target.result;
-    if(uid===currentUserId){renderMyProfile();updateNavAvatar(u);}
-    else viewUserProfile(uid);
-    showToast('Profile photo updated.','success');
-  };
-  reader.readAsDataURL(file);
+
+const AVATAR_MAX_PX=512, AVATAR_MAX_BYTES=8*1024*1024;
+
+function downscaleToJpegBase64(file, maxPx){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('read_failed'));
+    reader.onload=e=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('decode_failed'));
+      img.onload=()=>{
+        const scale=Math.min(1, maxPx/Math.max(img.width,img.height));
+        const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        const ctx=c.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',0.85).replace(/^data:[^;]+;base64,/,''));
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+const AVATAR_ERRORS={
+  image_too_large:'That image is too large, try a smaller one',
+  out_of_scope:"You can't change this person's photo",
+  forbidden:"You can't change this person's photo",
+  bad_image:'That file could not be read as an image'
+};
+
+async function handleAvatarChange(event,uid){
+  const file=event.target.files && event.target.files[0];
+  event.target.value='';
+  if(!file) return;
+  if(file.size>AVATAR_MAX_BYTES){ showToast('Pick an image under 8MB.','error'); return; }
+  showToast('Uploading photo…','success');
+  let b64;
+  try { b64=await downscaleToJpegBase64(file, AVATAR_MAX_PX); }
+  catch(e){ showToast('That file could not be read as an image.','error'); return; }
+  const r=await callDb('upload_avatar',{ user_id:uid, data_base64:b64, content_type:'image/jpeg' });
+  if(!r||!r.ok){ showToast(AVATAR_ERRORS[r&&r.error]||'Could not upload that photo','error'); return; }
+  const u=users.find(x=>x.id===uid);
+  if(u) u.photo=r.photo;
+  if(profileDetail[uid] && profileDetail[uid].profile) profileDetail[uid].profile.photo=r.photo;
+  if(uid===currentUserId){ await renderMyProfile(); updateNavAvatar(users.find(x=>x.id===currentUserId)); }
+  else await viewUserProfile(uid);
+  showToast('Profile photo updated.','success');
 }
 
 // Documents
 function openAddDoc(uid){
+  // The documents tab is read-only this phase; adding lands in the next one.
+  umNotYet('Adding documents'); return;
+  /* eslint-disable no-unreachable */
   addingDocUserId=uid;
   document.getElementById('doc-uid').value=uid;
   document.getElementById('doc-name').value='';
@@ -3606,6 +3739,7 @@ function openAddDoc(uid){
   document.getElementById('doc-date').value='';
   document.getElementById('doc-notes').value='';
   openBackdrop('modal-add-doc');
+  /* eslint-enable no-unreachable */
 }
 
 function saveDocument(){
@@ -4000,8 +4134,8 @@ function renderUsers(){
       <td>${u.tempPw?'<span class="temp-chip">Temporary</span>':`<span style="font-size:12px;color:var(--muted)">Set</span>`}</td>
       <td>
         <div class="table-actions">
-          <button class="tact-btn" style="color:var(--teal)" onclick="umNotYet('Profiles')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Profile</button>
-          <button class="tact-btn edit" onclick="umNotYet('Editing')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>
+          ${canViewProfile(u.id)?`<button class="tact-btn" style="color:var(--teal)" onclick="viewUserProfile('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Profile</button>`:''}
+          ${canEditProfile(u.id)?`<button class="tact-btn edit" onclick="openEditProfile('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>`:''}
           <button class="tact-btn reset" onclick="openModal('reset','${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Reset PW</button>
           <button class="tact-btn deact" onclick="openModal('deact','${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>${u.status==='active'?'Deactivate':'Activate'}</button>
         </div>

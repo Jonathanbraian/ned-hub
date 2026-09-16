@@ -56,6 +56,54 @@ function accessibleTeamIds(me, allTeams, allProfs){
   }
   return [];
 }
+// Everyone below this person in the reports_to chain, transitively.
+async function subtreeIds(me){
+  const { data: all } = await admin.from('profiles').select('id,reports_to');
+  const rows = all || [];
+  const out = new Set();
+  let frontier = [me.id];
+  while(frontier.length){
+    const next = [];
+    const f = new Set(frontier);
+    rows.forEach(u => {
+      if(u.reports_to!=null && f.has(u.reports_to) && !out.has(u.id) && u.id!==me.id){
+        out.add(u.id); next.push(u.id);
+      }
+    });
+    frontier = next;
+  }
+  return out;
+}
+// Who may edit whose descriptive profile fields.
+async function canEditProfileOf(me, tgt){
+  if(!me || !tgt) return false;
+  if(me.id === tgt.id) return true;
+  if(me.role === 'director') return true;
+  if(me.role === 'manager') return tgt.role !== 'director';
+  if(me.role === 'supervisor' || me.role === 'leader') return (await subtreeIds(me)).has(tgt.id);
+  return false;
+}
+// Viewing is the same set: editors, plus nothing extra. Leadership sees broadly
+// because the two clauses above already cover it.
+async function canViewProfileOf(me, tgt){
+  return canEditProfileOf(me, tgt);
+}
+const PROFILE_EDITABLE = ['first','last','nickname','job_title','phone','instagram','nationality','language','bio'];
+// Copied verbatim from the client's CERT_LIST.
+const CERT_SEED = [
+  'NED College - Organisational Overview',
+  'Sales Process - NED Limerick',
+  'Sales Process - NED Dublin',
+  'Understanding the Sales Funnel',
+  'Sales Communication Skills',
+  'Agency Management and B2B Partnerships',
+  'Customer Service and Student Experience',
+  'Consultative Selling Techniques',
+  'WhatsApp-First Sales Strategy',
+  'Post-Sales Support and Retention',
+  'Handling Objections and Closing',
+  'Irish Education Market and NED Products',
+];
 async function accessibleIds(me){
   const { data: all } = await admin.from('profiles').select('id,role,reports_to');
   if(me.role==='director') return all.map(u=>u.id);
@@ -458,6 +506,96 @@ exports.handler = async (event) => {
         const { error } = await admin.from('profiles').update(patch).eq('id',uid);
         if(error) return json(500,{error:'save_failed', detail:error.message});
         return json(200,{ ok:true, reports_to: patch.reports_to || null });
+      }
+      case 'get_profile_detail': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('*').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await canViewProfileOf(me, tgt)) return json(403,{error:'out_of_scope'});
+
+        const { data: certRows } = await admin.from('user_certs')
+          .select('cert_id,date_earned').eq('user_id',uid);
+        const { data: catalog } = await admin.from('cert_catalog').select('id,name');
+        const catById = {}; (catalog||[]).forEach(c=>{ catById[c.id]=c.name; });
+        const certs = (certRows||[]).map(c=>({
+          id: c.cert_id, name: catById[c.cert_id] || 'Unknown certificate', date_earned: c.date_earned
+        }));
+
+        const { data: aps } = await admin.from('appraisals')
+          .select('id,period,rating,notes,tags,created_by,created_at')
+          .eq('user_id',uid).order('created_at',{ascending:false});
+        const authorIds = [...new Set((aps||[]).map(a=>a.created_by).filter(Boolean))];
+        const authors = {};
+        if(authorIds.length){
+          const { data: who } = await admin.from('profiles').select('id,first,last').in('id',authorIds);
+          (who||[]).forEach(w=>{ authors[w.id] = (w.first||'')+' '+(w.last||''); });
+        }
+        const appraisals = (aps||[]).map(a=>Object.assign({}, a, { created_by_name: authors[a.created_by] || null }));
+
+        const { data: docs } = await admin.from('user_documents')
+          .select('id,name,category,doc_date,notes,file_url,created_at')
+          .eq('user_id',uid).order('created_at',{ascending:false});
+
+        return json(200,{ profile: tgt, certs, appraisals, documents: docs||[],
+          can_edit: await canEditProfileOf(me, tgt) });
+      }
+      case 'update_profile': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await canEditProfileOf(me, tgt)) return json(403,{error:'out_of_scope'});
+        // Only descriptive fields. Role, email, status, reports_to, team_id and
+        // targets are all managed elsewhere and are ignored here.
+        const fields = p.fields || {};
+        const patch = {};
+        PROFILE_EDITABLE.forEach(k => {
+          if(Object.prototype.hasOwnProperty.call(fields, k)){
+            const v = fields[k];
+            patch[k] = (v===null || v===undefined) ? null : String(v).trim();
+          }
+        });
+        if(!Object.keys(patch).length) return json(400,{error:'nothing_to_update'});
+        if(patch.first !== undefined && patch.first === '') return json(400,{error:'name_required'});
+        if(patch.last !== undefined && patch.last === '') return json(400,{error:'name_required'});
+        const { error } = await admin.from('profiles').update(patch).eq('id',uid);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, updated: Object.keys(patch) });
+      }
+      case 'upload_avatar': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await canEditProfileOf(me, tgt)) return json(403,{error:'out_of_scope'});
+        const b64 = (p.data_base64 || '').replace(/^data:[^;]+;base64,/, '');
+        if(!b64) return json(400,{error:'missing_image'});
+        let buf;
+        try { buf = Buffer.from(b64, 'base64'); } catch(e){ return json(400,{error:'bad_image'}); }
+        if(!buf.length) return json(400,{error:'bad_image'});
+        if(buf.length > 2*1024*1024) return json(413,{error:'image_too_large'});
+        const path = uid + '.jpg';
+        const { error: upErr } = await admin.storage.from('avatars')
+          .upload(path, buf, { contentType: p.content_type || 'image/jpeg', upsert: true });
+        if(upErr) return json(500,{error:'upload_failed', detail:upErr.message});
+        const { data: pub } = admin.storage.from('avatars').getPublicUrl(path);
+        const photo = (pub && pub.publicUrl ? pub.publicUrl : '') + '?v=' + Date.now();
+        const { error } = await admin.from('profiles').update({ photo }).eq('id',uid);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, photo });
+      }
+      case 'get_cert_catalog': {
+        let { data: rows } = await admin.from('cert_catalog').select('id,name').order('name',{ascending:true});
+        if(!rows || !rows.length){
+          await admin.from('cert_catalog').insert(CERT_SEED.map(name=>({ name })));
+          const seeded = await admin.from('cert_catalog').select('id,name').order('name',{ascending:true});
+          rows = seeded.data || [];
+        }
+        return json(200,{ catalog: rows });
       }
       default: return json(400, { error:'unknown_action' });
     }
