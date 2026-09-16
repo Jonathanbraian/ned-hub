@@ -43,6 +43,13 @@ exports.handler = async (event) => {
           .update({ last_login:new Date().toISOString() }).eq('id', caller.id);
         return json(200, { ok:true });
       }
+      case 'get_directory': {
+        const { data, error } = await admin.from('profiles')
+          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio')
+          .order('first',{ascending:true});
+        if(error) return json(500,{error:'directory_failed'});
+        return json(200,{ directory:data });
+      }
       case 'list_users': {
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
