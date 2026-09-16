@@ -1813,6 +1813,21 @@ a{text-decoration:none;color:inherit}
     </div>
   </div>
 
+  <div id="page-teams" class="page">
+    <div class="mgr-grad-bar"></div>
+    <div class="mgr-ph"><div class="mgr-ph-inner" style="grid-template-columns:1fr;padding-bottom:36px"><div><div class="mgr-eyebrow">Management Area</div><h1>Teams</h1><p class="ph-desc">Sales teams, who leads them and who is on them. Assigning someone to a team with a leader also points their reporting line at that leader.</p></div></div></div>
+    <div class="um-wrap">
+      <div class="um-toolbar">
+        <div style="flex:1;font-size:13px;color:var(--muted)">A team must be empty before it can be deleted. Deactivate it instead to take it out of the pickers.</div>
+        <button class="btn-add-user" onclick="openTeamModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New team</button>
+      </div>
+      <div class="um-table-wrap"><table class="um-table">
+        <thead><tr><th>Team</th><th>Leader</th><th>Campus</th><th>Members</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="teams-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="footer-l">
       <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w200" alt="" style="height:20px" onerror="this.style.display='none'">
@@ -2025,6 +2040,46 @@ a{text-decoration:none;color:inherit}
 
 <!-- MODALS -->
 <!-- Add/Edit User -->
+<div class="modal-backdrop" id="modal-team">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-team-title">New Team</div><button class="modal-close" onclick="closeModal('modal-team')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="team-id">
+      <div class="form-group"><label class="form-label">Team name</label><input class="form-input" type="text" id="team-name" placeholder="e.g. Team Brazil Dublin"></div>
+      <div class="modal-row">
+        <div class="form-group"><label class="form-label">Leader</label><select class="form-select" id="team-leader"></select>
+          <div class="form-hint">Members of this team will report to the leader.</div>
+        </div>
+        <div class="form-group"><label class="form-label">Campus</label>
+          <select class="form-select" id="team-campus">
+            <option value="">- Not set -</option>
+            <option value="dublin">Dublin</option>
+            <option value="limerick">Limerick</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="team-target" placeholder="Optional - not used yet" min="0" step="1000">
+        <div class="form-hint">Stored now, wired into the dashboards in the next phase.</div>
+      </div>
+      <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="team-active" style="width:14px;height:14px;cursor:pointer" checked>
+        Active - available when assigning people
+      </label>
+      <div id="team-members-block" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+        <div class="ps-title" style="margin-bottom:10px">Members</div>
+        <div id="team-members-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;gap:8px">
+          <select class="form-select" id="team-add-member" style="flex:1"></select>
+          <button class="btn-save" style="padding:9px 14px" onclick="addTeamMember()">Add</button>
+        </div>
+      </div>
+      <div class="login-error" id="team-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-team')">Close</button><button class="btn-save mgr-save" id="btn-save-team" onclick="saveTeam()">Save Team</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-role">
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modal-role-title">New Cargo</div><button class="modal-close" onclick="closeModal('modal-role')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -2084,7 +2139,7 @@ a{text-decoration:none;color:inherit}
         <div class="form-group"><label class="form-label">Campus</label><select class="form-select" id="u-campus"><option value="dublin">Dublin</option><option value="limerick">Limerick</option><option value="both">Both</option></select></div>
       </div>
       <div class="modal-row">
-        <div class="form-group"><label class="form-label">Team</label><input class="form-input" type="text" id="u-team" placeholder="e.g. Team Brazil"></div>
+        <div class="form-group"><label class="form-label">Team</label><select class="form-select" id="u-team"></select></div>
         <div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="u-phone" placeholder="+353 83 000 0000"></div>
       </div>
       <div class="form-group" id="pw-group">
@@ -2286,6 +2341,8 @@ function mapProfileToUser(u){
     role_id: u.role_id!=null?u.role_id:null,
     team_target: (u.team_target!=null)?Number(u.team_target):null,
     role_name: d((rolesById[u.role_id]||{}).name) || null,
+    team_id: u.team_id!=null?u.team_id:null,
+    team_name: d((teamsById[u.team_id]||{}).name) || null,
     perf: mkPerf(u.role, 0, u.role_id), certs:[], certDates:[], appraisals:[], documents:[]
   };
 }
@@ -2318,6 +2375,48 @@ function fillCargoSelect(selId, selected){
   sel.innerHTML=activeCargos()
     .map(r=>`<option value="${esc(r.id)}">${esc(dashFix(r.name))}</option>`).join('');
   if(selected!=null) sel.value=String(selected);
+}
+
+// ── TEAMS ───────────────────────────────────────────────────────
+// Teams are real rows now. profiles.team (the old string) is still stored but
+// nothing renders it any more.
+let dbTeams = [];
+let teamsById = {};
+
+async function loadTeams(){
+  const r = await callDb('get_teams');
+  dbTeams = (r && r.teams) || [];
+  teamsById = {};
+  dbTeams.forEach(t => { teamsById[t.id] = t; });
+  fillTeamFilters();
+}
+function activeTeams(){ return dbTeams.filter(t=>t.active!==false); }
+// The team's real name, or null when the person is on no team.
+function teamNameOf(u){ return (u && u.team_name) ? u.team_name : null; }
+function displayTeam(u){ return teamNameOf(u) || 'Individual'; }
+
+function fillTeamFilters(){
+  const opts=activeTeams().map(t=>`<option value="${esc(t.id)}">${esc(dashFix(t.name))}</option>`).join('');
+  [['perf-filter-team','All Teams'],['team-team-filter','All Teams']].forEach(([id,allLabel])=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const v=el.value;
+    el.innerHTML=`<option value="">${allLabel}</option>`+opts+'<option value="none">Individual</option>';
+    el.value=v;
+  });
+}
+function fillTeamSelect(selId, selected, noneLabel){
+  const sel=document.getElementById(selId);
+  if(!sel) return;
+  sel.innerHTML=`<option value="">${noneLabel||'- None / Individual -'}</option>`+
+    activeTeams().map(t=>`<option value="${esc(t.id)}">${esc(dashFix(t.name))}</option>`).join('');
+  sel.value=(selected!=null)?String(selected):'';
+}
+// Does this person match a team filter value ('' = all, 'none' = no team)?
+function matchesTeamFilter(u, v){
+  if(!v) return true;
+  if(v==='none') return u.team_id==null;
+  return String(u.team_id)===String(v);
 }
 
 function cargoOf(u){ return (u && u.role_id!=null) ? (rolesById[u.role_id]||null) : null; }
@@ -2556,7 +2655,8 @@ function completeLogin(uid){
 
 // Load the real staff directory, then start the app as the signed-in person.
 async function completeLoginReal(profile){
-  await loadRoles();        // names resolve during mapping, so this comes first
+  await loadRoles();        // names resolve during mapping, so these come first
+  await loadTeams();
   await loadDirectory();
   await loadPerformance();
   currentUserId = profile.id; currentRole = profile.role;
@@ -2603,6 +2703,7 @@ function startApp(user){
       {divider:true},
       {id:'users', label:'User Management', icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'},
       {id:'roles', label:'Cargos', icon:'<path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 7V5h6v2"/>'},
+      {id:'teams', label:'Teams', icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>'},
     ] : []),
   ] : [];
 
@@ -2729,6 +2830,10 @@ function showPage(name){
     if(isUserAdmin()) (async()=>{ await loadRoles(); renderRoles(); })();
     else renderRoles();
   }
+  if(name==='teams'){
+    if(isUserAdmin()) (async()=>{ await loadTeams(); renderTeams(); })();
+    else renderTeams();
+  }
   if(name==='users'){
     if(isUserAdmin()) (async()=>{ await loadDbUsers(); renderUsers(); updateStats(); })();
     else { renderUsers(); updateStats(); }
@@ -2826,7 +2931,7 @@ function renderPerformancePage(){
     const teamF=document.getElementById('perf-filter-team')?.value||'';
     const roleF=document.getElementById('perf-filter-role')?.value||'';
     if(campF) teamList=teamList.filter(u=>u.campus===campF||u.campus==='both');
-    if(teamF) teamList=teamList.filter(u=>u.team===teamF);
+    if(teamF) teamList=teamList.filter(u=>matchesTeamFilter(u,teamF));
     if(roleF) teamList=teamList.filter(u=>String(u.role_id)===String(roleF));
     container.innerHTML=renderByTeamView(me, teamList, p, canUpdate);
     return;
@@ -2839,7 +2944,7 @@ function renderPerformancePage(){
     const teamF=document.getElementById('perf-filter-team')?.value||'';
     const roleF=document.getElementById('perf-filter-role')?.value||'';
     if(campF) teamList=teamList.filter(u=>u.campus===campF||u.campus==='both');
-    if(teamF) teamList=teamList.filter(u=>u.team===teamF);
+    if(teamF) teamList=teamList.filter(u=>matchesTeamFilter(u,teamF));
     if(roleF) teamList=teamList.filter(u=>String(u.role_id)===String(roleF));
     container.innerHTML=renderIndividualTableView(me, teamList, p, canUpdate);
     return;
@@ -2922,7 +3027,7 @@ function renderByTeamView(me, teamList, p, canUpdate){
   // Group by campus + team
   const groups={};
   teamList.forEach(u=>{
-    const key=(u.campus==='both'?'Dublin':u.campus.charAt(0).toUpperCase()+u.campus.slice(1))+' - '+(u.team||'Unassigned');
+    const key=(u.campus==='both'?'Dublin':u.campus.charAt(0).toUpperCase()+u.campus.slice(1))+' - '+displayTeam(u);
     if(!groups[key]) groups[key]=[];
     groups[key].push(u);
   });
@@ -2974,7 +3079,7 @@ function renderTeamTable(teamList, p, canUpdate){
           <div class="perf-avatar ${u.photo?'':avColor(u.id)}">${u.photo?`<img src="${u.photo}" alt="">`:getInitials(u)}</div>
           <div>
             <div style="font-weight:600;font-size:13.5px">${u.first} ${u.last}</div>
-            <div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} ${u.team?'· '+u.team:''}</div>
+            <div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} · ${displayTeam(u)}</div>
           </div>
         </div>
       </td>
@@ -3171,7 +3276,7 @@ function buildProfileHTML(u,isMyProfile){
       </div>
       <div>
         <div class="profile-name">${u.first} ${u.last}</div>
-        <div class="profile-job-title">${displayRole(u)} ${u.team?'· '+u.team:''}</div>
+        <div class="profile-job-title">${displayRole(u)} · ${displayTeam(u)}</div>
         <div class="profile-meta-chips">
           <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${displayRole(u)}</span>
           <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${CAMPUS_LABELS[u.campus]||u.campus}</span>
@@ -3206,7 +3311,7 @@ function buildProfileHTML(u,isMyProfile){
           <div class="ps-title">Role & Position</div>
           <div class="profile-field"><div class="pf-label">Role</div><div class="pf-value"><span class="role-badge ${ROLE_BADGE[u.role]}">${displayRole(u)}</span></div></div>
           <div class="profile-field"><div class="pf-label">Job Title</div><div class="pf-value ${u.jobTitle?'':'empty'}">${u.jobTitle||'Not set'}</div></div>
-          <div class="profile-field"><div class="pf-label">Team</div><div class="pf-value ${u.team?'':'empty'}">${u.team||'Not assigned'}</div></div>
+          <div class="profile-field"><div class="pf-label">Team</div><div class="pf-value ${teamNameOf(u)?'':'empty'}">${displayTeam(u)}</div></div>
           <div class="profile-field"><div class="pf-label">Campus</div><div class="pf-value">${CAMPUS_LABELS[u.campus]||u.campus}</div></div>
           <div class="profile-field"><div class="pf-label">Manager</div><div class="pf-value ${managerNameOf(u)?'':'empty'}">${esc(dashFix(managerNameOf(u)))||'Not assigned'}</div></div>
           <div class="profile-field"><div class="pf-label">Monthly Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.monthly.target)}</div></div>
@@ -3314,7 +3419,7 @@ function renderTeamProfiles(roleF=''){
   // Apply campus filter
   if(teamFilterCampus) allTeam=allTeam.filter(u=>u.campus===teamFilterCampus||u.campus==='both');
   // Apply team filter
-  if(teamFilterTeam) allTeam=allTeam.filter(u=>u.team===teamFilterTeam);
+  if(teamFilterTeam) allTeam=allTeam.filter(u=>matchesTeamFilter(u,teamFilterTeam));
   // Apply role filter
   if(roleF) allTeam=allTeam.filter(u=>u.role===roleF);
 
@@ -3337,7 +3442,7 @@ function renderTeamProfiles(roleF=''){
 
   // Members section
   const membersLabel=document.getElementById('team-members-label');
-  membersLabel.textContent=teamFilterTeam?teamFilterTeam:(teamFilterCampus?teamFilterCampus.charAt(0).toUpperCase()+teamFilterCampus.slice(1)+' Sales Team':'Sales Team');
+  membersLabel.textContent=teamFilterTeam?((teamsById[teamFilterTeam]||{}).name||'Individual'):(teamFilterCampus?teamFilterCampus.charAt(0).toUpperCase()+teamFilterCampus.slice(1)+' Sales Team':'Sales Team');
 
   const mainGrid=document.getElementById('team-grid');
   mainGrid.innerHTML=members.map(u=>buildTeamCard(u)).join('')
@@ -3362,7 +3467,7 @@ function buildTeamCard(u){
       <span class="role-badge ${ROLE_BADGE[u.role]}" style="font-size:10px;padding:2px 7px">${displayRole(u)}</span>
     </div>
     <div style="width:100%;margin-top:2px">
-      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px"><span>${u.team||''}</span><span style="color:${color}">${pct}%</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px"><span>${esc(displayTeam(u))}</span><span style="color:${color}">${pct}%</span></div>
       <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100,pct)}%;background:${color};border-radius:4px"></div></div>
     </div>
     <button class="view-profile-btn">View →</button>
@@ -3475,6 +3580,165 @@ function deleteDoc(uid,idx){
 function isUserAdmin(){ return currentRole === 'manager' || currentRole === 'director'; }
 
 // ═══════════════════════════════════════
+// TEAMS - Manager / Director
+// ═══════════════════════════════════════
+function teamMembers(teamId){ return users.filter(u=>String(u.team_id)===String(teamId)); }
+function leaderCandidates(){
+  return users.filter(u=>['leader','supervisor','manager','director'].includes(u.role))
+              .sort((a,b)=>(a.first+a.last).localeCompare(b.first+b.last));
+}
+
+function renderTeams(){
+  const tbody=document.getElementById('teams-tbody');
+  if(!tbody) return;
+  if(!isUserAdmin()){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Only managers and directors can manage teams.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=dbTeams.map(t=>{
+    const ldr=t.leader_id?users.find(u=>u.id===t.leader_id):null;
+    const n=teamMembers(t.id).length;
+    return `
+    <tr>
+      <td><div class="user-name">${esc(dashFix(t.name))}</div></td>
+      <td>${ldr?`<div class="user-name" style="font-size:12.5px">${esc(ldr.first+' '+ldr.last)}</div><div class="user-email">${esc(displayRole(ldr))}</div>`:'<span style="color:var(--muted)">No leader</span>'}</td>
+      <td><span class="campus-chip">${t.campus?(CAMPUS_LABELS[t.campus]||esc(t.campus)):'Not set'}</span></td>
+      <td class="right">${n}</td>
+      <td><span class="status-dot"><span class="sdot ${t.active!==false?'sdot-active':'sdot-inactive'}"></span>${t.active!==false?'Active':'Inactive'}</span></td>
+      <td>
+        <div class="table-actions">
+          <button class="tact-btn edit" onclick="openTeamModal('${esc(t.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>
+          <button class="tact-btn reset" onclick="toggleTeamActive('${esc(t.id)}')">${t.active!==false?'Deactivate':'Activate'}</button>
+          <button class="tact-btn deact" onclick="deleteTeam('${esc(t.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No teams yet.</td></tr>';
+}
+
+function showTeamError(m){const e=document.getElementById('team-error');if(e){e.textContent=m;e.style.display='block';}}
+function clearTeamError(){const e=document.getElementById('team-error');if(e){e.textContent='';e.style.display='none';}}
+const TEAM_ERRORS={
+  name_exists:'A team with that name already exists',
+  missing_name:'Give the team a name',
+  bad_campus:'Pick a valid campus',
+  bad_number:'The team target must be zero or more',
+  leader_not_found:'That leader no longer exists',
+  forbidden:"You don't have permission for this",
+  in_use:'Move the members out first, then delete (or just deactivate it)',
+  not_found:'That team no longer exists',
+  team_inactive:'That team is inactive'
+};
+
+function openTeamModal(id){
+  const t=id!=null?dbTeams.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('team-id').value=t?t.id:'';
+  document.getElementById('modal-team-title').textContent=t?'Edit Team':'New Team';
+  document.getElementById('team-name').value=t?t.name:'';
+  document.getElementById('team-campus').value=(t&&t.campus)?t.campus:'';
+  document.getElementById('team-target').value=(t&&t.team_target!=null)?t.team_target:'';
+  document.getElementById('team-active').checked=t?t.active!==false:true;
+  const lsel=document.getElementById('team-leader');
+  lsel.innerHTML='<option value="">- No leader -</option>'+
+    leaderCandidates().map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} - ${esc(displayRole(u))}</option>`).join('');
+  lsel.value=(t&&t.leader_id)?t.leader_id:'';
+  document.getElementById('team-members-block').style.display=t?'block':'none';
+  if(t) renderTeamMembers(t.id);
+  clearTeamError();
+  openBackdrop('modal-team');
+}
+
+function renderTeamMembers(teamId){
+  const list=document.getElementById('team-members-list');
+  const members=teamMembers(teamId);
+  list.innerHTML=members.map(u=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--bg);border-radius:8px">
+      <div class="user-avatar ${u.photo?'':avColor(u.id)}" style="width:26px;height:26px;font-size:10px">${getInitials(u)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600">${esc(u.first+' '+u.last)}</div>
+        <div style="font-size:11px;color:var(--muted)">${esc(displayRole(u))}</div>
+      </div>
+      <button class="tact-btn deact" onclick="removeTeamMember('${esc(u.id)}')">Remove</button>
+    </div>`).join('')||'<div style="font-size:12.5px;color:var(--muted);padding:4px 2px">No members yet.</div>';
+  const sel=document.getElementById('team-add-member');
+  const free=users.filter(u=>String(u.team_id)!==String(teamId))
+                  .sort((a,b)=>(a.first+a.last).localeCompare(b.first+b.last));
+  sel.innerHTML='<option value="">Add someone...</option>'+
+    free.map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} - ${esc(displayTeam(u))}</option>`).join('');
+}
+
+async function saveTeam(){
+  const id=document.getElementById('team-id').value;
+  const name=document.getElementById('team-name').value.trim();
+  const leader_id=document.getElementById('team-leader').value||null;
+  const campus=document.getElementById('team-campus').value||null;
+  const tgtRaw=document.getElementById('team-target').value.trim();
+  const active=document.getElementById('team-active').checked;
+  clearTeamError();
+  if(!name){showTeamError('Give the team a name');return;}
+  if(tgtRaw!=='' && !(Number(tgtRaw)>=0)){showTeamError('The team target must be zero or more');return;}
+  const payload={name, leader_id, campus, team_target: tgtRaw===''?null:Number(tgtRaw)};
+  const btn=document.getElementById('btn-save-team');
+  btn.disabled=true;
+  try{
+    const r=id ? await callDb('update_team', Object.assign({id:Number(id), active}, payload))
+               : await callDb('create_team', payload);
+    if(!r||!r.ok){showTeamError(TEAM_ERRORS[r&&r.error]||'Could not save this team');return;}
+    closeModal('modal-team');
+    showToast('Team saved','success');
+    await refreshAfterTeamChange();
+  }catch(e){ showTeamError('Could not save this team'); }
+  finally{ btn.disabled=false; }
+}
+
+async function toggleTeamActive(id){
+  const t=dbTeams.find(x=>String(x.id)===String(id)); if(!t) return;
+  const r=await callDb('update_team',{id:Number(t.id), name:t.name, leader_id:t.leader_id,
+    campus:t.campus, team_target:t.team_target, active:t.active===false});
+  if(!r||!r.ok){showToast(TEAM_ERRORS[r&&r.error]||'Could not update this team','error');return;}
+  showToast(t.active===false?'Team activated':'Team deactivated','success');
+  await refreshAfterTeamChange();
+}
+
+async function deleteTeam(id){
+  const t=dbTeams.find(x=>String(x.id)===String(id)); if(!t) return;
+  const r=await callDb('delete_team',{id:Number(t.id)});
+  if(!r||!r.ok){showToast(TEAM_ERRORS[r&&r.error]||'Could not delete this team','error');return;}
+  showToast('Team deleted','success');
+  await refreshAfterTeamChange();
+}
+
+async function addTeamMember(){
+  const teamId=document.getElementById('team-id').value;
+  const uid=document.getElementById('team-add-member').value;
+  if(!teamId||!uid) return;
+  const r=await callDb('set_member_team',{user_id:uid, team_id:Number(teamId)});
+  if(!r||!r.ok){showTeamError(TEAM_ERRORS[r&&r.error]||'Could not add this person');return;}
+  showToast('Member added','success');
+  await refreshAfterTeamChange();
+  renderTeamMembers(teamId);
+}
+
+async function removeTeamMember(uid){
+  const teamId=document.getElementById('team-id').value;
+  const r=await callDb('set_member_team',{user_id:uid, team_id:null});
+  if(!r||!r.ok){showTeamError(TEAM_ERRORS[r&&r.error]||'Could not remove this person');return;}
+  showToast('Member removed','warning');
+  await refreshAfterTeamChange();
+  if(teamId) renderTeamMembers(teamId);
+}
+
+// Membership can move someone's reporting line, so reload the directory too.
+async function refreshAfterTeamChange(){
+  await loadTeams();
+  await loadDirectory();
+  renderTeams();
+  if(document.getElementById('page-users')?.classList.contains('active')) await refreshUserManagement();
+  if(document.getElementById('page-team-profiles')?.classList.contains('active')) renderTeamProfiles();
+  if(document.getElementById('page-orgchart')?.classList.contains('active')) renderOrgChart();
+}
+
+// ═══════════════════════════════════════
 // CARGOS (roles) - Manager / Director
 // ═══════════════════════════════════════
 function renderRoles(){
@@ -3581,6 +3845,7 @@ async function deleteRole(id){
 // the directory and the targets too.
 async function refreshAfterRoleChange(){
   await loadRoles();
+  await loadTeams();
   await loadDirectory();
   await loadPerformance();
   renderRoles();
@@ -3632,6 +3897,8 @@ async function loadDbUsers(){
     role:u.role, campus:u.campus, team:dashFix(u.team), phone:u.phone||'',
     role_id:u.role_id!=null?u.role_id:null,
     role_name: dashFix((rolesById[u.role_id]||{}).name) || null,
+    team_id:u.team_id!=null?u.team_id:null,
+    team_name: dashFix((teamsById[u.team_id]||{}).name) || null,
     jobTitle:dashFix(u.job_title)||'', status:u.status, tempPw:u.must_change_password,
     reports_to:u.reports_to||null, photo:u.photo||''
   }));
@@ -3668,7 +3935,7 @@ function renderUsers(){
         </div>
       </td>
       <td><span class="role-badge ${ROLE_BADGE[u.role]}">${displayRole(u)}</span></td>
-      <td><span class="campus-chip">${CAMPUS_LABELS[u.campus]||esc(u.campus)}</span>${u.team?` <span style="font-size:11px;color:var(--muted)">${esc(u.team)}</span>`:''}</td>
+      <td><span class="campus-chip">${CAMPUS_LABELS[u.campus]||esc(u.campus)}</span> <span style="font-size:11px;color:var(--muted)">${esc(displayTeam(u))}</span></td>
       <td><span class="status-dot"><span class="sdot ${u.status==='active'?'sdot-active':'sdot-inactive'}"></span>${u.status==='active'?'Active':'Inactive'}</span></td>
       <td>${u.tempPw?'<span class="temp-chip">Temporary</span>':`<span style="font-size:12px;color:var(--muted)">Set</span>`}</td>
       <td>
@@ -3704,6 +3971,7 @@ function openModal(type,userId){
     document.getElementById('btn-save-user').className='btn-save';
     ['u-first','u-last','u-email','u-team','u-phone','u-pw'].forEach(id=>document.getElementById(id).value='');
     fillCargoSelect('u-role');
+    fillTeamSelect('u-team');
     document.getElementById('u-campus').value='dublin';
     document.getElementById('u-status').value='active';
     document.getElementById('pw-group').style.display='block';
@@ -3721,7 +3989,7 @@ function openModal(type,userId){
     document.getElementById('u-email').value=u.email;
     fillCargoSelect('u-role', u.role_id);
     document.getElementById('u-campus').value=u.campus;
-    document.getElementById('u-team').value=u.team||'';
+    fillTeamSelect('u-team', u.team_id);
     document.getElementById('u-phone').value=u.phone||'';
     document.getElementById('u-status').value=u.status;
     document.getElementById('pw-group').style.display='none';
@@ -3768,6 +4036,8 @@ function clearUserError(){
 }
 const CREATE_USER_ERRORS={
   missing_role_id:'Pick a cargo for this person',
+  team_not_found:'That team no longer exists',
+  team_inactive:'That team is inactive',
   role_not_found:'That cargo no longer exists',
   role_inactive:'That cargo is inactive',
   email_exists:'This email is already in use',
@@ -3784,7 +4054,7 @@ async function saveUser(){
   const email=document.getElementById('u-email').value.trim().toLowerCase();
   const roleId=document.getElementById('u-role').value;
   const campus=(document.getElementById('u-campus').value||'').toLowerCase();
-  const team=document.getElementById('u-team').value.trim();
+  const teamId=document.getElementById('u-team').value;
   const phone=document.getElementById('u-phone').value.trim();
   const status=document.getElementById('u-status').value;
   const reportsTo=document.getElementById('au-reports-to').value;
@@ -3798,7 +4068,8 @@ async function saveUser(){
   btn.disabled=true;
   try{
     const r=await callDb('create_user',{user:{
-      first,last,email,role_id: roleId?Number(roleId):null,campus,team,phone,status,
+      first,last,email,role_id: roleId?Number(roleId):null,campus,phone,status,
+      team_id: teamId?Number(teamId):null,
       password:pw, reports_to: reportsTo || null
     }});
     if(!r||!r.ok){
@@ -3808,6 +4079,7 @@ async function saveUser(){
     closeModal('modal-user');
     showToast('User created','success');
     await loadRoles();
+    await loadTeams();
     await refreshUserManagement();
     await loadDirectory();
     await loadPerformance();
@@ -3973,7 +4245,7 @@ function renderHomePerf(){
             <td style="width:22px;font-weight:700;color:var(--muted);font-size:12px">${i+1}</td>
             <td style="width:28px"><div class="perf-avatar ${avColor(u.id)}" style="width:26px;height:26px;font-size:11px">${getInitials(u)}</div></td>
             <td style="font-weight:600;font-size:12.5px">${u.first} ${u.last.split(' ')[0]}</td>
-            <td style="font-size:11px;color:var(--muted)">${u.team||''}</td>
+            <td style="font-size:11px;color:var(--muted)">${esc(displayTeam(u))}</td>
             <td style="font-weight:700;color:${c};font-size:13px;text-align:right">${fmt(up2.actual)}</td>
             <td style="width:100px">
               <div style="display:flex;align-items:center;gap:6px">
@@ -4036,7 +4308,7 @@ function renderCommsPage(){
   const me=users.find(u=>u.id===currentUserId);
   const isLeader=['supervisor','manager','director','leader'].includes(me.role);
   if(isLeader){
-    openGroupThread(me.team||'All');
+    openGroupThread(teamNameOf(me)||'All');
   } else {
     const team=getTeamForUser(currentUserId);
     // Find supervisor/leader
@@ -4058,13 +4330,14 @@ function renderCommsContactList(filter=''){
     html+='<div class="comms-group-label">Group Chats</div>';
     // Build group list from team
     const myTeam=getTeamForUser(currentUserId);
-    const groups=[...new Set(myTeam.map(u=>u.team).filter(Boolean))];
-    if(me.team&&!groups.includes(me.team)) groups.unshift(me.team);
+    const groups=[...new Set(myTeam.map(u=>teamNameOf(u)).filter(Boolean))];
+    const myTeamName=teamNameOf(me);
+    if(myTeamName&&!groups.includes(myTeamName)) groups.unshift(myTeamName);
     // Also add "All Team" for manager/director
     if(['manager','director'].includes(me.role)) groups.unshift('All Team');
     groups.forEach(grp=>{
       const grpId=getGroupThreadId(grp);
-      const memberCount=myTeam.filter(u=>u.team===grp||grp==='All Team').length;
+      const memberCount=myTeam.filter(u=>teamNameOf(u)===grp||grp==='All Team').length;
       const lastMsg=MESSAGES[grpId]?.slice(-1)[0];
       const active=currentThreadId===grpId?'active':'';
       html+=`<div class="comms-contact ${active}" onclick="openGroupThread('${grp}')">
@@ -4132,7 +4405,7 @@ function openGroupThread(groupName){
 
   // Header
   const myTeam=getTeamForUser(currentUserId);
-  const count=myTeam.filter(u=>u.team===groupName||groupName==='All Team').length;
+  const count=myTeam.filter(u=>teamNameOf(u)===groupName||groupName==='All Team').length;
   document.getElementById('chat-header-avatar').className='chat-header-avatar ua-purple';
   document.getElementById('chat-header-avatar').innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
   document.getElementById('chat-header-name').innerHTML=`${groupName} <span class="group-badge">${count+1} members</span>`;
@@ -4302,8 +4575,9 @@ function renderCpContactList(){
   const isLeader=['supervisor','manager','director','leader'].includes(me.role);
   if(isLeader){
     const myTeam=getTeamForUser(currentUserId);
-    const groups=[...new Set(myTeam.map(u=>u.team).filter(Boolean))];
-    if(me.team&&!groups.includes(me.team)) groups.unshift(me.team);
+    const groups=[...new Set(myTeam.map(u=>teamNameOf(u)).filter(Boolean))];
+    const myTeamName=teamNameOf(me);
+    if(myTeamName&&!groups.includes(myTeamName)) groups.unshift(myTeamName);
     if(['manager','director'].includes(me.role)) groups.unshift('All Team');
     groups.forEach(grp=>{
       const grpId=getGroupThreadId(grp);
@@ -4881,6 +5155,7 @@ const MOB_LEADER_ITEMS=[
   {id:'mgr-handbook',   label:'Handbook',          icon:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'},
   {id:'users',          label:'Users',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
   {id:'roles',          label:'Cargos',            icon:'<path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>'},
+  {id:'teams',          label:'Teams',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
 ];
 
 function buildMobLeadersMenu(){
@@ -4888,7 +5163,7 @@ function buildMobLeadersMenu(){
   if(!cfg) return;
   const grid=document.getElementById('mob-leaders-grid');
   if(!grid) return;
-  const items=MOB_LEADER_ITEMS.filter(item=>(item.id!=='users'&&item.id!=='roles')||cfg.mgr);
+  const items=MOB_LEADER_ITEMS.filter(item=>!['users','roles','teams'].includes(item.id)||cfg.mgr);
   grid.innerHTML=items.map(item=>`
     <div class="mob-leaders-item" onclick="closeMobLeaders();showPage('${item.id}')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg>
@@ -5059,7 +5334,7 @@ function generateReport(){
     titleEl.textContent=`Individual Report - ${u.first} ${u.last}`;
     metaEl.textContent=`${displayRole(u)} · ${CAMPUS_LABELS[u.campus]} · ${getPeriodLabel()}`;
     lastReportTitle=titleEl.textContent;
-    lastReportData=[{Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pct}%`,Period:getPeriodLabel()}];
+    lastReportData=[{Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pct}%`,Period:getPeriodLabel()}];
     if(incKpis){
       html+=`<div class="rpt-section"><div class="rpt-section-title">Performance Summary</div>
         <div class="rpt-kpi-row">
@@ -5093,7 +5368,7 @@ function generateReport(){
     const totalActual=perfUsers.reduce((a,u)=>a+getPerfForPeriod(u).actual,0);
     const totalPct=totalTarget>0?Math.round(totalActual/totalTarget*100):0;
     const onTarget=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual>=p.target;}).length;
-    lastReportData=perfUsers.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Period:getPeriodLabel()};});
+    lastReportData=perfUsers.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Period:getPeriodLabel()};});
     if(incKpis){
       html+=`<div class="rpt-section"><div class="rpt-section-title">Team KPIs</div>
         <div class="rpt-kpi-row">
@@ -5118,7 +5393,7 @@ function generateReport(){
     }
     if(incTable){
       const groups={};
-      perfUsers.forEach(u=>{const key=(u.campus==='both'?'All':u.campus.charAt(0).toUpperCase()+u.campus.slice(1))+' - '+(u.team||'No Team');if(!groups[key])groups[key]=[];groups[key].push(u);});
+      perfUsers.forEach(u=>{const key=(u.campus==='both'?'All':u.campus.charAt(0).toUpperCase()+u.campus.slice(1))+' - '+displayTeam(u);if(!groups[key])groups[key]=[];groups[key].push(u);});
       html+=`<div class="rpt-section"><div class="rpt-section-title">Detailed Breakdown</div>
         ${Object.entries(groups).sort().map(([grp,members])=>{
           const gT=members.reduce((a,u)=>a+getPerfForPeriod(u).target,0);
@@ -5136,13 +5411,13 @@ function generateReport(){
     metaEl.textContent=getPeriodLabel();
     lastReportTitle=titleEl.textContent;
     const sorted=[...perfUsers].sort((a,b)=>{const pa=getPerfForPeriod(a);const pb=getPerfForPeriod(b);return (pb.target>0?pb.actual/pb.target:0)-(pa.target>0?pa.actual/pa.target:0);});
-    lastReportData=sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Rank:i+1,Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`};});
+    lastReportData=sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Rank:i+1,Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`};});
     html+=`<div class="rpt-section"><div class="rpt-section-title">Leaderboard - ${getPeriodLabel()}</div>
       ${sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;const numClass=i===0?'gold':i===1?'silver':i===2?'bronze':'';
         return `<div class="rpt-rank-row">
           <div class="rpt-rank-num ${numClass}">${medal}</div>
           <div class="perf-avatar ${avColor(u.id)}" style="width:34px;height:34px;font-size:13px">${getInitials(u)}</div>
-          <div style="flex:1"><div style="font-size:13.5px;font-weight:600">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} · ${u.team||''}</div></div>
+          <div style="flex:1"><div style="font-size:13.5px;font-weight:600">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} · ${displayTeam(u)}</div></div>
           <div style="text-align:right"><div class="eur-val">${fmt(p.actual)}</div><div class="eur-target">target ${fmt(p.target)}</div></div>
           <span class="pct-badge ${pctBadgeClass(pc)}" style="margin-left:8px">${pc}%</span>
         </div>`;
@@ -5154,12 +5429,12 @@ function generateReport(){
     lastReportTitle=titleEl.textContent;
     const onTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual>=p.target;});
     const offTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual<p.target;}).sort((a,b)=>{const pa=getPerfForPeriod(a);const pb=getPerfForPeriod(b);return (pa.actual/pa.target)-(pb.actual/pb.target);});
-    lastReportData=[...onTgt,...offTgt].map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:u.team||'',Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Status:p.actual>=p.target?'On Target':'Below Target'};});
+    lastReportData=[...onTgt,...offTgt].map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Status:p.actual>=p.target?'On Target':'Below Target'};});
     html+=`<div class="rpt-section"><div class="rpt-section-title">On Target (${onTgt.length})</div>
-      ${onTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${u.team||''}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:var(--success)"></div></div><div class="rpt-bar-val" style="color:var(--success)">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:var(--success)">${pc}%</div></div>`;}).join('')}
+      ${onTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${esc(displayTeam(u))}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:var(--success)"></div></div><div class="rpt-bar-val" style="color:var(--success)">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:var(--success)">${pc}%</div></div>`;}).join('')}
     </div>
     <div class="rpt-section"><div class="rpt-section-title">Below Target (${offTgt.length})</div>
-      ${offTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${u.team||''}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${pc}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
+      ${offTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${esc(displayTeam(u))}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${pc}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
     </div>`;
 
   } else if(reportType==='ytd'){
@@ -5247,7 +5522,7 @@ function renderOrgChart(){
   function card(u){
     const av=u.photo?`<img src="${u.photo}" alt="">`:`${getInitials(u)}`;
     const roleLbl=displayRole(u);
-    const teamLbl=u.team&&u.team!=='All'?`<div style="font-size:9.5px;color:var(--muted);margin-top:1px">${u.team}</div>`:'';
+    const teamLbl=teamNameOf(u)?`<div style="font-size:9.5px;color:var(--muted);margin-top:1px">${esc(teamNameOf(u))}</div>`:'';
     const campLbl=u.campus&&u.campus!=='both'?`<div style="font-size:9.5px;color:var(--muted)">${CAMPUS_LABELS[u.campus]||u.campus}</div>`:'';
     return `<div class="org-node-card ${u.role}" onclick="viewUserProfile('${u.id}')" title="${u.first} ${u.last}">
       <div class="org-avatar ${avColor(u.id)}">${av}</div>
@@ -5314,9 +5589,9 @@ function renderOrgChart(){
 
     const cols=[];
     branches.forEach(b=>cols.push(subtree(b)));
-    const leafTeams=[...new Set(leaves.map(u=>u.team||'No Team'))].sort();
+    const leafTeams=[...new Set(leaves.map(u=>displayTeam(u)))].sort();
     leafTeams.forEach(team=>{
-      const members=leaves.filter(u=>(u.team||'No Team')===team);
+      const members=leaves.filter(u=>displayTeam(u)===team);
       const memberCols=members.map(u=>`<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(u)}</div>`);
       const grpLabel=`<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:1px;text-align:center;margin-bottom:4px">${esc(dashFix(team))}${suffix}</div>`;
       cols.push(`<div style="display:flex;flex-direction:column;align-items:center">
