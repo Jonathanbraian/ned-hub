@@ -23,6 +23,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300">
 <title>NED Sales Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -2144,6 +2145,24 @@ a{text-decoration:none;color:inherit}
 
 <script>
 // ═══════════════════════════════════════
+// SUPABASE CONFIG & DB GATEWAY
+// ═══════════════════════════════════════
+const SUPABASE_URL = 'https://acwgfgsctgmuepeofdkj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjd2dmZ3NjdGdtdWVwZW9mZGtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1NDg3NTQsImV4cCI6MjEwNTEyNDc1NH0.KHVCNbr_C9064aWCF25wNymhvTA1qljK41MSv966lbk';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function callDb(action, payload = {}) {
+  const { data:{ session } } = await sb.auth.getSession();
+  const token = session ? session.access_token : '';
+  const res = await fetch('/api/db', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+    body: JSON.stringify({ action, ...payload })
+  });
+  return res.json();
+}
+
+// ═══════════════════════════════════════
 // CONSTANTS & TARGETS
 // ═══════════════════════════════════════
 const ROLE_TARGETS = {
@@ -2476,6 +2495,7 @@ let nextId=34;
 let currentRole=null, currentUserId=null;
 let deactTargetId=null, editingId=null, editingProfileUserId=null, addingDocUserId=null;
 let currentStars=0, currentPerfPeriod='monthly', pendingLoginUserId=null;
+let pendingLoginProfile=null; // Supabase profile awaiting a password change
 let searchVal='', roleFilter='', campusFilter='';
 // Team page filters
 let teamFilterCampus='', teamFilterTeam='';
@@ -2527,23 +2547,23 @@ function getTeamForUser(uid){
 // ═══════════════════════════════════════
 // LOGIN / AUTH
 // ═══════════════════════════════════════
-function doLogin(){
+async function doLogin(){
   const email = document.getElementById('l-email').value.trim().toLowerCase();
   const pw    = document.getElementById('l-password').value;
   const err   = document.getElementById('login-error');
   const tmpBanner = document.getElementById('temp-pw-banner');
+  const fail  = msg => {err.style.display='block';err.textContent=msg;};
   tmpBanner.style.display='none';
-  if(!email||!pw){err.style.display='block';err.textContent='Please enter your email and password.';return;}
-  const u = users.find(x=>x.email.toLowerCase()===email);
-  if(!u||u.pw!==pw){err.style.display='block';err.textContent='Incorrect email or password. Please try again.';return;}
-  if(u.status==='inactive'){err.style.display='block';err.textContent='This account has been deactivated. Please contact your manager.';return;}
+  if(!email||!pw){fail('Please enter your email and password.');return;}
   err.style.display='none';
-  if(u.tempPw){
-    pendingLoginUserId=u.id;
-    showChangePwScreen();
-    return;
-  }
-  completeLogin(u.id);
+  const { error } = await sb.auth.signInWithPassword({ email, password:pw });
+  if(error){fail('Invalid email or password');return;}
+  const r = await callDb('get_my_profile');
+  if(!r.profile){ await sb.auth.signOut(); fail('No profile found'); return; }
+  const profile = r.profile;
+  if(profile.status === 'inactive'){ await sb.auth.signOut(); fail('Account inactive'); return; }
+  if(profile.must_change_password){ pendingLoginProfile = profile; showChangePwScreen(); return; }
+  completeLoginReal(profile);
 }
 
 function showChangePwScreen(){
@@ -2554,17 +2574,23 @@ function showChangePwScreen(){
   document.getElementById('cpw-error').style.display='none';
 }
 
-function doChangePw(){
+async function doChangePw(){
   const pw  = document.getElementById('new-pw').value;
   const pw2 = document.getElementById('new-pw2').value;
   const err = document.getElementById('cpw-error');
-  if(pw.length<8){err.style.display='block';err.textContent='Password must be at least 8 characters.';return;}
-  if(pw!==pw2){err.style.display='block';err.textContent='Passwords do not match.';return;}
+  const fail = msg => {err.style.display='block';err.textContent=msg;};
+  if(pw.length<8){fail('Minimum 8 characters');return;}
+  if(pw!==pw2){fail('Passwords do not match');return;}
   err.style.display='none';
-  const u = users.find(x=>x.id===pendingLoginUserId);
-  if(u){u.pw=pw;u.tempPw=false;}
+  const { error } = await sb.auth.updateUser({ password:pw });
+  if(error){fail(error.message);return;}
+  await callDb('set_password_changed');
+  const r = await callDb('get_my_profile');
+  const profile = r.profile || pendingLoginProfile;
+  if(!profile){fail('No profile found');return;}
+  pendingLoginProfile = null;
   document.getElementById('change-pw-screen').style.display='none';
-  completeLogin(pendingLoginUserId);
+  completeLoginReal(profile);
 }
 
 function checkStrPw(v){
@@ -2581,6 +2607,25 @@ function completeLogin(uid){
   const u=users.find(x=>x.id===uid);
   currentRole=u.role;
   u.lastLogin='Just now';
+  startApp(u);
+}
+
+// Bridge a real Supabase profile into the in-memory `users` array so every
+// existing find-by-id lookup keeps working (currentUserId is now a UUID).
+function completeLoginReal(profile){
+  const u = {
+    id: profile.id, first: profile.first, last: profile.last,
+    nickname: profile.nickname||'', email: profile.email, role: profile.role,
+    campus: profile.campus, team: profile.team, phone: profile.phone||'',
+    instagram: profile.instagram||'', nationality: profile.nationality||'',
+    language: profile.language||'', jobTitle: profile.job_title||'',
+    status: profile.status, managerName:'', photo: profile.photo||'', bio: profile.bio||'',
+    perf: mkPerf(profile.role, 0), certs:[], certDates:[], appraisals:[], documents:[]
+  };
+  const i = users.findIndex(x => x.id === u.id);
+  if(i >= 0) users[i] = u; else users.push(u);
+  currentUserId = u.id; currentRole = u.role;
+  callDb('update_last_login');
   startApp(u);
 }
 
@@ -2719,8 +2764,9 @@ function updateNavAvatar(user){
   else{btn.textContent=getInitials(user);btn.style.backgroundImage='var(--grad-bt)';btn.style.color='#fff';}
 }
 
-function doLogout(){
-  currentRole=null;currentUserId=null;
+async function doLogout(){
+  await sb.auth.signOut();
+  currentRole=null;currentUserId=null;pendingLoginProfile=null;
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('l-email').value='';
@@ -5127,6 +5173,20 @@ function renderOrgChart(){
 // ═══════════════════════════════════════════════════
 // Run PWA setup
 setupPWA();
+
+// ═══════════════════════════════════════════════════
+// KEEP-ALIVE — restore an existing Supabase session
+// ═══════════════════════════════════════════════════
+(async () => {
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){
+    const r = await callDb('get_my_profile');
+    if(r.profile && r.profile.status !== 'inactive'){
+      if(r.profile.must_change_password){ pendingLoginProfile = r.profile; showChangePwScreen(); }
+      else completeLoginReal(r.profile);
+    }
+  }
+})();
 
 // Also call renderCalendar when calendar page opens
 const _origShowPage=showPage;
