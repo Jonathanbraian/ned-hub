@@ -88,6 +88,34 @@ async function canEditProfileOf(me, tgt){
 async function canViewProfileOf(me, tgt){
   return canEditProfileOf(me, tgt);
 }
+// All the profile gates in one place, computed from a single subtree walk.
+//   view/edit : self, or up the chain
+//   certs     : chain only - a non-director cannot manage their own
+//   appraisals: chain only, never about yourself, not even for a director
+//   documents : chain only - a non-director cannot see their own
+async function gatesFor(me, tgt){
+  const self = me.id === tgt.id;
+  const needSub = (me.role === 'supervisor' || me.role === 'leader');
+  const sub = needSub ? await subtreeIds(me) : null;
+  let chain;
+  if(me.role === 'director') chain = true;
+  else if(me.role === 'manager') chain = tgt.role !== 'director';
+  else if(needSub) chain = sub.has(tgt.id);
+  else chain = false;
+  const chefia = chain && !(self && me.role !== 'director');
+  return {
+    canView: self || chain,
+    canEdit: self || chain,
+    certView: self || chain,
+    certManage: chefia,
+    appraisal: !self && chain,
+    doc: chefia
+  };
+}
+const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Other'];
+function safeFileName(n){
+  return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
+}
 const PROFILE_EDITABLE = ['first','last','nickname','job_title','phone','instagram','nationality','language','bio'];
 // Copied verbatim from the client's CERT_LIST.
 const CERT_SEED = [
@@ -513,19 +541,24 @@ exports.handler = async (event) => {
         if(!uid) return json(400,{error:'missing_id'});
         const { data: tgt } = await admin.from('profiles').select('*').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!await canViewProfileOf(me, tgt)) return json(403,{error:'out_of_scope'});
+        const gates = await gatesFor(me, tgt);
+        if(!gates.canView) return json(403,{error:'out_of_scope'});
 
-        const { data: certRows } = await admin.from('user_certs')
-          .select('cert_id,date_earned').eq('user_id',uid);
+        const { data: certRows } = gates.certView
+          ? await admin.from('user_certs').select('cert_id,date_earned').eq('user_id',uid)
+          : { data: [] };
         const { data: catalog } = await admin.from('cert_catalog').select('id,name');
         const catById = {}; (catalog||[]).forEach(c=>{ catById[c.id]=c.name; });
         const certs = (certRows||[]).map(c=>({
           id: c.cert_id, name: catById[c.cert_id] || 'Unknown certificate', date_earned: c.date_earned
         }));
 
-        const { data: aps } = await admin.from('appraisals')
-          .select('id,period,rating,notes,tags,created_by,created_at')
-          .eq('user_id',uid).order('created_at',{ascending:false});
+        // Appraisals are never shown to their subject, director or not.
+        const { data: aps } = gates.appraisal
+          ? await admin.from('appraisals')
+              .select('id,period,rating,notes,tags,created_by,created_at')
+              .eq('user_id',uid).order('created_at',{ascending:false})
+          : { data: [] };
         const authorIds = [...new Set((aps||[]).map(a=>a.created_by).filter(Boolean))];
         const authors = {};
         if(authorIds.length){
@@ -534,12 +567,23 @@ exports.handler = async (event) => {
         }
         const appraisals = (aps||[]).map(a=>Object.assign({}, a, { created_by_name: authors[a.created_by] || null }));
 
-        const { data: docs } = await admin.from('user_documents')
-          .select('id,name,category,doc_date,notes,file_url,created_at')
-          .eq('user_id',uid).order('created_at',{ascending:false});
+        const { data: docs } = gates.doc
+          ? await admin.from('user_documents')
+              .select('id,name,category,doc_date,notes,file_url,created_at')
+              .eq('user_id',uid).order('created_at',{ascending:false})
+          : { data: [] };
+        // The storage path never leaves the server; the client asks for a
+        // signed URL when it actually wants to open a file.
+        const documents = (docs||[]).map(d=>({
+          id:d.id, name:d.name, category:d.category, doc_date:d.doc_date,
+          notes:d.notes, created_at:d.created_at, has_file: !!d.file_url
+        }));
 
-        return json(200,{ profile: tgt, certs, appraisals, documents: docs||[],
-          can_edit: await canEditProfileOf(me, tgt) });
+        return json(200,{ profile: tgt, certs, appraisals, documents,
+          can_edit: gates.canEdit,
+          can_manage_certs: gates.certManage,
+          can_see_appraisals: gates.appraisal,
+          can_see_documents: gates.doc });
       }
       case 'update_profile': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
@@ -596,6 +640,159 @@ exports.handler = async (event) => {
           rows = seeded.data || [];
         }
         return json(200,{ catalog: rows });
+      }
+      case 'add_user_cert': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id, certId = p.cert_id;
+        if(!uid || !certId) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).certManage) return json(403,{error:'out_of_scope'});
+        const { data: course } = await admin.from('cert_catalog').select('id').eq('id',certId).single();
+        if(!course) return json(404,{error:'cert_not_found'});
+        const { error } = await admin.from('user_certs')
+          .upsert({ user_id:uid, cert_id:certId, date_earned: p.date_earned || null },
+                  { onConflict:'user_id,cert_id' });
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'remove_user_cert': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id, certId = p.cert_id;
+        if(!uid || !certId) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).certManage) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('user_certs').delete().eq('user_id',uid).eq('cert_id',certId);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'add_cert_catalog': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const { data, error } = await admin.from('cert_catalog').insert({ name }).select('id,name').single();
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'save_failed', detail:error.message});
+        }
+        return json(200,{ ok:true, cert:data });
+      }
+      case 'create_appraisal': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
+        const period = (p.period||'').toString().trim();
+        const rating = Number(p.rating);
+        if(!period) return json(400,{error:'missing_period'});
+        if(!(rating >= 1 && rating <= 5)) return json(400,{error:'bad_rating'});
+        const { data, error } = await admin.from('appraisals').insert({
+          user_id: uid, period, rating, notes: (p.notes||'').toString(),
+          tags: Array.isArray(p.tags) ? p.tags : [],
+          created_by: me.id, created_at: new Date().toISOString()
+        }).select('id').single();
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, id:data && data.id });
+      }
+      case 'update_appraisal': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('appraisals').select('id,user_id').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',row.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
+        const period = (p.period||'').toString().trim();
+        const rating = Number(p.rating);
+        if(!period) return json(400,{error:'missing_period'});
+        if(!(rating >= 1 && rating <= 5)) return json(400,{error:'bad_rating'});
+        const { error } = await admin.from('appraisals').update({
+          period, rating, notes: (p.notes||'').toString(),
+          tags: Array.isArray(p.tags) ? p.tags : []
+        }).eq('id',p.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'delete_appraisal': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('appraisals').select('id,user_id').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',row.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('appraisals').delete().eq('id',p.id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'upload_document': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).doc) return json(403,{error:'out_of_scope'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const b64 = (p.data_base64||'').replace(/^data:[^;]+;base64,/,'');
+        if(!b64) return json(400,{error:'missing_file'});
+        let buf;
+        try { buf = Buffer.from(b64,'base64'); } catch(e){ return json(400,{error:'bad_file'}); }
+        if(!buf.length) return json(400,{error:'bad_file'});
+        // Netlify caps a synchronous request body around 6MB and base64 adds
+        // about a third, so the raw file has to stay under 4MB.
+        if(buf.length > 4*1024*1024) return json(413,{error:'file_too_large'});
+        const category = DOC_CATEGORIES.includes(p.category) ? p.category : 'Other';
+        const path = uid + '/' + require('crypto').randomUUID() + '_' + safeFileName(p.filename || name);
+        const { error: upErr } = await admin.storage.from('documents')
+          .upload(path, buf, { contentType: p.content_type || 'application/octet-stream', upsert: false });
+        if(upErr) return json(500,{error:'upload_failed', detail:upErr.message});
+        const { data, error } = await admin.from('user_documents').insert({
+          user_id: uid, name, category, doc_date: p.doc_date || null,
+          notes: (p.notes||'').toString(), file_url: path,
+          created_at: new Date().toISOString()
+        }).select('id,name,category,doc_date,notes,created_at').single();
+        if(error){
+          await admin.storage.from('documents').remove([path]);
+          return json(500,{error:'save_failed', detail:error.message});
+        }
+        // Built field by field: the storage path must never reach the client,
+        // and that must not depend on the select projection.
+        return json(200,{ ok:true, document: {
+          id: data.id, name: data.name, category: data.category,
+          doc_date: data.doc_date, notes: data.notes, created_at: data.created_at,
+          has_file: true
+        } });
+      }
+      case 'get_document_url': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.doc_id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('user_documents').select('id,user_id,file_url').eq('id',p.doc_id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',row.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).doc) return json(403,{error:'out_of_scope'});
+        if(!row.file_url) return json(404,{error:'no_file'});
+        const { data, error } = await admin.storage.from('documents').createSignedUrl(row.file_url, 60);
+        if(error || !data) return json(500,{error:'sign_failed', detail:error && error.message});
+        return json(200,{ ok:true, url:data.signedUrl });
+      }
+      case 'delete_document': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.doc_id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('user_documents').select('id,user_id,file_url').eq('id',p.doc_id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',row.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).doc) return json(403,{error:'out_of_scope'});
+        if(row.file_url) await admin.storage.from('documents').remove([row.file_url]);
+        const { error } = await admin.from('user_documents').delete().eq('id',p.doc_id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
       }
       default: return json(400, { error:'unknown_action' });
     }
