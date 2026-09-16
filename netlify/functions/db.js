@@ -56,6 +56,64 @@ function accessibleTeamIds(me, allTeams, allProfs){
   }
   return [];
 }
+// ── CHAT MEMBERSHIP ──────────────────────────────────────────────
+// RLS lets the browser READ messages it may see (is_thread_member) and nothing
+// else; every write comes through here. These helpers mirror is_thread_member
+// EXACTLY, and deliberately NOT accessibleTeamIds: that one hands a manager or
+// director every team, which is right for figures but wrong here - the gateway
+// must never accept a send into a thread whose rows RLS will then hide from the
+// sender, because nothing is echoed locally and their own message would vanish.
+const MSG_MAX = 4000;
+const MSG_PAGE = 50;
+// The teams whose group chat this caller belongs to: the team they are on,
+// plus any team they lead. teams.active is ignored on purpose - deactivating a
+// team hides it from pickers, it does not evict its people from the chat.
+async function chatTeamIdsOf(me){
+  const { data: allTeams } = await admin.from('teams').select('id,name,leader_id');
+  const teams = allTeams || [];
+  const mine = new Set();
+  if(me.team_id != null && teams.some(t => t.id === me.team_id)) mine.add(me.team_id);
+  teams.forEach(t => { if(t.leader_id === me.id) mine.add(t.id); });
+  return { ids: [...mine], teams };
+}
+async function memberOfThread(me, thread){
+  if(!thread) return false;
+  if(thread.kind === 'dm') return thread.user_a === me.id || thread.user_b === me.id;
+  if(thread.kind === 'group'){
+    if(thread.team_id == null) return false;
+    const { ids } = await chatTeamIdsOf(me);
+    return ids.includes(thread.team_id);
+  }
+  return false;
+}
+// A DM thread is keyed by the sorted pair, so the two directions can never
+// produce two threads.
+function dmPair(a, b){ return [String(a), String(b)].sort(); }
+async function findOrCreateDm(meId, otherId){
+  const [user_a, user_b] = dmPair(meId, otherId);
+  const { data: existing } = await admin.from('threads')
+    .select('*').eq('kind','dm').eq('user_a',user_a).eq('user_b',user_b).single();
+  if(existing) return existing;
+  const { data: created } = await admin.from('threads')
+    .insert({ kind:'dm', user_a, user_b }).select('*').single();
+  if(created) return created;
+  // unique(user_a,user_b) turns a race into a duplicate key, so re-read.
+  const { data: raced } = await admin.from('threads')
+    .select('*').eq('kind','dm').eq('user_a',user_a).eq('user_b',user_b).single();
+  return raced || null;
+}
+async function findOrCreateGroup(teamId){
+  const { data: existing } = await admin.from('threads')
+    .select('*').eq('kind','group').eq('team_id',teamId).single();
+  if(existing) return existing;
+  const { data: created } = await admin.from('threads')
+    .insert({ kind:'group', team_id:teamId }).select('*').single();
+  if(created) return created;
+  const { data: raced } = await admin.from('threads')
+    .select('*').eq('kind','group').eq('team_id',teamId).single();
+  return raced || null;
+}
+
 // Everyone below this person in the reports_to chain, transitively.
 async function subtreeIds(me){
   const { data: all } = await admin.from('profiles').select('id,reports_to');
@@ -209,6 +267,107 @@ exports.handler = async (event) => {
           .update({ theme }).eq('id', caller.id);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true, theme });
+      }
+      case 'get_threads': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const { ids: myTeamIds, teams } = await chatTeamIdsOf(me);
+        const teamById = {}; teams.forEach(t => { teamById[t.id] = t; });
+        for(const tid of myTeamIds) await findOrCreateGroup(tid);
+        const { data: allThreads } = await admin.from('threads').select('*');
+        const mine = (allThreads||[]).filter(t =>
+          (t.kind==='group' && t.team_id!=null && myTeamIds.includes(t.team_id)) ||
+          (t.kind==='dm' && (t.user_a===me.id || t.user_b===me.id)));
+        const ids = mine.map(t => t.id);
+        const { data: msgs } = ids.length
+          ? await admin.from('messages').select('id,thread_id,sender_id,body,created_at').in('thread_id', ids)
+          : { data: [] };
+        const { data: reads } = await admin.from('thread_reads')
+          .select('thread_id,last_read_at').eq('user_id', me.id);
+        const readAt = {}; (reads||[]).forEach(r => { readAt[r.thread_id] = r.last_read_at; });
+        const { data: profs } = await admin.from('profiles').select('id,first,last,nickname,photo,role');
+        const profById = {}; (profs||[]).forEach(u => { profById[u.id] = u; });
+        const out = mine.map(t => {
+          const rows = (msgs||[]).filter(m => m.thread_id === t.id)
+            .sort((x,y) => Number(x.id) - Number(y.id));
+          const last = rows.length ? rows[rows.length-1] : null;
+          const since = readAt[t.id] || null;
+          // Your own messages never count as unread, however late you read them.
+          const unread = rows.filter(m => m.sender_id !== me.id &&
+            (!since || String(m.created_at) > String(since))).length;
+          let name = '', other = null;
+          if(t.kind === 'dm'){
+            const otherId = t.user_a === me.id ? t.user_b : t.user_a;
+            const u = profById[otherId];
+            other = u ? { id:u.id, first:u.first, last:u.last, nickname:u.nickname||'', photo:u.photo||'' } : { id:otherId, first:'?', last:'', nickname:'', photo:'' };
+            name = (other.first + ' ' + other.last).trim();
+          } else {
+            name = (teamById[t.team_id] || {}).name || 'Team';
+          }
+          return { id:t.id, kind:t.kind, team_id:t.team_id ?? null, name, other,
+            unread, last_message: last ? { body:last.body, created_at:last.created_at,
+              sender_id:last.sender_id, sender_first:(profById[last.sender_id]||{}).first || '?' } : null };
+        });
+        return json(200,{ threads: out });
+      }
+      case 'get_messages': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.thread_id) return json(400,{error:'missing_thread'});
+        const { data: thread } = await admin.from('threads').select('*').eq('id', p.thread_id).single();
+        if(!thread) return json(404,{error:'not_found'});
+        if(!await memberOfThread(me, thread)) return json(403,{error:'forbidden'});
+        const { data } = await admin.from('messages')
+          .select('id,sender_id,body,created_at').eq('thread_id', thread.id);
+        // id is a bigint identity, so it orders and paginates without the tie
+        // problems created_at has at sub-millisecond resolution.
+        let rows = (data||[]).slice().sort((a,b) => Number(b.id) - Number(a.id));
+        if(p.before != null) rows = rows.filter(m => Number(m.id) < Number(p.before));
+        const page = rows.slice(0, MSG_PAGE).reverse();
+        return json(200,{ thread_id: thread.id, messages: page,
+          has_more: rows.length > MSG_PAGE, cursor: page.length ? page[0].id : null });
+      }
+      case 'send_message': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const body = String(p.body == null ? '' : p.body).trim();
+        if(!body) return json(400,{error:'empty_body'});
+        if(body.length > MSG_MAX) return json(400,{error:'body_too_long'});
+        let thread = null;
+        if(p.thread_id){
+          const { data } = await admin.from('threads').select('*').eq('id', p.thread_id).single();
+          if(!data) return json(404,{error:'not_found'});
+          thread = data;
+        } else if(p.to_user_id){
+          if(String(p.to_user_id) === String(me.id)) return json(400,{error:'no_self_dm'});
+          const { data: tgt } = await admin.from('profiles').select('id').eq('id', p.to_user_id).single();
+          if(!tgt) return json(404,{error:'not_found'});
+          thread = await findOrCreateDm(me.id, tgt.id);
+        } else if(p.team_id != null){
+          const { ids } = await chatTeamIdsOf(me);
+          if(!ids.includes(p.team_id)) return json(403,{error:'forbidden'});
+          thread = await findOrCreateGroup(p.team_id);
+        } else {
+          return json(400,{error:'missing_target'});
+        }
+        if(!thread) return json(500,{error:'send_failed'});
+        if(!await memberOfThread(me, thread)) return json(403,{error:'forbidden'});
+        // sender_id is the resolved caller, never anything the client sent.
+        const { data: row, error } = await admin.from('messages')
+          .insert({ thread_id: thread.id, sender_id: me.id, body })
+          .select('id,thread_id,sender_id,body,created_at').single();
+        if(error) return json(500,{error:'send_failed'});
+        return json(200,{ ok:true, thread_id: thread.id, message: row });
+      }
+      case 'mark_read': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.thread_id) return json(400,{error:'missing_thread'});
+        const { data: thread } = await admin.from('threads').select('*').eq('id', p.thread_id).single();
+        if(!thread) return json(404,{error:'not_found'});
+        if(!await memberOfThread(me, thread)) return json(403,{error:'forbidden'});
+        const last_read_at = new Date().toISOString();
+        const { error } = await admin.from('thread_reads')
+          .upsert({ thread_id: thread.id, user_id: me.id, last_read_at },
+                  { onConflict: 'thread_id,user_id' });
+        if(error) return json(500,{error:'save_failed'});
+        return json(200,{ ok:true, thread_id: thread.id, last_read_at });
       }
       case 'set_password_changed': {
         const { error } = await admin.from('profiles')
