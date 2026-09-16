@@ -114,6 +114,16 @@ async function gatesFor(me, tgt){
 }
 // ── meetings ────────────────────────────────────────────────────
 const MEETING_EDITABLE = ['title','meeting_date','meeting_time','duration','type','location','notes','minutes_private'];
+// A room name nobody can guess; it is the only thing protecting the call.
+function newJitsiRoom(){ return 'nedhub-' + require('crypto').randomUUID().replace(/-/g,''); }
+// Resolve a chosen location, or fail loudly rather than silently dropping it.
+async function resolveLocation(locationId){
+  if(locationId===null || locationId===undefined || locationId==='') return { ok:true, id:null };
+  const { data } = await admin.from('locations').select('id,active').eq('id',locationId).single();
+  if(!data) return { ok:false, error:'location_not_found' };
+  if(data.active === false) return { ok:false, error:'location_inactive' };
+  return { ok:true, id:data.id };
+}
 // The organiser runs their own meeting; a director can step in.
 function canManageMeeting(me, meeting){
   return meeting.created_by === me.id || me.role === 'director';
@@ -126,13 +136,19 @@ async function attendeeIdsOf(meetingId, createdBy){
   return ids;
 }
 // Built field by field so private minutes can never ride along in the payload.
-function meetingForCaller(m, attendees, me){
+function meetingForCaller(m, attendees, me, locationsById){
   const isCreator = m.created_by === me.id;
   const isAttendee = attendees.includes(me.id);
   const minutesVisible = m.minutes_private ? isCreator : (isCreator || isAttendee);
   const out = {
     id: m.id, title: m.title, meeting_date: m.meeting_date, meeting_time: m.meeting_time,
     duration: m.duration, type: m.type, location: m.location, notes: m.notes,
+    location_id: (m.location_id!=null) ? m.location_id : null,
+    location_name: (m.location_id!=null && locationsById && locationsById[m.location_id])
+      ? locationsById[m.location_id] : null,
+    is_online: !!m.is_online,
+    // The room name is the join key, so every attendee needs it.
+    jitsi_room: m.is_online ? (m.jitsi_room || null) : null,
     minutes_private: !!m.minutes_private, created_by: m.created_by, attendees,
     can_edit: canManageMeeting(me, m),
     minutes_visible: minutesVisible,
@@ -840,9 +856,11 @@ exports.handler = async (event) => {
           .select('*').gte('meeting_date', from).lte('meeting_date', to);
         if(error) return json(500,{error:'list_failed', detail:error.message});
         const visible = (rows||[]).filter(m => m.created_by === me.id || attendingIds.includes(m.id));
+        const { data: locs } = await admin.from('locations').select('id,name');
+        const locationsById = {}; (locs||[]).forEach(l=>{ locationsById[l.id]=l.name; });
         const out = [];
         for(const m of visible){
-          out.push(meetingForCaller(m, await attendeeIdsOf(m.id, m.created_by), me));
+          out.push(meetingForCaller(m, await attendeeIdsOf(m.id, m.created_by), me, locationsById));
         }
         out.sort((a,b)=> String(a.meeting_date).localeCompare(String(b.meeting_date))
                       || String(a.meeting_time||'').localeCompare(String(b.meeting_time||'')));
@@ -855,12 +873,23 @@ exports.handler = async (event) => {
         if(!title) return json(400,{error:'missing_title'});
         if(!/^\d{4}-\d{2}-\d{2}$/.test(meeting_date)) return json(400,{error:'bad_date'});
         const duration = Number(p.duration);
+        // Online and a physical location are mutually exclusive.
+        const online = !!p.is_online;
+        let locationId = null;
+        if(!online){
+          const loc = await resolveLocation(p.location_id);
+          if(!loc.ok) return json(400,{error:loc.error});
+          locationId = loc.id;
+        }
         const { data, error } = await admin.from('meetings').insert({
           title, meeting_date,
           meeting_time: (p.meeting_time||'09:00').toString(),
           duration: (Number.isFinite(duration) && duration > 0) ? duration : 60,
           type: (p.type === 'call') ? 'call' : 'meeting',
           location: (p.location||'').toString(),
+          location_id: locationId,
+          is_online: online,
+          jitsi_room: online ? newJitsiRoom() : null,
           notes: (p.notes||'').toString(),
           minutes: '',
           minutes_private: !!p.minutes_private,
@@ -881,10 +910,24 @@ exports.handler = async (event) => {
       case 'update_meeting': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         if(!p.id) return json(400,{error:'missing_id'});
-        const { data: m } = await admin.from('meetings').select('id,created_by').eq('id',p.id).single();
+        const { data: m } = await admin.from('meetings').select('id,created_by,is_online,jitsi_room').eq('id',p.id).single();
         if(!m) return json(404,{error:'not_found'});
         if(!canManageMeeting(me, m)) return json(403,{error:'out_of_scope'});
         const patch = {};
+        if(Object.prototype.hasOwnProperty.call(p,'is_online') || Object.prototype.hasOwnProperty.call(p,'location_id')){
+          const online = Object.prototype.hasOwnProperty.call(p,'is_online') ? !!p.is_online : !!m.is_online;
+          patch.is_online = online;
+          if(online){
+            patch.location_id = null;
+            // Keep the existing room so links already shared keep working.
+            if(!m.jitsi_room) patch.jitsi_room = newJitsiRoom();
+          } else {
+            const loc = await resolveLocation(p.location_id);
+            if(!loc.ok) return json(400,{error:loc.error});
+            patch.location_id = loc.id;
+            // The old room stays on the row but is no longer handed out.
+          }
+        }
         MEETING_EDITABLE.forEach(k=>{
           if(!Object.prototype.hasOwnProperty.call(p, k)) return;
           if(k === 'duration'){ const n = Number(p[k]); if(Number.isFinite(n) && n > 0) patch[k] = n; return; }
@@ -934,6 +977,57 @@ exports.handler = async (event) => {
         const { error } = await admin.from('meetings')
           .update({ minutes: (p.minutes||'').toString() }).eq('id',p.id);
         if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'get_locations': {
+        const { data, error } = await admin.from('locations')
+          .select('id,name,campus,active').order('name',{ascending:true});
+        if(error) return json(500,{error:'locations_failed'});
+        return json(200,{ locations:data||[] });
+      }
+      case 'create_location': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const campus = validCampus(p.campus);
+        if(campus === false) return json(400,{error:'bad_campus'});
+        const { data, error } = await admin.from('locations')
+          .insert({ name, campus, active:true }).select('id').single();
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'create_failed', detail:error.message});
+        }
+        return json(200,{ ok:true, id:data && data.id });
+      }
+      case 'update_location': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const campus = validCampus(p.campus);
+        if(campus === false) return json(400,{error:'bad_campus'});
+        const { data: existing } = await admin.from('locations').select('id').eq('id',p.id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        const { error } = await admin.from('locations')
+          .update({ name, campus, active: p.active !== false }).eq('id',p.id);
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'update_failed', detail:error.message});
+        }
+        return json(200,{ ok:true });
+      }
+      case 'delete_location': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: existing } = await admin.from('locations').select('id').eq('id',p.id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        const { data: used } = await admin.from('meetings').select('id').eq('location_id',p.id);
+        if(used && used.length) return json(409,{error:'in_use', count:used.length});
+        const { error } = await admin.from('locations').delete().eq('id',p.id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
         return json(200,{ ok:true });
       }
       default: return json(400, { error:'unknown_action' });

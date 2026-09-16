@@ -632,6 +632,19 @@ a{text-decoration:none;color:inherit}
 .cmi-title{font-size:12.5px;font-weight:600;color:var(--text)}
 .cmi-date{font-size:11px;color:var(--muted);margin-top:2px}
 
+/* ════════ EMBEDDED VIDEO CALL ════════ */
+#video-overlay{position:fixed;inset:0;z-index:1200;background:#0F1B3D;display:none;flex-direction:column}
+#video-overlay.open{display:flex}
+#video-overlay-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(15,27,61,.96);border-bottom:1px solid rgba(255,255,255,.12);flex-shrink:0}
+#video-overlay-title{color:#fff;font-size:14px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#video-overlay-stage{flex:1;min-height:0}
+#video-overlay-stage iframe{width:100%;height:100%;border:0;display:block}
+@media(max-width:768px){
+  #video-overlay-bar{padding:8px 12px}
+  #video-overlay-title{font-size:12.5px}
+  #btn-leave-call{padding:7px 12px;font-size:12px}
+}
+
 /* ════════ MODAL — NEW MEETING ════════ */
 .attendee-tag{display:inline-flex;align-items:center;gap:5px;background:var(--light-blue);color:var(--blue);font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;cursor:pointer}
 .attendee-tag:hover{background:rgba(0,50,255,.15)}
@@ -1828,6 +1841,21 @@ a{text-decoration:none;color:inherit}
     </div>
   </div>
 
+  <div id="page-locations" class="page">
+    <div class="mgr-grad-bar"></div>
+    <div class="mgr-ph"><div class="mgr-ph-inner" style="grid-template-columns:1fr;padding-bottom:36px"><div><div class="mgr-eyebrow">Management Area</div><h1>Locations</h1><p class="ph-desc">Places a meeting can be held. Online meetings use the built-in video room instead of a location.</p></div></div></div>
+    <div class="um-wrap">
+      <div class="um-toolbar">
+        <div style="flex:1;font-size:13px;color:var(--muted)">A location used by meetings cannot be deleted. Deactivate it to take it out of the picker.</div>
+        <button class="btn-add-user" onclick="openLocationModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New location</button>
+      </div>
+      <div class="um-table-wrap"><table class="um-table">
+        <thead><tr><th>Location</th><th>Campus</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="locations-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="footer-l">
       <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w200" alt="" style="height:20px" onerror="this.style.display='none'">
@@ -1968,7 +1996,11 @@ a{text-decoration:none;color:inherit}
     <div class="modal-body">
       <div class="modal-row" style="margin-bottom:12px">
         <div><div class="pf-label">Date & Time</div><div class="pf-value" id="meeting-view-date"></div></div>
-        <div><div class="pf-label">Location</div><div class="pf-value" id="meeting-view-location"></div></div>
+        <div><div class="pf-label">Where</div><div class="pf-value" id="meeting-view-location"></div></div>
+      </div>
+      <div id="meeting-online-actions" style="display:none;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn-save" id="btn-join-call" style="display:flex;align-items:center;gap:7px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Join video call</button>
+        <button class="btn-cancel" id="btn-copy-call">Copy link</button>
       </div>
       <div class="form-group"><div class="pf-label">Organiser</div><div class="pf-value" id="meeting-view-organiser" style="font-size:13px;line-height:1.6"></div></div>
       <div class="form-group"><div class="pf-label">Attendees</div><div class="pf-value" id="meeting-view-attendees" style="font-size:13px;line-height:1.6"></div></div>
@@ -2015,7 +2047,7 @@ a{text-decoration:none;color:inherit}
       </div>
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Duration (minutes)</label><input class="form-input" type="number" id="nm-duration" value="60" min="15" step="15"></div>
-        <div class="form-group"><label class="form-label">Location</label><input class="form-input" type="text" id="nm-location" placeholder="Google Meet / Office"></div>
+        <div class="form-group"><label class="form-label">Where</label><select class="form-select" id="nm-location"></select></div>
       </div>
       <div class="form-group">
         <label class="form-label">Attendees</label>
@@ -2058,6 +2090,38 @@ a{text-decoration:none;color:inherit}
 
 <!-- MODALS -->
 <!-- Add/Edit User -->
+<div id="video-overlay">
+  <div id="video-overlay-bar">
+    <div id="video-overlay-title">Video call</div>
+    <button class="btn-save danger-save" id="btn-leave-call" onclick="leaveVideoCall()">Leave call</button>
+  </div>
+  <div id="video-overlay-stage"></div>
+</div>
+
+<div class="modal-backdrop" id="modal-location">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-location-title">New Location</div><button class="modal-close" onclick="closeModal('modal-location')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="loc-id">
+      <div class="form-group"><label class="form-label">Location name</label><input class="form-input" type="text" id="loc-name" placeholder="e.g. Office Dublin - Room 2"></div>
+      <div class="form-group"><label class="form-label">Campus</label>
+        <select class="form-select" id="loc-campus">
+          <option value="">- Not set -</option>
+          <option value="dublin">Dublin</option>
+          <option value="limerick">Limerick</option>
+          <option value="both">Both</option>
+        </select>
+      </div>
+      <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="loc-active" style="width:14px;height:14px;cursor:pointer" checked>
+        Active - available when booking a meeting
+      </label>
+      <div class="login-error" id="loc-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-location')">Cancel</button><button class="btn-save mgr-save" id="btn-save-location" onclick="saveLocation()">Save Location</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-team">
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modal-team-title">New Team</div><button class="modal-close" onclick="closeModal('modal-team')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -2457,6 +2521,19 @@ function fmtDate(v){
   return d.toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'});
 }
 
+// ── LOCATIONS ───────────────────────────────────────────────────
+// Where a meeting physically happens. Online meetings have none.
+let dbLocations = [];
+let locationsById = {};
+
+async function loadLocations(){
+  const r = await callDb('get_locations');
+  dbLocations = (r && r.locations) || [];
+  locationsById = {};
+  dbLocations.forEach(l => { locationsById[l.id] = l; });
+}
+function activeLocations(){ return dbLocations.filter(l => l.active !== false); }
+
 async function loadTeams(){
   const r = await callDb('get_teams');
   dbTeams = (r && r.teams) || [];
@@ -2774,6 +2851,7 @@ function completeLogin(uid){
 async function completeLoginReal(profile){
   await loadRoles();        // names resolve during mapping, so these come first
   await loadTeams();
+  await loadLocations();
   await loadCertCatalog();
   await loadDirectory();
   await loadPerformance();
@@ -2822,6 +2900,7 @@ function startApp(user){
       {id:'users', label:'User Management', icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'},
       {id:'roles', label:'Cargos', icon:'<path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 7V5h6v2"/>'},
       {id:'teams', label:'Teams', icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>'},
+      {id:'locations', label:'Locations', icon:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'},
     ] : []),
   ] : [];
 
@@ -2922,6 +3001,7 @@ function updateNavAvatar(user){
 }
 
 async function doLogout(){
+  leaveVideoCall();
   await sb.auth.signOut();
   currentRole=null;currentUserId=null;pendingLoginProfile=null;
   document.getElementById('app').style.display='none';
@@ -2947,6 +3027,10 @@ function showPage(name){
   if(name==='roles'){
     if(isUserAdmin()) (async()=>{ await loadRoles(); renderRoles(); })();
     else renderRoles();
+  }
+  if(name==='locations'){
+    if(isUserAdmin()) (async()=>{ await loadLocations(); renderLocations(); })();
+    else renderLocations();
   }
   if(name==='teams'){
     if(isUserAdmin()) (async()=>{ await loadTeams(); renderTeams(); })();
@@ -4004,6 +4088,94 @@ function deleteDoc(uid,idx){
 // USER MANAGEMENT TABLE — real data via db.js
 // ═══════════════════════════════════════
 function isUserAdmin(){ return currentRole === 'manager' || currentRole === 'director'; }
+
+// ═══════════════════════════════════════
+// LOCATIONS - Manager / Director
+// ═══════════════════════════════════════
+const LOCATION_ERRORS={
+  name_exists:'A location with that name already exists',
+  missing_name:'Give the location a name',
+  bad_campus:'Pick a valid campus',
+  forbidden:"You don't have permission for this",
+  in_use:'This location is used by meetings - deactivate it instead',
+  not_found:'That location no longer exists'
+};
+
+function renderLocations(){
+  const tbody=document.getElementById('locations-tbody');
+  if(!tbody) return;
+  if(!isUserAdmin()){
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">Only managers and directors can manage locations.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=dbLocations.map(l=>`
+    <tr>
+      <td><div class="user-name">${esc(dashFix(l.name))}</div></td>
+      <td><span class="campus-chip">${l.campus?(CAMPUS_LABELS[l.campus]||esc(l.campus)):'Not set'}</span></td>
+      <td><span class="status-dot"><span class="sdot ${l.active!==false?'sdot-active':'sdot-inactive'}"></span>${l.active!==false?'Active':'Inactive'}</span></td>
+      <td>
+        <div class="table-actions">
+          <button class="tact-btn edit" onclick="openLocationModal('${esc(l.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>
+          <button class="tact-btn reset" onclick="toggleLocationActive('${esc(l.id)}')">${l.active!==false?'Deactivate':'Activate'}</button>
+          <button class="tact-btn deact" onclick="deleteLocation('${esc(l.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button>
+        </div>
+      </td>
+    </tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">No locations yet.</td></tr>';
+}
+
+function showLocError(m){const e=document.getElementById('loc-error');if(e){e.textContent=m;e.style.display='block';}}
+function clearLocError(){const e=document.getElementById('loc-error');if(e){e.textContent='';e.style.display='none';}}
+
+function openLocationModal(id){
+  const l=id!=null?dbLocations.find(x=>String(x.id)===String(id)):null;
+  document.getElementById('loc-id').value=l?l.id:'';
+  document.getElementById('modal-location-title').textContent=l?'Edit Location':'New Location';
+  document.getElementById('loc-name').value=l?l.name:'';
+  document.getElementById('loc-campus').value=(l&&l.campus)?l.campus:'';
+  document.getElementById('loc-active').checked=l?l.active!==false:true;
+  clearLocError();
+  openBackdrop('modal-location');
+}
+
+async function saveLocation(){
+  const id=document.getElementById('loc-id').value;
+  const name=document.getElementById('loc-name').value.trim();
+  const campus=document.getElementById('loc-campus').value||null;
+  const active=document.getElementById('loc-active').checked;
+  clearLocError();
+  if(!name){showLocError('Give the location a name');return;}
+  const btn=document.getElementById('btn-save-location'); btn.disabled=true;
+  try{
+    const r=id ? await callDb('update_location',{ id:Number(id), name, campus, active })
+               : await callDb('create_location',{ name, campus });
+    if(!r||!r.ok){ showLocError(LOCATION_ERRORS[r&&r.error]||'Could not save this location'); return; }
+    closeModal('modal-location');
+    showToast('Location saved','success');
+    await refreshAfterLocationChange();
+  } finally { btn.disabled=false; }
+}
+
+async function toggleLocationActive(id){
+  const l=dbLocations.find(x=>String(x.id)===String(id)); if(!l) return;
+  const r=await callDb('update_location',{ id:Number(l.id), name:l.name, campus:l.campus, active:l.active===false });
+  if(!r||!r.ok){ showToast(LOCATION_ERRORS[r&&r.error]||'Could not update this location','error'); return; }
+  showToast(l.active===false?'Location activated':'Location deactivated','success');
+  await refreshAfterLocationChange();
+}
+
+async function deleteLocation(id){
+  const l=dbLocations.find(x=>String(x.id)===String(id)); if(!l) return;
+  const r=await callDb('delete_location',{ id:Number(l.id) });
+  if(!r||!r.ok){ showToast(LOCATION_ERRORS[r&&r.error]||'Could not delete this location','error'); return; }
+  showToast('Location deleted','warning');
+  await refreshAfterLocationChange();
+}
+
+async function refreshAfterLocationChange(){
+  await loadLocations();
+  renderLocations();
+  if(document.getElementById('page-calendar')?.classList.contains('active')) await refreshCalendar();
+}
 
 // ═══════════════════════════════════════
 // TEAMS - Manager / Director
@@ -5242,6 +5414,10 @@ function mapMeeting(m){
     id:m.id, title:m.title||'', date:m.meeting_date||'', time:(m.meeting_time||'').slice(0,5),
     duration:Number(m.duration)||60, type:m.type==='call'?'call':'meeting',
     location:m.location||'', notes:m.notes||'',
+    location_id:(m.location_id!=null)?m.location_id:null,
+    location_name:m.location_name||null,
+    is_online:!!m.is_online,
+    jitsi_room:m.jitsi_room||null,
     attendees:Array.isArray(m.attendees)?m.attendees:[],
     created_by:m.created_by,
     minutes_private:!!m.minutes_private,
@@ -5363,7 +5539,7 @@ function renderAgendaView(){
           <div class="ae-dot" style="background:${m.type==='meeting'?'var(--blue)':'var(--success)'}"></div>
           <div>
             <div class="ae-title">${esc(dashFix(m.title))}</div>
-            <div class="ae-sub">${m.duration} min · ${m.location||'No location'} · ${attendeeUsers.length} attendees</div>
+            <div class="ae-sub">${m.duration} min · ${m.is_online?'Online video call':esc(dashFix(m.location_name||m.location||'No location'))} · ${attendeeUsers.length} attendees</div>
             ${m.has_minutes?'<div style="font-size:11px;color:var(--success);font-weight:600;margin-top:3px">✓ Minutes saved</div>':''}
           </div>
         </div>`;
@@ -5399,6 +5575,82 @@ function renderCalMinutes(){
   </div>`).join(''):'<div style="font-size:12.5px;color:var(--muted);padding:4px 0">No minutes saved yet.</div>';
 }
 
+// ── embedded video calls (Jitsi) ────────────────────────────────
+const JITSI_HOST='meet.jit.si';
+let jitsiApi=null;
+let jitsiScriptPromise=null;
+
+// Loaded on first use only, and only once even if Join is hit twice.
+function loadJitsiScript(){
+  if(window.JitsiMeetExternalAPI) return Promise.resolve();
+  if(jitsiScriptPromise) return jitsiScriptPromise;
+  jitsiScriptPromise=new Promise((resolve,reject)=>{
+    const sc=document.createElement('script');
+    sc.src='https://'+JITSI_HOST+'/external_api.js';
+    sc.async=true;
+    sc.onload=()=>resolve();
+    sc.onerror=()=>{ jitsiScriptPromise=null; reject(new Error('jitsi_load_failed')); };
+    document.head.appendChild(sc);
+  });
+  return jitsiScriptPromise;
+}
+
+function callLinkFor(room){ return 'https://'+JITSI_HOST+'/'+room; }
+
+async function copyCallLink(room){
+  if(!room){ showToast('This meeting has no video room.','error'); return; }
+  const link=callLinkFor(room);
+  try{
+    await navigator.clipboard.writeText(link);
+    showToast('Meeting link copied','success');
+  }catch(e){
+    // Clipboard is blocked in some contexts; show the link so it can be copied by hand.
+    showToast(link,'success');
+  }
+}
+
+async function joinVideoCall(room, title){
+  if(!room){ showToast('This meeting has no video room.','error'); return; }
+  if(jitsiApi){ showToast('You are already in a call.','warning'); return; }
+  closeModal('modal-meeting');
+  const overlay=document.getElementById('video-overlay');
+  const stage=document.getElementById('video-overlay-stage');
+  document.getElementById('video-overlay-title').textContent=title||'Video call';
+  stage.innerHTML='<div style="color:rgba(255,255,255,.7);font-size:13px;padding:24px">Connecting…</div>';
+  overlay.classList.add('open');
+  try{ await loadJitsiScript(); }
+  catch(e){
+    overlay.classList.remove('open'); stage.innerHTML='';
+    showToast('Could not load the video service.','error');
+    return;
+  }
+  if(!overlay.classList.contains('open')) return;   // left before it loaded
+  stage.innerHTML='';
+  const me=users.find(u=>u.id===currentUserId);
+  jitsiApi=new window.JitsiMeetExternalAPI(JITSI_HOST,{
+    roomName:room,
+    parentNode:stage,
+    width:'100%',
+    height:'100%',
+    userInfo:{ displayName: me ? (me.first+' '+me.last) : 'NED Sales Hub' },
+    configOverwrite:{ prejoinPageEnabled:false }
+  });
+  if(jitsiApi && typeof jitsiApi.addEventListener==='function'){
+    jitsiApi.addEventListener('readyToClose', leaveVideoCall);
+  }
+}
+
+function leaveVideoCall(){
+  if(jitsiApi){
+    try{ jitsiApi.dispose(); }catch(e){}
+    jitsiApi=null;
+  }
+  const overlay=document.getElementById('video-overlay');
+  if(overlay) overlay.classList.remove('open');
+  const stage=document.getElementById('video-overlay-stage');
+  if(stage) stage.innerHTML='';
+}
+
 function calDayClick(dateStr){openNewMeeting(dateStr);}
 
 function viewMeeting(id){
@@ -5407,7 +5659,17 @@ function viewMeeting(id){
   const organiser=users.find(u=>u.id===m.created_by);
   document.getElementById('modal-meeting-title').textContent=m.title;
   document.getElementById('meeting-view-date').textContent=`${m.date} at ${m.time} (${m.duration} min)`;
-  document.getElementById('meeting-view-location').textContent=m.location||'No location';
+  const locEl=document.getElementById('meeting-view-location');
+  locEl.textContent=m.is_online ? 'Online video call'
+    : (m.location_name || m.location || 'No location set');
+  const online=document.getElementById('meeting-online-actions');
+  if(online){
+    online.style.display=m.is_online?'flex':'none';
+    if(m.is_online){
+      document.getElementById('btn-join-call').onclick=()=>joinVideoCall(m.jitsi_room, m.title);
+      document.getElementById('btn-copy-call').onclick=()=>copyCallLink(m.jitsi_room);
+    }
+  }
   document.getElementById('meeting-view-attendees').textContent=attendeeNames||'No attendees';
   document.getElementById('meeting-view-notes').textContent=m.notes||'No description.';
   const org=document.getElementById('meeting-view-organiser');
@@ -5459,7 +5721,7 @@ function openNewMeeting(prefillDate=''){
   document.getElementById('nm-date').value=prefillDate||`${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
   document.getElementById('nm-time').value='10:00';
   document.getElementById('nm-duration').value='60';
-  document.getElementById('nm-location').value='Google Meet';
+  fillLocationPicker(ONLINE_VALUE);
   document.getElementById('nm-notes').value='';
   document.getElementById('nm-private').checked=false;
   fillMeetingPickers();
@@ -5479,7 +5741,7 @@ function openEditMeeting(id){
   document.getElementById('nm-date').value=m.date;
   document.getElementById('nm-time').value=m.time;
   document.getElementById('nm-duration').value=m.duration;
-  document.getElementById('nm-location').value=m.location;
+  fillLocationPicker(m.is_online?ONLINE_VALUE:(m.location_id!=null?String(m.location_id):''));
   document.getElementById('nm-notes').value=m.notes;
   document.getElementById('nm-private').checked=!!m.minutes_private;
   fillMeetingPickers();
@@ -5487,6 +5749,17 @@ function openEditMeeting(id){
   clearNmError();
   closeModal('modal-meeting');
   openBackdrop('modal-new-meeting');
+}
+
+const ONLINE_VALUE='__online__';
+function fillLocationPicker(selected){
+  const sel=document.getElementById('nm-location');
+  if(!sel) return;
+  sel.innerHTML=`<option value="${ONLINE_VALUE}">Online (video call)</option>`
+    +'<option value="">No location set</option>'
+    +activeLocations().map(l=>`<option value="${esc(l.id)}">${esc(dashFix(l.name))}${l.campus?' · '+esc(CAMPUS_LABELS[l.campus]||l.campus):''}</option>`).join('');
+  sel.value=(selected!=null)?String(selected):ONLINE_VALUE;
+  if(!sel.value) sel.value=ONLINE_VALUE;
 }
 
 function fillMeetingPickers(){
@@ -5539,6 +5812,8 @@ function removeAttendee(id){
 }
 
 const MEETING_ERRORS={
+  location_not_found:'That location no longer exists',
+  location_inactive:'That location is inactive',
   out_of_scope:'Only the organiser can change this meeting',
   forbidden:'Only the organiser can change this meeting',
   missing_title:'Give the meeting a title',
@@ -5551,7 +5826,9 @@ async function saveNewMeeting(){
   const date=document.getElementById('nm-date').value;
   const time=document.getElementById('nm-time').value||'09:00';
   const duration=parseInt(document.getElementById('nm-duration').value)||60;
-  const location=document.getElementById('nm-location').value.trim();
+  const where=document.getElementById('nm-location').value;
+  const isOnline=where===ONLINE_VALUE;
+  const locationId=(!isOnline && where)?Number(where):null;
   const notes=document.getElementById('nm-notes').value.trim();
   const minutes_private=document.getElementById('nm-private').checked;
   clearNmError();
@@ -5563,14 +5840,15 @@ async function saveNewMeeting(){
     let r;
     if(editingMeetingId){
       r=await callDb('update_meeting',{ id:editingMeetingId, title, meeting_date:date, meeting_time:time,
-        duration, type:'meeting', location, notes, minutes_private });
+        duration, type:'meeting', location_id:locationId, is_online:isOnline, notes, minutes_private });
       if(r&&r.ok){
         const ar=await callDb('set_attendees',{ id:editingMeetingId, attendee_ids:calNewMeetingAttendees });
         if(!ar||!ar.ok) showToast('Meeting saved, but the attendee list did not update.','warning');
       }
     } else {
       r=await callDb('create_meeting',{ title, meeting_date:date, meeting_time:time, duration,
-        type:'meeting', location, notes, minutes_private, attendee_ids:calNewMeetingAttendees });
+        type:'meeting', location_id:locationId, is_online:isOnline, notes, minutes_private,
+        attendee_ids:calNewMeetingAttendees });
     }
     if(!r||!r.ok){ showNmError(MEETING_ERRORS[r&&r.error]||'Could not save this meeting'); return; }
     const wasEdit=!!editingMeetingId;
@@ -5762,6 +6040,7 @@ const MOB_LEADER_ITEMS=[
   {id:'users',          label:'Users',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
   {id:'roles',          label:'Cargos',            icon:'<path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>'},
   {id:'teams',          label:'Teams',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
+  {id:'locations',      label:'Locations',         icon:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'},
 ];
 
 function buildMobLeadersMenu(){
@@ -5769,7 +6048,7 @@ function buildMobLeadersMenu(){
   if(!cfg) return;
   const grid=document.getElementById('mob-leaders-grid');
   if(!grid) return;
-  const items=MOB_LEADER_ITEMS.filter(item=>!['users','roles','teams'].includes(item.id)||cfg.mgr);
+  const items=MOB_LEADER_ITEMS.filter(item=>!['users','roles','teams','locations'].includes(item.id)||cfg.mgr);
   grid.innerHTML=items.map(item=>`
     <div class="mob-leaders-item" onclick="closeMobLeaders();showPage('${item.id}')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg>
