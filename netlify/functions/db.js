@@ -36,6 +36,12 @@ function numOrNull(v){
   const n = Number(v);
   return (Number.isFinite(n) && n>=0) ? n : false;
 }
+// null / '' clears; anything outside the three campuses returns false so callers can 400.
+function validCampus(v){
+  if(v===null || v===undefined || v==='') return null;
+  const c = String(v).toLowerCase();
+  return ['dublin','limerick','both'].includes(c) ? c : false;
+}
 async function accessibleIds(me){
   const { data: all } = await admin.from('profiles').select('id,role,reports_to');
   if(me.role==='director') return all.map(u=>u.id);
@@ -71,7 +77,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_target')
+          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_target,team_id')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -106,6 +112,16 @@ exports.handler = async (event) => {
         if(!ROLES.includes(role)) return json(400,{error:'bad_role'});
         if(password.length < 6) return json(400,{error:'weak_password'});
         if(me.role === 'manager' && role === 'director') return json(403,{error:'forbidden_role'});
+        // Resolve the team before anything is created, so a bad team can never
+        // leave an orphaned auth user behind. Its leader wins as reports_to.
+        let teamId = null, reportsTo = b.reports_to || null;
+        if(b.team_id){
+          const { data: team } = await admin.from('teams').select('id,active,leader_id').eq('id',b.team_id).single();
+          if(!team) return json(404,{error:'team_not_found'});
+          if(team.active === false) return json(400,{error:'team_inactive'});
+          teamId = team.id;
+          if(team.leader_id) reportsTo = team.leader_id;
+        }
         const { data: created, error: cErr } = await admin.auth.admin.createUser({
           email, password, email_confirm:true
         });
@@ -115,8 +131,8 @@ exports.handler = async (event) => {
           ? (b.campus).toLowerCase() : 'dublin';
         const { error: pErr } = await admin.from('profiles').insert({
           id:newId, first, last, email, role, campus, role_id: cargo.id,
-          team: b.team || 'All', phone: b.phone || '',
-          reports_to: b.reports_to || null,
+          team: b.team || 'All', team_id: teamId, phone: b.phone || '',
+          reports_to: reportsTo,
           status: (b.status === 'inactive') ? 'inactive' : 'active',
           must_change_password:true
         });
@@ -300,6 +316,100 @@ exports.handler = async (event) => {
         const { error } = await admin.from('profiles').update({ team_target }).eq('id',uid);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
+      }
+      case 'get_teams': {
+        const { data, error } = await admin.from('teams')
+          .select('id,name,leader_id,campus,team_target,active').order('name',{ascending:true});
+        if(error) return json(500,{error:'teams_failed'});
+        return json(200,{ teams:data||[] });
+      }
+      case 'create_team': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const campus = validCampus(p.campus);
+        if(campus === false) return json(400,{error:'bad_campus'});
+        const team_target = numOrNull(p.team_target);
+        if(team_target === false) return json(400,{error:'bad_number'});
+        const leader_id = p.leader_id || null;
+        if(leader_id){
+          const { data: ldr } = await admin.from('profiles').select('id').eq('id',leader_id).single();
+          if(!ldr) return json(404,{error:'leader_not_found'});
+        }
+        const { data, error } = await admin.from('teams')
+          .insert({ name, leader_id, campus, team_target, active:true })
+          .select('id').single();
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'create_failed', detail:error.message});
+        }
+        return json(200,{ ok:true, id:data && data.id });
+      }
+      case 'update_team': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const id = p.id;
+        if(!id) return json(400,{error:'missing_id'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const campus = validCampus(p.campus);
+        if(campus === false) return json(400,{error:'bad_campus'});
+        const team_target = numOrNull(p.team_target);
+        if(team_target === false) return json(400,{error:'bad_number'});
+        const leader_id = p.leader_id || null;
+        if(leader_id){
+          const { data: ldr } = await admin.from('profiles').select('id').eq('id',leader_id).single();
+          if(!ldr) return json(404,{error:'leader_not_found'});
+        }
+        const { data: existing } = await admin.from('teams').select('id').eq('id',id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        const { error } = await admin.from('teams')
+          .update({ name, leader_id, campus, team_target, active: p.active !== false })
+          .eq('id',id);
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'update_failed', detail:error.message});
+        }
+        return json(200,{ ok:true });
+      }
+      case 'delete_team': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const id = p.id;
+        if(!id) return json(400,{error:'missing_id'});
+        const { data: existing } = await admin.from('teams').select('id').eq('id',id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        const { data: members } = await admin.from('profiles').select('id').eq('team_id', id);
+        if(members && members.length) return json(409,{error:'in_use', count:members.length});
+        const { error } = await admin.from('teams').delete().eq('id',id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'set_member_team': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(me.role === 'manager' && tgt.role === 'director') return json(403,{error:'forbidden'});
+        const teamId = (p.team_id===null || p.team_id===undefined || p.team_id==='') ? null : p.team_id;
+        if(teamId === null){
+          // Leaving a team does not move anyone in the hierarchy.
+          const { error } = await admin.from('profiles').update({ team_id:null }).eq('id',uid);
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+          return json(200,{ ok:true });
+        }
+        const { data: team } = await admin.from('teams').select('id,active,leader_id').eq('id',teamId).single();
+        if(!team) return json(404,{error:'team_not_found'});
+        if(team.active === false) return json(400,{error:'team_inactive'});
+        // Joining a team with a leader also lines the hierarchy up behind them.
+        const patch = { team_id: team.id };
+        if(team.leader_id && team.leader_id !== uid) patch.reports_to = team.leader_id;
+        const { error } = await admin.from('profiles').update(patch).eq('id',uid);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, reports_to: patch.reports_to || null });
       }
       default: return json(400, { error:'unknown_action' });
     }
