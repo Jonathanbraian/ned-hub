@@ -221,6 +221,21 @@ function safeFileName(n){
   return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
 }
 const PROFILE_EDITABLE = ['first','last','nickname','job_title','phone','instagram','nationality','language','bio'];
+// start_date is a date column, so it is validated on its own rather than
+// joining PROFILE_EDITABLE, whose generic path would send '' to Postgres.
+// Returns {ok:true, value:null|'YYYY-MM-DD'} or {ok:false}.
+function normStartDate(v){
+  if(v===null || v===undefined || String(v).trim()==='') return { ok:true, value:null };
+  const t = String(v).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if(!m) return { ok:false };
+  const d = new Date(t + 'T00:00:00Z');
+  if(Number.isNaN(d.getTime())) return { ok:false };
+  // Reject a well-formed-but-impossible date such as 2026-02-31.
+  if(d.getUTCFullYear()!==Number(m[1]) || d.getUTCMonth()+1!==Number(m[2]) || d.getUTCDate()!==Number(m[3]))
+    return { ok:false };
+  return { ok:true, value:t };
+}
 // Copied verbatim from the client's CERT_LIST.
 const CERT_SEED = [
   'NED College - Organisational Overview',
@@ -382,7 +397,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id')
+          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -427,6 +442,11 @@ exports.handler = async (event) => {
           teamId = team.id;
           if(team.leader_id) reportsTo = team.leader_id;
         }
+        // Validated before anything is created: a bad date must not leave an
+        // orphaned auth user behind, the same reason the team is resolved above.
+        const sd = normStartDate(b.start_date);
+        if(!sd.ok) return json(400,{error:'bad_start_date'});
+        const startDate = sd.value;
         const { data: created, error: cErr } = await admin.auth.admin.createUser({
           email, password, email_confirm:true
         });
@@ -437,7 +457,7 @@ exports.handler = async (event) => {
         const { error: pErr } = await admin.from('profiles').insert({
           id:newId, first, last, email, role, campus, role_id: cargo.id,
           team: b.team || 'All', team_id: teamId, phone: b.phone || '',
-          reports_to: reportsTo,
+          reports_to: reportsTo, start_date: startDate,
           status: (b.status === 'inactive') ? 'inactive' : 'active',
           must_change_password:true
         });
@@ -817,6 +837,11 @@ exports.handler = async (event) => {
             patch[k] = (v===null || v===undefined) ? null : String(v).trim();
           }
         });
+        if(Object.prototype.hasOwnProperty.call(fields, 'start_date')){
+          const sd = normStartDate(fields.start_date);
+          if(!sd.ok) return json(400,{error:'bad_start_date'});
+          patch.start_date = sd.value;
+        }
         if(!Object.keys(patch).length) return json(400,{error:'nothing_to_update'});
         if(patch.first !== undefined && patch.first === '') return json(400,{error:'name_required'});
         if(patch.last !== undefined && patch.last === '') return json(400,{error:'name_required'});

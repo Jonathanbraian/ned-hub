@@ -36,6 +36,9 @@
 <title>NED Sales Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
+<!-- Spreadsheet export. If this CDN is blocked the page still works and the
+     export falls back to CSV - see exportReportExcel(). -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1319,6 +1322,11 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
                 <div class="rtype-label">Target vs Actual</div>
                 <div class="rtype-desc">Target achievement overview</div>
               </div>
+              <div class="report-type-card" data-type="people" onclick="selectReportType('people',this)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <div class="rtype-label">People</div>
+                <div class="rtype-desc">Who is in which team, cargo and campus</div>
+              </div>
               <div class="report-type-card" data-type="ytd" onclick="selectReportType('ytd',this)">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><polyline points="18 9 13 14 8 9 3 14"/></svg>
                 <div class="rtype-label">Year-to-Date</div>
@@ -1369,6 +1377,17 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
             </div>
 
             <!-- Person (for individual) -->
+            <div class="report-param-group" id="rpt-people-filters" style="display:none">
+              <div class="report-param-label">People filters</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <select class="form-select" id="rpt-cargo" style="max-width:220px" onchange="rptCargo=this.value"></select>
+                <select class="form-select" id="rpt-status" style="max-width:180px" onchange="rptStatus=this.value">
+                  <option value="active">Active only</option>
+                  <option value="all">Active + inactive</option>
+                  <option value="inactive">Inactive only</option>
+                </select>
+              </div>
+            </div>
             <div class="report-param-group" id="rpt-person-group" style="display:none">
               <div class="report-param-label">Person</div>
               <select class="form-select" id="rpt-person" style="max-width:280px"></select>
@@ -1396,9 +1415,9 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
             <div class="report-output-meta" id="rpt-out-meta"></div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="chat-action-btn" onclick="exportReportCsv()" style="font-family:'Rubik',sans-serif;color:var(--success);border-color:var(--success-border)">
+            <button class="chat-action-btn" onclick="exportReportExcel()" style="font-family:'Rubik',sans-serif;color:var(--success);border-color:var(--success-border)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              Export CSV
+              Export Excel
             </button>
             <button class="chat-action-btn" onclick="printReport()" style="font-family:'Rubik',sans-serif">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -2251,6 +2270,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
         <div class="form-hint" style="display:flex;align-items:center;gap:6px;color:var(--warning)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>This is a temporary password. The user will be prompted to create a new one on first login.</div>
       </div>
       <div class="modal-row">
+        <div class="form-group"><label class="form-label">Start date</label><input class="form-input" type="date" id="u-start-date"><div class="form-hint">Targets before this month are not charged</div></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="u-status"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
         <div class="form-group"><label class="form-label">Reports to</label><select class="form-select" id="au-reports-to"><option value="">&mdash; None (top level) &mdash;</option></select></div>
       </div>
@@ -2330,6 +2350,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
       </div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Nationality</label><input class="form-input" type="text" id="ep-nationality" placeholder="e.g. Brazil"></div><div class="form-group"><label class="form-label">Language</label><input class="form-input" type="text" id="ep-language" placeholder="e.g. Portuguese, English"></div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Start date</label><input class="form-input" type="date" id="ep-start-date"><div class="form-hint">Targets before this month are not charged</div></div><div class="form-group"></div></div>
       <div class="form-group"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-edit-profile')">Cancel</button><button class="btn-save mgr-save" onclick="saveProfile()">Save Profile</button></div>
@@ -2549,6 +2570,7 @@ function mapProfileToUser(u){
     campus:u.campus, team:d(u.team), phone:u.phone||'', instagram:u.instagram||'',
     nationality:d(u.nationality)||'', language:d(u.language)||'', jobTitle:d(u.job_title)||'',
     status:u.status, reports_to:u.reports_to||null, photo:u.photo||'', bio:d(u.bio)||'',
+    start_date: u.start_date || null,
     monthly_target: (u.monthly_target!=null)?Number(u.monthly_target):null,
     role_id: u.role_id!=null?u.role_id:null,
     role_name: d((rolesById[u.role_id]||{}).name) || null,
@@ -2785,7 +2807,9 @@ async function loadPerformance(){
   users.forEach(u=>{
     const eT = effectiveTargetOf(u, eff);
     const mm = byUser[u.id]||{};
-    const tOf=m=>(mm[m]?mm[m].target:eT), aOf=m=>(mm[m]?mm[m].actual:0);
+    // Same start_date rule as the Reports page, so the two never disagree.
+    const tOf=m=>(isBeforeStart(u, perfYear, m) ? 0 : (mm[m]?mm[m].target:eT));
+    const aOf=m=>(mm[m]?mm[m].actual:0);
     let qt=0,qa=0; for(let m=qs;m<qs+3;m++){qt+=tOf(m);qa+=aOf(m);}
     let at=0,aa=0; for(let m=1;m<=12;m++){at+=tOf(m);aa+=aOf(m);}
     u.perf = {
@@ -3400,7 +3424,7 @@ function renderTeamTable(teamList, p, canUpdate){
         <div class="perf-name-cell">
           <div class="perf-avatar ${u.photo?'':avColor(u.id)}">${u.photo?`<img src="${u.photo}" alt="">`:getInitials(u)}</div>
           <div>
-            <div style="font-weight:600;font-size:13.5px">${u.first} ${u.last}</div>
+            <div style="font-weight:600;font-size:13.5px">${esc(dashFix(u.first+' '+u.last))}</div>
             <div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} · ${displayTeam(u)}</div>
           </div>
         </div>
@@ -3653,7 +3677,7 @@ function buildProfileHTML(u,isMyProfile){
         ${avatarUploadBtn}
       </div>
       <div>
-        <div class="profile-name">${u.first} ${u.last}</div>
+        <div class="profile-name">${esc(dashFix(u.first+' '+u.last))}</div>
         <div class="profile-job-title">${displayRole(u)} · ${displayTeam(u)}</div>
         <div class="profile-meta-chips">
           <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${displayRole(u)}</span>
@@ -3679,7 +3703,7 @@ function buildProfileHTML(u,isMyProfile){
       <div class="profile-details-grid">
         <div class="profile-section-card">
           <div class="ps-title">Personal Information</div>
-          <div class="profile-field"><div class="pf-label">Full Name</div><div class="pf-value">${u.first} ${u.last}${u.nickname?` <span style="font-size:11px;color:var(--muted);font-weight:400">(${u.nickname})</span>`:''}</div></div>
+          <div class="profile-field"><div class="pf-label">Full Name</div><div class="pf-value">${esc(dashFix(u.first+' '+u.last))}${u.nickname?` <span style="font-size:11px;color:var(--muted);font-weight:400">(${esc(dashFix(u.nickname))})</span>`:''}</div></div>
           <div class="profile-field"><div class="pf-label">Email</div><div class="pf-value">${u.email}</div></div>
           <div class="profile-field"><div class="pf-label">Phone</div><div class="pf-value ${u.phone?'':'empty'}">${u.phone||'Not provided'}</div></div>
           <div class="profile-field"><div class="pf-label">Instagram</div><div class="pf-value ${u.instagram?'':'empty'}">${u.instagram?'<a href="https://instagram.com/'+u.instagram+'" target="_blank" style="color:var(--blue)">@'+u.instagram+'</a>':'Not provided'}</div></div>
@@ -3838,7 +3862,7 @@ function buildTeamCard(u){
   const color=pctColor(pct);
   const avatarContent=u.photo?`<img src="${u.photo}" alt="">`:getInitials(u);
   // Show nickname in parentheses if exists
-  const displayName=u.nickname?`${u.first} <span style="color:var(--muted);font-weight:400;font-size:11px">(${u.nickname})</span>`:u.first+' '+u.last.split(' ')[0];
+  const displayName=u.nickname?`${esc(dashFix(u.first))} <span style="color:var(--muted);font-weight:400;font-size:11px">(${esc(dashFix(u.nickname))})</span>`:esc(dashFix(u.first+' '+u.last.split(' ')[0]));
   return `<div class="team-member-card" onclick="viewUserProfile('${u.id}')">
     <div class="tm-avatar ${u.photo?'':avColor(u.id)}">${avatarContent}</div>
     <div class="tm-name">${displayName}</div>
@@ -3882,6 +3906,7 @@ function openEditProfile(uid){
   document.getElementById('ep-nationality').value=u.nationality||'';
   document.getElementById('ep-language').value=u.language||'';
   document.getElementById('ep-bio').value=u.bio||'';
+  document.getElementById('ep-start-date').value=(u.start_date||'').slice(0,10);
   openBackdrop('modal-edit-profile');
 }
 
@@ -3912,7 +3937,8 @@ async function saveProfile(){
     instagram: document.getElementById('ep-instagram').value.trim().replace('@',''),
     nationality: document.getElementById('ep-nationality').value.trim(),
     language: document.getElementById('ep-language').value.trim(),
-    bio: document.getElementById('ep-bio').value.trim()
+    bio: document.getElementById('ep-bio').value.trim(),
+    start_date: document.getElementById('ep-start-date').value || null
   };
   if(!fields.first||!fields.last){ showToast('First and last name are required.','error'); return; }
   const r=await callDb('update_profile',{ user_id:uid, fields });
@@ -4675,7 +4701,7 @@ function openModal(type,userId){
     document.getElementById('modal-user-title').textContent='Add New User';
     document.getElementById('btn-save-user').textContent='Create User';
     document.getElementById('btn-save-user').className='btn-save';
-    ['u-first','u-last','u-email','u-team','u-phone','u-pw'].forEach(id=>document.getElementById(id).value='');
+    ['u-first','u-last','u-email','u-team','u-phone','u-pw','u-start-date'].forEach(id=>document.getElementById(id).value='');
     fillCargoSelect('u-role');
     fillTeamSelect('u-team');
     document.getElementById('u-campus').value='dublin';
@@ -4776,6 +4802,7 @@ async function saveUser(){
     const r=await callDb('create_user',{user:{
       first,last,email,role_id: roleId?Number(roleId):null,campus,phone,status,
       team_id: teamId?Number(teamId):null,
+      start_date: (document.getElementById('u-start-date')?.value || null),
       password:pw, reports_to: reportsTo || null
     }});
     if(!r||!r.ok){
@@ -4972,7 +4999,7 @@ function renderHomePerf(){
           return `<tr>
             <td style="width:22px;font-weight:700;color:var(--muted);font-size:12px">${i+1}</td>
             <td style="width:28px"><div class="perf-avatar ${avColor(u.id)}" style="width:26px;height:26px;font-size:11px">${getInitials(u)}</div></td>
-            <td style="font-weight:600;font-size:12.5px">${u.first} ${u.last.split(' ')[0]}</td>
+            <td style="font-weight:600;font-size:12.5px">${esc(dashFix(u.first+' '+u.last.split(' ')[0]))}</td>
             <td style="font-size:11px;color:var(--muted)">${esc(displayTeam(u))}</td>
             <td style="font-weight:700;color:${c};font-size:13px;text-align:right">${fmt(up2.actual)}</td>
             <td style="width:100px">
@@ -6354,9 +6381,25 @@ function selectReportType(type, card){
   reportType=type;
   document.querySelectorAll('.report-type-card').forEach(c=>c.classList.remove('active'));
   if(card) card.classList.add('active');
-  document.getElementById('rpt-person-group').style.display=(type==='individual')?'block':'none';
-  document.getElementById('rpt-scope-group').style.display=(type==='individual')?'none':'block';
+  const show=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'block':'none'; };
+  show('rpt-person-group', type==='individual');
+  show('rpt-scope-group',  type!=='individual');
+  show('rpt-people-filters', type==='people');
+  // People is a directory listing, not a performance figure, so the period
+  // controls have nothing to say about it.
+  const per=document.getElementById('period-presets');
+  if(per && per.parentElement) per.parentElement.style.display=(type==='people')?'none':'';
   if(type==='individual') fillRptPersonSelect();
+  if(type==='people') fillRptCargoFilter();
+}
+let rptCargo='all', rptStatus='active';
+function fillRptCargoFilter(){
+  const sel=document.getElementById('rpt-cargo');
+  if(!sel) return;
+  const v=sel.value||rptCargo;
+  sel.innerHTML='<option value="all">All cargos</option>'+
+    activeCargos().map(r=>`<option value="${esc(r.id)}">${esc(dashFix(r.name))}</option>`).join('');
+  sel.value=v; rptCargo=sel.value||'all';
 }
 
 // The population, not canUpdatePerf(): a 'leader' can open Reports and owns
@@ -6475,16 +6518,32 @@ async function loadPerfForYears(years){
     perfEff[y]=(r&&r.effective_targets)||{};
   }
 }
+// ── START DATE ───────────────────────────────────────────────────
+// Nobody is charged a target for months before they joined. A null
+// start_date means "no information", which keeps the previous behaviour.
+// Actuals are never touched: if a row somehow exists before the start month
+// it still counts as sold, it just does not carry a target with it.
+function startMonthIndexOf(u){
+  const m=/^(\d{4})-(\d{2})/.exec(String((u&&u.start_date)||''));
+  return m ? Number(m[1])*12 + (Number(m[2])-1) : null;
+}
+function isBeforeStart(u, y, mo){
+  const st=startMonthIndexOf(u);
+  return st!=null && (y*12+(mo-1)) < st;
+}
 // The rule, stated once: a cell in the past or the current month always counts
 // toward target - using its own row, or the person's effective monthly target
 // when no row was entered - and a missing row means 0 sold, not a free pass.
-// Future cells are excluded entirely by periodCells().
+// Future cells are excluded entirely by periodCells(); pre-start cells carry
+// no target at all.
 function cellFor(u, c){
   const row=(perfCells[c.y]&&perfCells[c.y][u.id]&&perfCells[c.y][u.id][c.m])||null;
-  if(row) return { target:Number(row.target)||0, actual:Number(row.actual)||0, filled:true };
+  const preStart=isBeforeStart(u, c.y, c.m);
+  if(row) return { target:preStart?0:(Number(row.target)||0), actual:Number(row.actual)||0, filled:true, preStart };
+  if(preStart) return { target:0, actual:0, filled:false, preStart:true };
   const eff=(perfEff[c.y]&&perfEff[c.y][u.id]!=null) ? Number(perfEff[c.y][u.id])
           : (u._effTarget!=null ? Number(u._effTarget) : 0);
-  return { target:eff, actual:0, filled:false };
+  return { target:eff, actual:0, filled:false, preStart:false };
 }
 let periodCache=null;       // uid -> {target, actual, months, filled}
 function buildPeriodFigures(pop){
@@ -6507,6 +6566,7 @@ let rptTeams=new Set(['all']);
 // Store last generated report data for Excel
 let lastReportData=[];
 let lastReportTitle='';
+let lastReportPeriod='';
 
 function setRptCampus(v,btn){
   rptCampus=v;
@@ -6551,6 +6611,7 @@ function rptTeam(u){ return esc(displayTeam(u)); }
 function csvName(u){ return dashFix(((u.first||'')+' '+(u.last||'')).trim()); }
 
 async function generateReport(){
+  if(reportType==='people') return generatePeopleReport();
   const years=[...new Set(periodCells().map(c=>c.y))];
   await loadPerfForYears(years);
   const incKpis=document.getElementById('inc-kpis')?.checked!==false;
@@ -6579,6 +6640,7 @@ async function generateReport(){
 
   let html='';
   lastReportData=[];
+  lastReportPeriod=getPeriodLabel();
 
   if(reportType==='individual'){
     const uid=document.getElementById('rpt-person')?.value||currentUserId;
@@ -6723,6 +6785,81 @@ async function generateReport(){
   outEl.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+// ── PEOPLE / STRUCTURE ────────────────────────────────────────────
+// Company-wide on purpose: get_directory is unscoped for every client and the
+// directory is already visible app-wide, so a people listing is not a new
+// disclosure. Performance reports keep their reportPopulation() scope.
+function fmtStartDate(v){
+  const t=String(v||'').slice(0,10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : '';
+}
+function peopleRows(){
+  let list=users.slice();
+  if(rptStatus==='active')   list=list.filter(u=>u.status!=='inactive');
+  if(rptStatus==='inactive') list=list.filter(u=>u.status==='inactive');
+  if(rptCampus==='dublin')   list=list.filter(u=>u.campus==='dublin'||u.campus==='both');
+  if(rptCampus==='limerick') list=list.filter(u=>u.campus==='limerick'||u.campus==='both');
+  if(!rptTeams.has('all'))   list=list.filter(u=>rptTeams.has(teamFilterKey(u)));
+  if(rptCargo && rptCargo!=='all') list=list.filter(u=>String(u.role_id)===String(rptCargo));
+  return list.sort((a,b)=>String(a.first||'').localeCompare(String(b.first||''))
+                       || String(a.last||'').localeCompare(String(b.last||'')));
+}
+// Plain values - this feeds both the escaped table and the export, and the
+// export must not carry HTML entities into spreadsheet cells.
+function peopleRecord(u){
+  return {
+    Name: dashFix(((u.first||'')+' '+(u.last||'')).trim()),
+    Cargo: displayRole(u),
+    Team: displayTeam(u),
+    Campus: CAMPUS_LABELS[u.campus]||u.campus||'',
+    'Reports to': dashFix(managerNameOf(u)||''),
+    Email: u.email||'',
+    Phone: u.phone||'',
+    Status: u.status==='inactive' ? 'Inactive' : 'Active',
+    'Start date': fmtStartDate(u.start_date),
+  };
+}
+function generatePeopleReport(){
+  const incKpis=document.getElementById('inc-kpis')?.checked!==false;
+  const outEl=document.getElementById('report-output');
+  const body=document.getElementById('report-output-body');
+  const titleEl=document.getElementById('rpt-out-title');
+  const metaEl=document.getElementById('rpt-out-meta');
+
+  const rows=peopleRows();
+  titleEl.textContent='People & Structure';
+  metaEl.textContent=`${rows.length} ${rows.length===1?'person':'people'} · company-wide`;
+  lastReportTitle=titleEl.textContent;
+  lastReportPeriod='Company';
+  lastReportData=rows.map(peopleRecord);
+
+  let html='';
+  if(incKpis){
+    const active=rows.filter(u=>u.status!=='inactive').length;
+    const byCampus=k=>rows.filter(u=>u.campus===k).length;
+    const teamsCount=new Set(rows.filter(u=>u.team_id!=null).map(u=>String(u.team_id))).size;
+    html+=`<div class="rpt-section"><div class="rpt-section-title">Headcount</div>
+      <div class="rpt-kpi-row">
+        <div class="kpi-card kc-blue"><div class="kpi-label">People</div><div class="kpi-val" style="color:var(--blue)">${rows.length}</div></div>
+        <div class="kpi-card kc-green"><div class="kpi-label">Active</div><div class="kpi-val" style="color:var(--success)">${active}</div></div>
+        <div class="kpi-card kc-orange"><div class="kpi-label">Dublin / Limerick / Both</div><div class="kpi-val" style="font-size:20px">${byCampus('dublin')} / ${byCampus('limerick')} / ${byCampus('both')}</div></div>
+        <div class="kpi-card kc-purple"><div class="kpi-label">Teams represented</div><div class="kpi-val" style="color:var(--manager)">${teamsCount}</div></div>
+      </div></div>`;
+  }
+  const cols=['Name','Cargo','Team','Campus','Reports to','Email','Phone','Status','Start date'];
+  html+=`<div class="rpt-section"><div class="rpt-section-title">Directory</div>
+    <div class="um-table-wrap"><table class="um-table"><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.length
+      ? rows.map(u=>{ const r=peopleRecord(u);
+          return `<tr>${cols.map(c=>`<td>${esc(r[c])}</td>`).join('')}</tr>`; }).join('')
+      : `<tr><td colspan="${cols.length}" style="color:var(--muted)">Nobody matches these filters.</td></tr>`}
+    </tbody></table></div></div>`;
+
+  body.innerHTML=html;
+  outEl.style.display='block';
+  outEl.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function printReport(){window.print();}
 
 // CSV, and it says so. A real .xlsx needs a spreadsheet library - that is 8b.
@@ -6730,6 +6867,57 @@ function csvCell(v){
   if(typeof v==='number' && Number.isFinite(v)) return String(v);
   return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
 }
+// ── EXPORT ────────────────────────────────────────────────────────
+// Cells carry raw values with dashFix for display names. esc() is
+// HTML-render only; putting it here would write &amp; into a spreadsheet.
+const SHEET_NAMES={ individual:'Individual', team:'Team', campus:'Campus',
+  ranking:'Ranking', target:'Target vs Actual', ytd:'By Period', people:'People' };
+function exportFileBase(){
+  const safe=t=>String(t||'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  return (safe(lastReportTitle)||'Report')+'_'+(safe(lastReportPeriod||getPeriodLabel())||'period');
+}
+// Excel is nicer, but a blocked CDN must never cost the user their export.
+function exportReportExcel(){
+  if(!lastReportData||!lastReportData.length){showToast('Generate a report first.','warning');return;}
+  if(typeof XLSX==='undefined' || !XLSX.utils){ exportReportCsv(); return; }
+  try {
+    const rows=lastReportData;
+    const headers=Object.keys(rows[0]);
+    const ws=XLSX.utils.json_to_sheet(rows,{header:headers});
+    // Column widths from the longest value actually present.
+    ws['!cols']=headers.map(h=>({ wch: Math.min(42, Math.max(10,
+      h.length+2, ...rows.map(r=>String(r[h]==null?'':r[h]).length+2))) }));
+    headers.forEach((h,i)=>{
+      const ref=XLSX.utils.encode_cell({r:0,c:i});
+      if(ws[ref]) ws[ref].s={ font:{ bold:true } };
+    });
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, SHEET_NAMES[reportType]||'Report');
+    // A performance report gains a Teams sheet when there is anything to say.
+    if(reportType!=='people' && reportType!=='individual'){
+      const tRows=(dbTeams||[]).filter(t=>t.active!==false).map(t=>{
+        const tp=teamPerf[t.id]||{};
+        const leader=users.find(u=>String(u.id)===String(t.leader_id));
+        return { Team:dashFix(t.name),
+          Leader: leader?dashFix((leader.first||'')+' '+(leader.last||'')):'',
+          Members: users.filter(u=>String(u.team_id)===String(t.id)).length,
+          'Monthly target': (tp.target!=null)?Number(tp.target):'',
+          'Actual (month)': (tp.actual&&tp.actual.monthly!=null)?Number(tp.actual.monthly):'' };
+      });
+      if(tRows.length){
+        const tws=XLSX.utils.json_to_sheet(tRows);
+        tws['!cols']=[{wch:24},{wch:24},{wch:10},{wch:14},{wch:14}];
+        XLSX.utils.book_append_sheet(wb, tws, 'Teams');
+      }
+    }
+    XLSX.writeFile(wb, exportFileBase()+'.xlsx');
+    showToast('Excel file downloaded.','success');
+  } catch(e){
+    showToast('Excel export failed, downloading CSV instead.','warning');
+    exportReportCsv();
+  }
+}
+
 function exportReportCsv(){
   if(!lastReportData||!lastReportData.length){showToast('Generate a report first.','warning');return;}
   const headers=Object.keys(lastReportData[0]);
@@ -6738,9 +6926,8 @@ function exportReportCsv(){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  const safe=t=>String(t||'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
   a.href=url;
-  a.download=(safe(lastReportTitle)||'Report')+'_'+(safe(getPeriodLabel())||'period')+'.csv';
+  a.download=exportFileBase()+'.csv';
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV downloaded.','success');
