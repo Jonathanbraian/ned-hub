@@ -1362,10 +1362,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
                 <div>
                   <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px">Team</div>
                   <div style="display:flex;gap:4px;flex-wrap:wrap" id="rpt-team-btns">
-                    <label class="org-team-check active" data-rteam="all" onclick="toggleRptTeam('all',this)"><input type="checkbox" checked style="display:none"> All</label>
-                    <label class="org-team-check" data-rteam="Team Brazil" onclick="toggleRptTeam('Team Brazil',this)"><input type="checkbox" style="display:none"> Brazil</label>
-                    <label class="org-team-check" data-rteam="Team Latam" onclick="toggleRptTeam('Team Latam',this)"><input type="checkbox" style="display:none"> Latam</label>
-                    <label class="org-team-check" data-rteam="Team Asia" onclick="toggleRptTeam('Team Asia',this)"><input type="checkbox" style="display:none"> Asia</label>
+                    <!-- built from the real teams table by fillRptTeamFilter() -->
                   </div>
                 </div>
               </div>
@@ -1399,9 +1396,9 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
             <div class="report-output-meta" id="rpt-out-meta"></div>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="chat-action-btn" onclick="exportReportExcel()" style="font-family:'Rubik',sans-serif;color:var(--success);border-color:var(--success-border)">
+            <button class="chat-action-btn" onclick="exportReportCsv()" style="font-family:'Rubik',sans-serif;color:var(--success);border-color:var(--success-border)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              Export Excel
+              Export CSV
             </button>
             <button class="chat-action-btn" onclick="printReport()" style="font-family:'Rubik',sans-serif">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -1437,19 +1434,8 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
         <!-- Team filter (multi-select checkboxes) -->
         <div style="display:flex;flex-direction:column;gap:6px">
           <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Team</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <label class="org-team-check active" onclick="toggleOrgTeam('all',this)">
-              <input type="checkbox" checked style="display:none"> All
-            </label>
-            <label class="org-team-check" onclick="toggleOrgTeam('Team Brazil',this)">
-              <input type="checkbox" style="display:none"> Brazil
-            </label>
-            <label class="org-team-check" onclick="toggleOrgTeam('Team Latam',this)">
-              <input type="checkbox" style="display:none"> Latam
-            </label>
-            <label class="org-team-check" onclick="toggleOrgTeam('Team Asia',this)">
-              <input type="checkbox" style="display:none"> Asia
-            </label>
+          <div style="display:flex;gap:4px;flex-wrap:wrap" id="org-team-btns">
+            <!-- built from the real teams table by fillOrgTeamFilter() -->
           </div>
         </div>
         <span style="font-size:12px;color:var(--muted);margin-left:8px">Click any card to view profile</span>
@@ -2480,14 +2466,6 @@ const CERT_LIST = [
 // ═══════════════════════════════════════
 const AV_COLORS = ['ua-blue','ua-green','ua-purple','ua-orange','ua-teal','ua-pink','ua-indigo'];
 
-// TEAMS MASTER LIST — campus → teams
-const TEAMS_BY_CAMPUS = {
-  dublin:   ['Team Brazil','Team Asia','Team Latam'],
-  limerick: ['Team Brazil','Team Asia','Team Latam'],
-  both:     ['Team Brazil','Team Asia','Team Latam'],
-};
-const ALL_TEAMS = ['Team Brazil','Team Asia','Team Latam'];
-
 // Helper: build perf object by role
 // Pre-load placeholder. Uses the same ladder as the server so the figures do
 // not jump when loadPerformance() replaces them:
@@ -2726,41 +2704,53 @@ function teamSubtreeOf(leaderId){
 
 const PERIOD_MULT={monthly:1,quarterly:3,annual:12};
 
-function teamMembersOf(teamId){ return users.filter(u=>String(u.team_id)===String(teamId)); }
+// `pop` lets a caller restrict "the team" to a population it may actually see.
+// Defaulting to users keeps every existing call site behaving as before.
+function teamMembersOf(teamId, pop){ return (pop||users).filter(u=>String(u.team_id)===String(teamId)); }
 function hasTeamTarget(teamId){
   const tp=teamPerf[teamId];
   return !!(tp && tp.target!=null);
 }
 // The team's target for a period: the figure set on the team, or the sum of its
 // members' own targets when none is set.
-function teamTargetOf(teamId, p){
+function teamTargetOf(teamId, p, pop){
   const tp=teamPerf[teamId];
   if(tp && tp.target!=null) return Number(tp.target)*(PERIOD_MULT[p]||1);
-  return teamMembersOf(teamId).reduce((a,u)=>a+u.perf[p].target,0);
+  return teamMembersOf(teamId, pop).reduce((a,u)=>a+u.perf[p].target,0);
 }
 // The team's actual: summed from its members, server-side where available.
-function teamActualOf(teamId, p){
+function teamActualOf(teamId, p, pop){
   const tp=teamPerf[teamId];
   if(tp && tp.actual && tp.actual[p]!=null) return Number(tp.actual[p]);
-  return teamMembersOf(teamId).reduce((a,u)=>a+u.perf[p].actual,0);
+  return teamMembersOf(teamId, pop).reduce((a,u)=>a+u.perf[p].actual,0);
 }
 
 // Target for a mixed list of people, without counting anyone twice: a team
 // contributes its own target once, but only when the whole team is in the list.
 // A filtered slice falls back to summing the people actually shown.
-function aggregateTargetOf(list, p){
+// `pop` scopes the "is the whole team present?" test. Without it the test
+// compares against the full directory, so a supervisor who can legitimately
+// see every member of their team is told the team is only partly shown and
+// silently falls back to summing people instead of using the team's target.
+// `valueOf` lets a caller supply period figures computed elsewhere (the
+// Reports page works off explicit month cells, not u.perf); `units` is how
+// many months an explicit team target is counted for, so a 6-month report
+// charges the team six months of its monthly figure.
+function aggregateTargetOf(list, p, pop, valueOf, units){
+  const tgt = valueOf ? (u=>valueOf(u).target) : (u=>u.perf[p].target);
+  const mult = (units!=null) ? units : (PERIOD_MULT[p]||1);
   const byTeam={}; let total=0;
   list.forEach(u=>{
-    if(u.team_id==null){ total+=u.perf[p].target; return; }
+    if(u.team_id==null){ total+=tgt(u); return; }
     const k=String(u.team_id);
     (byTeam[k]=byTeam[k]||[]).push(u);
   });
   Object.keys(byTeam).forEach(k=>{
     const shown=byTeam[k];
-    const whole=teamMembersOf(k);
+    const whole=teamMembersOf(k, pop);
     total += (hasTeamTarget(k) && shown.length===whole.length)
-      ? teamTargetOf(k,p)
-      : shown.reduce((a,u)=>a+u.perf[p].target,0);
+      ? Number(teamPerf[k].target)*mult
+      : shown.reduce((a,u)=>a+tgt(u),0);
   });
   return total;
 }
@@ -3162,8 +3152,8 @@ function showPage(name){
   if(name==='home') (async()=>{ await loadPerformance(); renderHomePerf(); })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
-  if(name==='orgchart') renderOrgChart();
-  if(name==='reports') renderReportsPage();
+  if(name==='orgchart'){ fillOrgTeamFilter(); renderOrgChart(); }
+  if(name==='reports') (async()=>{ await loadPerformance(); seedCurrentYearCells(); renderReportsPage(); })();
   // Sync mobile nav highlight
   if(window._mobNavSync) window._mobNavSync(name);
 }
@@ -6366,13 +6356,17 @@ function selectReportType(type, card){
   if(card) card.classList.add('active');
   document.getElementById('rpt-person-group').style.display=(type==='individual')?'block':'none';
   document.getElementById('rpt-scope-group').style.display=(type==='individual')?'none':'block';
-  // Populate person select if individual
-  if(type==='individual'){
-    const me=users.find(u=>u.id===currentUserId);
-    const accessible=canUpdatePerf()?users:users.filter(u=>u.id===currentUserId);
-    const sel=document.getElementById('rpt-person');
-    sel.innerHTML=accessible.map(u=>`<option value="${u.id}" ${u.id===currentUserId?'selected':''}>${u.first} ${u.last} - ${displayRole(u)}</option>`).join('');
-  }
+  if(type==='individual') fillRptPersonSelect();
+}
+
+// The population, not canUpdatePerf(): a 'leader' can open Reports and owns
+// direct reports, but canUpdatePerf() excludes them, so they used to get a
+// dropdown containing only themselves.
+function fillRptPersonSelect(){
+  const sel=document.getElementById('rpt-person');
+  if(!sel) return;
+  sel.innerHTML=reportPopulation().map(u=>
+    `<option value="${esc(u.id)}"${u.id===currentUserId?' selected':''}>${esc(dashFix(u.first+' '+u.last))} - ${esc(displayRole(u))}</option>`).join('');
 }
 
 function selectPeriodPreset(p, btn){
@@ -6392,19 +6386,120 @@ document.querySelectorAll('.report-include-check').forEach(lbl=>{
   });
 });
 
-function getPeriodLabel(){
-  const map={this_month:'This Month (May 2026)',q:'Q2 2026 (Apr-Jun)',
-    '6m':'Last 6 Months (Nov 2025 - May 2026)',ytd:'Year to Date 2026',
-    '1y':'Full Year 2025-2026',custom:'Custom Period'};
-  return map[reportPeriod]||reportPeriod;
+// ── WHO a report may cover ────────────────────────────────────────
+// Mirrors the gateway's accessibleIds. The server still decides what data
+// arrives; this decides who may appear, so a report never lists someone whose
+// figures we do not actually have.
+function reportPopulation(){
+  const me=users.find(u=>u.id===currentUserId);
+  if(!me) return [];
+  if(me.role==='director') return users.slice();
+  if(me.role==='manager')  return users.filter(u=>u.role!=='director');
+  if(me.role==='supervisor'||me.role==='leader')
+    return users.filter(u=>String(u.reports_to)===String(me.id)||u.id===me.id);
+  return [me];
 }
 
+// ── PERIODS as explicit (year, month) cells ───────────────────────
+const RPT_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function ymNow(){ const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()+1}; }
+function ymAdd(y,m,delta){ const t=y*12+(m-1)+delta; return {y:Math.floor(t/12), m:(t%12)+1}; }
+function ymIndex(c){ return c.y*12+(c.m-1); }
+function ymRange(a,b){
+  const out=[];
+  for(let i=ymIndex(a); i<=ymIndex(b); i++) out.push({y:Math.floor(i/12), m:(i%12)+1});
+  return out;
+}
+function parseMonthInput(v){
+  const mt=/^(\d{4})-(\d{2})$/.exec(String(v||''));
+  if(!mt) return null;
+  const y=Number(mt[1]), m=Number(mt[2]);
+  return (m>=1&&m<=12) ? {y,m} : null;
+}
+// Nothing in the future ever contributes: an unreached month is not a miss.
+function periodCells(){
+  const now=ymNow();
+  let a, b;
+  switch(reportPeriod){
+    case 'this_month': a=now; b=now; break;
+    case 'q':   a={y:now.y, m:Math.floor((now.m-1)/3)*3+1}; b=now; break;
+    case '6m':  a=ymAdd(now.y,now.m,-5);  b=now; break;
+    case 'ytd': a={y:now.y, m:1};         b=now; break;
+    case '1y':  a=ymAdd(now.y,now.m,-11); b=now; break;
+    case 'custom': {
+      a=parseMonthInput(document.getElementById('rpt-from')?.value) || now;
+      b=parseMonthInput(document.getElementById('rpt-to')?.value)   || now;
+      if(ymIndex(a)>ymIndex(b)){ const t=a; a=b; b=t; }
+      break;
+    }
+    default: a=now; b=now;
+  }
+  if(ymIndex(b)>ymIndex(now)) b=now;           // clamp the end to this month
+  if(ymIndex(a)>ymIndex(b)) a=b;
+  return ymRange(a,b);
+}
+function getPeriodLabel(){
+  const cells=periodCells();
+  if(!cells.length) return 'No period';
+  const f=cells[0], l=cells[cells.length-1];
+  const one=c=>`${RPT_MONTHS[c.m-1]} ${c.y}`;
+  if(cells.length===1) return one(f);
+  if(f.y===l.y) return `${RPT_MONTHS[f.m-1]} - ${RPT_MONTHS[l.m-1]} ${f.y}`;
+  return `${one(f)} - ${one(l)}`;
+}
+
+// ── per-(year, month) figures ─────────────────────────────────────
+// perfCells[year][uid][month] = {target, actual, notes}; perfEff[year][uid] is
+// the effective monthly target used where a month has no row.
+const perfCells={}, perfEff={};
+function seedCurrentYearCells(){
+  if(perfCells[perfYear]) return;
+  const byUser={}, eff={};
+  users.forEach(u=>{ if(u._months) byUser[u.id]=u._months;
+                     if(u._effTarget!=null) eff[u.id]=u._effTarget; });
+  perfCells[perfYear]=byUser; perfEff[perfYear]=eff;
+}
+// A range crossing January needs the other year's rows, which loadPerformance
+// never fetches - it only ever loads perfYear.
+async function loadPerfForYears(years){
+  seedCurrentYearCells();
+  for(const y of years){
+    if(perfCells[y]) continue;
+    const r=await callDb('get_performance',{ year:y });
+    const byUser={};
+    ((r&&r.results)||[]).forEach(row=>{
+      (byUser[row.user_id] ||= {})[row.month] =
+        { target:Number(row.target), actual:Number(row.actual), notes:row.notes||'' };
+    });
+    perfCells[y]=byUser;
+    perfEff[y]=(r&&r.effective_targets)||{};
+  }
+}
+// The rule, stated once: a cell in the past or the current month always counts
+// toward target - using its own row, or the person's effective monthly target
+// when no row was entered - and a missing row means 0 sold, not a free pass.
+// Future cells are excluded entirely by periodCells().
+function cellFor(u, c){
+  const row=(perfCells[c.y]&&perfCells[c.y][u.id]&&perfCells[c.y][u.id][c.m])||null;
+  if(row) return { target:Number(row.target)||0, actual:Number(row.actual)||0, filled:true };
+  const eff=(perfEff[c.y]&&perfEff[c.y][u.id]!=null) ? Number(perfEff[c.y][u.id])
+          : (u._effTarget!=null ? Number(u._effTarget) : 0);
+  return { target:eff, actual:0, filled:false };
+}
+let periodCache=null;       // uid -> {target, actual, months, filled}
+function buildPeriodFigures(pop){
+  const cells=periodCells();
+  periodCache={};
+  pop.forEach(u=>{
+    let t=0,a=0,filled=0;
+    cells.forEach(c=>{ const v=cellFor(u,c); t+=v.target; a+=v.actual; if(v.filled) filled++; });
+    periodCache[u.id]={ target:t, actual:a, months:cells.length, filled };
+  });
+  return periodCache;
+}
 function getPerfForPeriod(u){
-  // In this demo monthly/quarterly/annual are the actual data
-  // Map preset to available period key
-  if(reportPeriod==='this_month') return {target:u.perf.monthly.target, actual:u.perf.monthly.actual};
-  if(reportPeriod==='q'||reportPeriod==='6m') return {target:u.perf.quarterly.target, actual:u.perf.quarterly.actual};
-  return {target:u.perf.annual.target, actual:u.perf.annual.actual};
+  const v=periodCache && periodCache[u.id];
+  return v ? { target:v.target, actual:v.actual } : { target:0, actual:0 };
 }
 
 let rptCampus='all';
@@ -6418,23 +6513,46 @@ function setRptCampus(v,btn){
   document.querySelectorAll('[data-rcamp]').forEach(b=>b.classList.toggle('active',b.dataset.rcamp===v));
 }
 
+// Team filters are keyed by String(teams.id), plus 'all' and 'individual'
+// (team_id null). The old buttons were hard-coded names matched against the
+// legacy profiles.team string, which nothing writes any more - so choosing a
+// team silently emptied the report.
+function teamFilterKey(u){ return (u.team_id==null) ? 'individual' : String(u.team_id); }
+function teamFilterOptions(){
+  return [{k:'all', label:'All'}]
+    .concat(activeTeams().map(t => ({ k:String(t.id), label:dashFix(t.name) })))
+    .concat([{k:'individual', label:'No team'}]);
+}
+function fillRptTeamFilter(){
+  const el=document.getElementById('rpt-team-btns');
+  if(!el) return;
+  el.innerHTML=teamFilterOptions().map(o=>
+    `<label class="org-team-check${rptTeams.has(o.k)?' active':''}" data-rteam="${esc(o.k)}" onclick="toggleRptTeam('${esc(o.k)}',this)"><input type="checkbox"${rptTeams.has(o.k)?' checked':''} style="display:none"> ${esc(o.label)}</label>`
+  ).join('');
+}
+function toggleTeamSet(set, v){
+  if(v==='all'){ set.clear(); set.add('all'); return set; }
+  set.delete('all');
+  if(set.has(v)) set.delete(v); else set.add(v);
+  if(set.size===0) set.add('all');
+  return set;
+}
 function toggleRptTeam(v,lbl){
-  if(v==='all'){
-    rptTeams=new Set(['all']);
-    document.querySelectorAll('[data-rteam]').forEach(l=>l.classList.toggle('active',l.dataset.rteam==='all'));
-  } else {
-    rptTeams.delete('all');
-    if(rptTeams.has(v)) rptTeams.delete(v);
-    else rptTeams.add(v);
-    if(rptTeams.size===0) rptTeams.add('all');
-    document.querySelectorAll('[data-rteam]').forEach(l=>{
-      if(l.dataset.rteam==='all') l.classList.toggle('active',rptTeams.has('all'));
-      else l.classList.toggle('active',rptTeams.has(l.dataset.rteam));
-    });
-  }
+  toggleTeamSet(rptTeams, v);
+  fillRptTeamFilter();
 }
 
-function generateReport(){
+// Names, nicknames, cargo and team names are all user-entered, so every one of
+// them is escaped on the way into innerHTML.
+function rptName(u){ return esc(dashFix(((u.first||'')+' '+(u.last||'')).trim())); }
+function rptRole(u){ return esc(displayRole(u)); }
+function rptTeam(u){ return esc(displayTeam(u)); }
+// Plain text for CSV cells - esc() is HTML-render only and would write &amp;.
+function csvName(u){ return dashFix(((u.first||'')+' '+(u.last||'')).trim()); }
+
+async function generateReport(){
+  const years=[...new Set(periodCells().map(c=>c.y))];
+  await loadPerfForYears(years);
   const incKpis=document.getElementById('inc-kpis')?.checked!==false;
   const incTable=document.getElementById('inc-table')?.checked!==false;
   const incChart=document.getElementById('inc-chart')?.checked!==false;
@@ -6444,41 +6562,34 @@ function generateReport(){
   const titleEl=document.getElementById('rpt-out-title');
   const metaEl=document.getElementById('rpt-out-meta');
 
-  // ── SCOPE: lock to current user's accessible team ──
-  const me=users.find(u=>u.id===currentUserId);
-  // Base: get accessible users
-  let baseUsers;
-  if(me.role==='director') baseUsers=users.filter(u=>u.id!==me.id);
-  else if(me.role==='manager') baseUsers=users.filter(u=>u.id!==me.id&&u.role!=='director');
-  else if(me.role==='supervisor'||me.role==='leader'){
-    baseUsers=users.filter(u=>u.reports_to===me.id||u.id===me.id);
-  }
-  else baseUsers=[me];
+  // ── SCOPE: one population, mirroring the gateway ──
+  const population=reportPopulation();
+  buildPeriodFigures(population);
 
-  // Apply campus filter
-  let scopedUsers=[...baseUsers];
-  if(rptCampus==='dublin') scopedUsers=scopedUsers.filter(u=>u.campus==='dublin'||u.campus==='both');
+  let scopedUsers=population.filter(u=>u.status!=='inactive');
+  if(rptCampus==='dublin')   scopedUsers=scopedUsers.filter(u=>u.campus==='dublin'||u.campus==='both');
   if(rptCampus==='limerick') scopedUsers=scopedUsers.filter(u=>u.campus==='limerick'||u.campus==='both');
-  // Apply team filter (skip for leadership)
-  if(!rptTeams.has('all')){
-    scopedUsers=scopedUsers.filter(u=>['director','manager','supervisor','leader'].includes(u.role)||rptTeams.has(u.team));
-  }
-  // Performance users only (exclude director/manager for individual/ranking)
+  if(!rptTeams.has('all')) scopedUsers=scopedUsers.filter(u=>rptTeams.has(teamFilterKey(u)));
+  // Performance users only (leadership above supervisor carries no own target)
   const perfUsers=scopedUsers.filter(u=>['agent','specialist','executive','leader','supervisor'].includes(u.role));
+  // Every target total goes through this, so a team with an explicit
+  // teams.team_target contributes that figure once instead of a sum of members.
+  const nCells=periodCells().length;
+  const AGG=list=>aggregateTargetOf(list, 'monthly', population, getPerfForPeriod, nCells);
 
   let html='';
   lastReportData=[];
 
   if(reportType==='individual'){
     const uid=document.getElementById('rpt-person')?.value||currentUserId;
-    const u=scopedUsers.find(x=>x.id===uid)||users.find(x=>x.id===currentUserId);
+    const u=population.find(x=>x.id===uid)||users.find(x=>x.id===currentUserId);
     const p=getPerfForPeriod(u);
     const pct=p.target>0?Math.round(p.actual/p.target*100):0;
     const color=pctColor(pct);
-    titleEl.textContent=`Individual Report - ${u.first} ${u.last}`;
+    titleEl.textContent=`Individual Report - ${dashFix(u.first+' '+u.last)}`;
     metaEl.textContent=`${displayRole(u)} · ${CAMPUS_LABELS[u.campus]} · ${getPeriodLabel()}`;
     lastReportTitle=titleEl.textContent;
-    lastReportData=[{Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pct}%`,Period:getPeriodLabel()}];
+    lastReportData=[{Name:csvName(u),Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pct}%`,Period:getPeriodLabel()}];
     if(incKpis){
       html+=`<div class="rpt-section"><div class="rpt-section-title">Performance Summary</div>
         <div class="rpt-kpi-row">
@@ -6499,8 +6610,10 @@ function generateReport(){
       </div>`;
     }
     if(incTable){
-      html+=`<div class="rpt-section"><div class="rpt-section-title">All Periods</div>
-        ${['monthly','quarterly','annual'].map(per=>{const pd=u.perf[per];const pc=pd.target>0?Math.round(pd.actual/pd.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${per.charAt(0).toUpperCase()+per.slice(1)}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(pd.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
+      // Month by month across the chosen range, from the real cells.
+      html+=`<div class="rpt-section"><div class="rpt-section-title">Month by Month</div>
+        ${periodCells().map(c=>{const v=cellFor(u,c);const pc=v.target>0?Math.round(v.actual/v.target*100):0;const col=pctColor(pc);
+          return `<div class="rpt-bar-row"><div class="rpt-bar-name">${esc(RPT_MONTHS[c.m-1]+' '+c.y)}${v.filled?'':' <span style="color:var(--muted);font-size:11px">(no entry)</span>'}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${col}"></div></div><div class="rpt-bar-val" style="color:${col}">${fmt(v.actual)}</div><div class="rpt-bar-pct" style="color:${col}">${pc}%</div></div>`;}).join('')}
       </div>`;
     }
 
@@ -6508,11 +6621,11 @@ function generateReport(){
     titleEl.textContent=reportType==='campus'?'Campus Comparison':'Team Performance Report';
     metaEl.textContent=`${getPeriodLabel()} · ${perfUsers.length} members`;
     lastReportTitle=titleEl.textContent;
-    const totalTarget=perfUsers.reduce((a,u)=>a+getPerfForPeriod(u).target,0);
+    const totalTarget=AGG(perfUsers);
     const totalActual=perfUsers.reduce((a,u)=>a+getPerfForPeriod(u).actual,0);
     const totalPct=totalTarget>0?Math.round(totalActual/totalTarget*100):0;
     const onTarget=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual>=p.target;}).length;
-    lastReportData=perfUsers.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Period:getPeriodLabel()};});
+    lastReportData=perfUsers.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:csvName(u),Role:displayRole(u),Campus:CAMPUS_LABELS[u.campus],Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Period:getPeriodLabel()};});
     if(incKpis){
       html+=`<div class="rpt-section"><div class="rpt-section-title">Team KPIs</div>
         <div class="rpt-kpi-row">
@@ -6523,12 +6636,14 @@ function generateReport(){
         </div></div>`;
     }
     if(reportType==='campus'){
-      const camps=[{k:'dublin',l:'Dublin'},{k:'limerick',l:'Limerick'}];
+      // Three disjoint buckets: a 'both' person belongs to Both, not to
+      // Dublin AND Limerick, so the three add up to the company total.
+      const camps=[{k:'dublin',l:'Dublin'},{k:'limerick',l:'Limerick'},{k:'both',l:'Both'}];
       html+=`<div class="rpt-section"><div class="rpt-section-title">Campus Breakdown</div>`;
       camps.forEach(({k,l})=>{
-        const cu=perfUsers.filter(u=>u.campus===k||u.campus==='both');
+        const cu=perfUsers.filter(u=>u.campus===k);
         if(!cu.length)return;
-        const ct=cu.reduce((a,u)=>a+getPerfForPeriod(u).target,0);
+        const ct=AGG(cu);
         const ca=cu.reduce((a,u)=>a+getPerfForPeriod(u).actual,0);
         const cp=ct>0?Math.round(ca/ct*100):0;
         html+=`<div class="rpt-bar-row"><div class="rpt-bar-name">${l} (${cu.length})</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,cp)}%;background:${pctColor(cp)}"></div></div><div class="rpt-bar-val" style="color:${pctColor(cp)}">${fmt(ca)}</div><div class="rpt-bar-pct" style="color:${pctColor(cp)}">${cp}%</div></div>`;
@@ -6536,16 +6651,19 @@ function generateReport(){
       html+=`</div>`;
     }
     if(incTable){
+      // Grouped by the team's id - a display string would collide on rename.
       const groups={};
-      perfUsers.forEach(u=>{const key=(u.campus==='both'?'All':u.campus.charAt(0).toUpperCase()+u.campus.slice(1))+' - '+displayTeam(u);if(!groups[key])groups[key]=[];groups[key].push(u);});
+      perfUsers.forEach(u=>{const k=teamFilterKey(u);(groups[k]=groups[k]||[]).push(u);});
+      const groupLabel=k=>k==='individual' ? 'No team' : dashFix((teamsById[k]||{}).name || 'Team');
       html+=`<div class="rpt-section"><div class="rpt-section-title">Detailed Breakdown</div>
-        ${Object.entries(groups).sort().map(([grp,members])=>{
-          const gT=members.reduce((a,u)=>a+getPerfForPeriod(u).target,0);
+        ${Object.keys(groups).sort((a,b)=>groupLabel(a).localeCompare(groupLabel(b))).map(k=>{
+          const members=groups[k];
+          const gT=AGG(members);
           const gA=members.reduce((a,u)=>a+getPerfForPeriod(u).actual,0);
           const gP=gT>0?Math.round(gA/gT*100):0;
           return `<div style="margin-bottom:16px">
-            <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between">${grp}<span style="color:${pctColor(gP)}">${fmt(gA)} / ${fmt(gT)} · ${gP}%</span></div>
-            ${members.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
+            <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between">${esc(groupLabel(k))} (${members.length})<span style="color:${pctColor(gP)}">${fmt(gA)} / ${fmt(gT)} · ${gP}%</span></div>
+            ${members.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${rptName(u)}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
           </div>`;
         }).join('')}</div>`;
     }
@@ -6555,13 +6673,13 @@ function generateReport(){
     metaEl.textContent=getPeriodLabel();
     lastReportTitle=titleEl.textContent;
     const sorted=[...perfUsers].sort((a,b)=>{const pa=getPerfForPeriod(a);const pb=getPerfForPeriod(b);return (pb.target>0?pb.actual/pb.target:0)-(pa.target>0?pa.actual/pa.target:0);});
-    lastReportData=sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Rank:i+1,Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`};});
-    html+=`<div class="rpt-section"><div class="rpt-section-title">Leaderboard - ${getPeriodLabel()}</div>
+    lastReportData=sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Rank:i+1,Name:csvName(u),Role:displayRole(u),Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`};});
+    html+=`<div class="rpt-section"><div class="rpt-section-title">Leaderboard - ${esc(getPeriodLabel())}</div>
       ${sorted.map((u,i)=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;const numClass=i===0?'gold':i===1?'silver':i===2?'bronze':'';
         return `<div class="rpt-rank-row">
           <div class="rpt-rank-num ${numClass}">${medal}</div>
-          <div class="perf-avatar ${avColor(u.id)}" style="width:34px;height:34px;font-size:13px">${getInitials(u)}</div>
-          <div style="flex:1"><div style="font-size:13.5px;font-weight:600">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted)">${displayRole(u)} · ${displayTeam(u)}</div></div>
+          <div class="perf-avatar ${avColor(u.id)}" style="width:34px;height:34px;font-size:13px">${esc(getInitials(u))}</div>
+          <div style="flex:1"><div style="font-size:13.5px;font-weight:600">${rptName(u)}</div><div style="font-size:11.5px;color:var(--muted)">${rptRole(u)} · ${rptTeam(u)}</div></div>
           <div style="text-align:right"><div class="eur-val">${fmt(p.actual)}</div><div class="eur-target">target ${fmt(p.target)}</div></div>
           <span class="pct-badge ${pctBadgeClass(pc)}" style="margin-left:8px">${pc}%</span>
         </div>`;
@@ -6572,24 +6690,31 @@ function generateReport(){
     metaEl.textContent=`${getPeriodLabel()} · ${perfUsers.length} members`;
     lastReportTitle=titleEl.textContent;
     const onTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual>=p.target;});
-    const offTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual<p.target;}).sort((a,b)=>{const pa=getPerfForPeriod(a);const pb=getPerfForPeriod(b);return (pa.actual/pa.target)-(pb.actual/pb.target);});
-    lastReportData=[...onTgt,...offTgt].map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:`${u.first} ${u.last}`,Role:displayRole(u),Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Status:p.actual>=p.target?'On Target':'Below Target'};});
+    const ratio=u=>{const p=getPerfForPeriod(u);return p.target>0?p.actual/p.target:0;};
+    const offTgt=perfUsers.filter(u=>{const p=getPerfForPeriod(u);return p.actual<p.target;}).sort((a,b)=>ratio(a)-ratio(b));
+    lastReportData=[...onTgt,...offTgt].map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return {Name:csvName(u),Role:displayRole(u),Team:displayTeam(u),Target:p.target,Actual:p.actual,Achievement:`${pc}%`,Status:p.actual>=p.target?'On Target':'Below Target'};});
     html+=`<div class="rpt-section"><div class="rpt-section-title">On Target (${onTgt.length})</div>
-      ${onTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${esc(displayTeam(u))}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:var(--success)"></div></div><div class="rpt-bar-val" style="color:var(--success)">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:var(--success)">${pc}%</div></div>`;}).join('')}
+      ${onTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;return `<div class="rpt-bar-row"><div class="rpt-bar-name">${rptName(u)}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${esc(displayTeam(u))}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:var(--success)"></div></div><div class="rpt-bar-val" style="color:var(--success)">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:var(--success)">${pc}%</div></div>`;}).join('')}
     </div>
     <div class="rpt-section"><div class="rpt-section-title">Below Target (${offTgt.length})</div>
-      ${offTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${u.first} ${u.last}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${esc(displayTeam(u))}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${pc}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
+      ${offTgt.map(u=>{const p=getPerfForPeriod(u);const pc=p.target>0?Math.round(p.actual/p.target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${rptName(u)}</div><div style="font-size:11.5px;color:var(--muted);width:80px;flex-shrink:0">${esc(displayTeam(u))}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${pc}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(p.actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
     </div>`;
 
   } else if(reportType==='ytd'){
-    titleEl.textContent='Year-to-Date Report';
-    metaEl.textContent='2026 · All periods';
+    titleEl.textContent='Period Breakdown';
+    metaEl.textContent=`${getPeriodLabel()} · ${perfUsers.length} members`;
     lastReportTitle=titleEl.textContent;
-    const rptTT=per=>aggregateTargetOf(perfUsers,per);
-    const rows=[['Monthly',perfUsers.reduce((a,u)=>a+u.perf.monthly.actual,0),rptTT('monthly')],['Quarterly',perfUsers.reduce((a,u)=>a+u.perf.quarterly.actual,0),rptTT('quarterly')],['Annual',perfUsers.reduce((a,u)=>a+u.perf.annual.actual,0),rptTT('annual')]];
+    // One row per month of the chosen range, each aggregated the same way.
+    const rows=periodCells().map(c=>{
+      const per={}; perfUsers.forEach(u=>{ per[u.id]=cellFor(u,c); });
+      const t=aggregateTargetOf(perfUsers,'monthly',population,u=>per[u.id],1);
+      const a=perfUsers.reduce((x,u)=>x+per[u.id].actual,0);
+      return [RPT_MONTHS[c.m-1]+' '+c.y, a, t];
+    });
+    rows.push(['Total', rows.reduce((x,r)=>x+r[1],0), rows.reduce((x,r)=>x+r[2],0)]);
     lastReportData=rows.map(([l,a,t])=>({Period:l,Target:t,Actual:a,Achievement:`${t>0?Math.round(a/t*100):0}%`}));
-    html+=`<div class="rpt-section"><div class="rpt-section-title">Year-to-Date - ${perfUsers.length} members</div>
-      ${rows.map(([lbl,actual,target])=>{const pc=target>0?Math.round(actual/target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${lbl}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
+    html+=`<div class="rpt-section"><div class="rpt-section-title">${esc(getPeriodLabel())} - ${perfUsers.length} members</div>
+      ${rows.map(([lbl,actual,target])=>{const pc=target>0?Math.round(actual/target*100):0;const c=pctColor(pc);return `<div class="rpt-bar-row"><div class="rpt-bar-name">${esc(lbl)}</div><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:${Math.min(100,pc)}%;background:${c}"></div></div><div class="rpt-bar-val" style="color:${c}">${fmt(actual)}</div><div class="rpt-bar-pct" style="color:${c}">${pc}%</div></div>`;}).join('')}
     </div>`;
   }
 
@@ -6600,34 +6725,36 @@ function generateReport(){
 
 function printReport(){window.print();}
 
-function exportReportExcel(){
+// CSV, and it says so. A real .xlsx needs a spreadsheet library - that is 8b.
+function csvCell(v){
+  if(typeof v==='number' && Number.isFinite(v)) return String(v);
+  return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+}
+function exportReportCsv(){
   if(!lastReportData||!lastReportData.length){showToast('Generate a report first.','warning');return;}
-  // Build CSV (universal Excel compatible)
   const headers=Object.keys(lastReportData[0]);
-  const rows=lastReportData.map(row=>headers.map(h=>{const v=row[h];return typeof v==='number'?v:`"${String(v).replace(/"/g,'""')}"`}).join(','));
-  const csv='\uFEFF'+[headers.map(h=>`"${h}"`).join(','),...rows].join('\n'); // BOM for Excel UTF-8
+  const rows=lastReportData.map(row=>headers.map(h=>csvCell(row[h])).join(','));
+  const csv='\uFEFF'+[headers.map(csvCell).join(','),...rows].join('\r\n'); // BOM + CRLF for Excel
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  const filename=(lastReportTitle||'Report').replace(/[^a-zA-Z0-9 ]/g,'').trim().replace(/\s+/g,'_')+'_'+getPeriodLabel().replace(/[^a-zA-Z0-9]/g,'_')+'.csv';
-  a.href=url;a.download=filename;a.click();
+  const safe=t=>String(t||'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  a.href=url;
+  a.download=(safe(lastReportTitle)||'Report')+'_'+(safe(getPeriodLabel())||'period')+'.csv';
+  a.click();
   URL.revokeObjectURL(url);
-  showToast('Excel file downloaded.','success');
+  showToast('CSV downloaded.','success');
 }
 
 function renderReportsPage(){
-  // Populate person select if individual is selected
-  if(reportType==='individual'){
-    const accessible=canUpdatePerf()?users:users.filter(u=>u.id===currentUserId);
-    const sel=document.getElementById('rpt-person');
-    if(sel) sel.innerHTML=accessible.map(u=>`<option value="${u.id}" ${u.id===currentUserId?'selected':''}>${u.first} ${u.last} - ${displayRole(u)}</option>`).join('');
-  }
+  fillRptTeamFilter();
+  if(reportType==='individual') fillRptPersonSelect();
 }
 
 // ═══════════════════════════════════════════════════
 // ORG CHART FILTERS
 let orgCampus='all';  // 'all' | 'dublin' | 'limerick' - matches the default active filter button
-let orgTeams=new Set(['all']); // Set of 'all' | 'Team Brazil' | 'Team Latam' | 'Team Asia'
+let orgTeams=new Set(['all']); // 'all' | String(teams.id) | 'individual'
 
 function setOrgCampus(v, btn){
   orgCampus=v;
@@ -6635,24 +6762,17 @@ function setOrgCampus(v, btn){
   renderOrgChart();
 }
 
+// Same fix as the Reports filter: real team ids, not the legacy name string.
+function fillOrgTeamFilter(){
+  const el=document.getElementById('org-team-btns');
+  if(!el) return;
+  el.innerHTML=teamFilterOptions().map(o=>
+    `<label class="org-team-check${orgTeams.has(o.k)?' active':''}" data-oteam="${esc(o.k)}" onclick="toggleOrgTeam('${esc(o.k)}',this)"><input type="checkbox"${orgTeams.has(o.k)?' checked':''} style="display:none"> ${esc(o.label)}</label>`
+  ).join('');
+}
 function toggleOrgTeam(v, lbl){
-  if(v==='all'){
-    orgTeams=new Set(['all']);
-    document.querySelectorAll('.org-team-check').forEach(l=>l.classList.toggle('active',l.textContent.trim()==='All'));
-  } else {
-    orgTeams.delete('all');
-    if(orgTeams.has(v)) orgTeams.delete(v);
-    else orgTeams.add(v);
-    if(orgTeams.size===0) orgTeams.add('all');
-    document.querySelectorAll('.org-team-check').forEach(l=>{
-      const t=l.textContent.trim();
-      if(t==='All') l.classList.toggle('active',orgTeams.has('all'));
-      else{
-        const map={'Brazil':'Team Brazil','Latam':'Team Latam','Asia':'Team Asia'};
-        l.classList.toggle('active',orgTeams.has(map[t]));
-      }
-    });
-  }
+  toggleTeamSet(orgTeams, v);
+  fillOrgTeamFilter();
   renderOrgChart();
 }
 
@@ -6664,15 +6784,15 @@ function renderOrgChart(){
 
   // Card for a single person
   function card(u){
-    const av=u.photo?`<img src="${u.photo}" alt="">`:`${getInitials(u)}`;
+    const av=u.photo?`<img src="${esc(u.photo)}" alt="">`:esc(getInitials(u));
     const roleLbl=displayRole(u);
     const teamLbl=teamNameOf(u)?`<div style="font-size:9.5px;color:var(--muted);margin-top:1px">${esc(teamNameOf(u))}</div>`:'';
     const campLbl=u.campus&&u.campus!=='both'?`<div style="font-size:9.5px;color:var(--muted)">${CAMPUS_LABELS[u.campus]||u.campus}</div>`:'';
-    return `<div class="org-node-card ${u.role}" onclick="viewUserProfile('${u.id}')" title="${u.first} ${u.last}">
+    return `<div class="org-node-card ${esc(u.role)}" onclick="viewUserProfile('${esc(u.id)}')" title="${esc(dashFix(u.first+' '+u.last))}">
       <div class="org-avatar ${avColor(u.id)}">${av}</div>
-      <div class="org-name">${u.first} ${u.last}</div>
-      ${u.nickname?`<div class="org-nick">(${u.nickname})</div>`:''}
-      <span class="role-badge ${ROLE_BADGE[u.role]}" style="font-size:9.5px;padding:2px 6px">${roleLbl}</span>
+      <div class="org-name">${esc(dashFix(u.first+' '+u.last))}</div>
+      ${u.nickname?`<div class="org-nick">(${esc(dashFix(u.nickname))})</div>`:''}
+      <span class="role-badge ${ROLE_BADGE[u.role]||''}" style="font-size:9.5px;padding:2px 6px">${esc(roleLbl)}</span>
       ${teamLbl}${campLbl}
     </div>`;
   }
@@ -6695,7 +6815,7 @@ function renderOrgChart(){
     if(['director','manager','supervisor','leader'].includes(u.role)) return true;
     if(orgCampus==='dublin'  && u.campus!=='dublin'  && u.campus!=='both') return false;
     if(orgCampus==='limerick'&& u.campus!=='limerick' && u.campus!=='both') return false;
-    if(!orgTeams.has('all') && !orgTeams.has(u.team)) return false;
+    if(!orgTeams.has('all') && !orgTeams.has(teamFilterKey(u))) return false;
     return true;
   }
 
