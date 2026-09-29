@@ -145,6 +145,17 @@ a{text-decoration:none;color:inherit}
 .form-textarea:focus{border-color:var(--blue);background:var(--surface)}
 .form-select{font-family:'Rubik',sans-serif;font-size:13px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:11px 36px 11px 14px;color:var(--text);outline:none;cursor:pointer;transition:border-color .15s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7A99' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;width:100%}
 .form-select:focus{border-color:var(--blue)}
+/* Language tick list: a filter box over a scrolling set of checkboxes, with
+   the current picks repeated as removable chips above it. */
+.lang-box{border:1.5px solid var(--border);border-radius:10px;background:var(--bg);padding:8px}
+.lang-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:24px;align-items:center}
+.lang-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);border-radius:20px;padding:3px 6px 3px 10px}
+.lang-chip-x{background:none;border:none;color:var(--blue);cursor:pointer;font-size:15px;line-height:1;padding:0 3px;font-family:inherit}
+.lang-chip-x:hover{color:var(--danger)}
+.lang-list{max-height:170px;overflow-y:auto;border-top:1px solid var(--border);padding-top:6px}
+.lang-opt{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 6px;border-radius:7px;cursor:pointer}
+.lang-opt:hover{background:var(--light-blue)}
+.lang-opt input{cursor:pointer;accent-color:var(--blue)}
 /* The chevron is baked into a data: URI, so it cannot follow --muted; dark
    gets its own copy rather than staying a dim grey on a dark field. */
 html[data-theme="dark"] .form-select,
@@ -2350,19 +2361,34 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
       <div class="modal-section-title">Basic Information</div>
       <div class="modal-row"><div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" id="ep-first"></div><div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" id="ep-last"></div></div>
       <div class="form-group"><label class="form-label">Nickname</label><input class="form-input" type="text" id="ep-nickname" placeholder="What people actually call them"></div>
-      <div class="modal-row"><div class="form-group"><label class="form-label">Job Title</label><input class="form-input" type="text" id="ep-jobtitle" placeholder="e.g. Sales Specialist"></div><div class="form-group"><label class="form-label">Team</label>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Job Title</label><input class="form-input" type="text" id="ep-jobtitle-ro" readonly><div class="form-hint">Follows your role</div></div><div class="form-group"><label class="form-label">Team</label>
         <select class="form-select" id="ep-team-select" style="display:none"></select>
         <input class="form-input" type="text" id="ep-team" readonly>
         <div class="form-hint" id="ep-team-hint">Managed in Teams</div>
       </div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
-      <div class="modal-row"><div class="form-group"><label class="form-label">Nationality</label><input class="form-input" type="text" id="ep-nationality" placeholder="e.g. Brazil"></div><div class="form-group"><label class="form-label">Language</label><input class="form-input" type="text" id="ep-language" placeholder="e.g. Portuguese, English"></div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">LinkedIn</label><input class="form-input" type="text" id="ep-linkedin" placeholder="username or full profile link"></div><div class="form-group"><label class="form-label">Nationality</label><select class="form-select" id="ep-nationality"></select></div></div>
+      <div class="form-group"><label class="form-label">Languages</label>
+        <div class="lang-box">
+          <div class="lang-chips" id="ep-lang-chips"></div>
+          <input class="form-input" type="text" id="ep-lang-filter" placeholder="Search languages..." oninput="filterLangList()" style="font-size:13px;padding:8px 12px">
+          <div class="lang-list" id="ep-lang-list"></div>
+        </div>
+        <div class="form-hint">Tick every language this person speaks.</div>
+      </div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Birthday</label>
+        <div style="display:flex;gap:8px">
+          <select class="form-select" id="ep-birth-day" style="flex:0 0 90px"></select>
+          <select class="form-select" id="ep-birth-month"></select>
+        </div>
+        <div class="form-hint">Day and month only - no year is stored.</div>
+      </div><div class="form-group"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Start date</label>
         <input class="form-input" type="date" id="ep-start-date">
         <input class="form-input" type="text" id="ep-start-date-ro" readonly style="display:none">
         <div class="form-hint" id="ep-start-date-hint">Targets before this month are not charged</div>
       </div><div class="form-group"></div></div>
-      <div class="form-group"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
+      <div class="form-group" style="margin-top:2px"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-edit-profile')">Cancel</button><button class="btn-save mgr-save" onclick="saveProfile()">Save Profile</button></div>
   </div>
@@ -2585,8 +2611,13 @@ function mapProfileToUser(u){
   const d = dashFix;
   return {
     id:u.id, first:d(u.first), last:d(u.last), nickname:d(u.nickname)||'', email:u.email, role:u.role,
-    campus:u.campus, phone:u.phone||'', instagram:u.instagram||'',
+    campus:u.campus, phone:u.phone||'', instagram:u.instagram||'', linkedin:u.linkedin||'',
     nationality:d(u.nationality)||'', language:d(u.language)||'', jobTitle:d(u.job_title)||'',
+    // languages is text[]; anything else (an old row, a stubbed response) reads
+    // as "none picked" rather than throwing on .join() later.
+    languages: Array.isArray(u.languages) ? u.languages.filter(Boolean).map(d) : [],
+    birthDay: (u.birth_day!=null) ? Number(u.birth_day) : null,
+    birthMonth: (u.birth_month!=null) ? Number(u.birth_month) : null,
     status:u.status, reports_to:u.reports_to||null, photo:u.photo||'', bio:d(u.bio)||'',
     start_date: u.start_date || null,
     monthly_target: (u.monthly_target!=null)?Number(u.monthly_target):null,
@@ -2596,6 +2627,53 @@ function mapProfileToUser(u){
     team_name: d((teamsById[u.team_id]||{}).name) || null,
     perf: mkPerf(u.role, 0, u.role_id), certs:[], certDates:[], appraisals:[], documents:[]
   };
+}
+
+
+// ── PROFILE PICK LISTS ───────────────────────────────────────────
+// Kept as one split string each so the diff stays readable. Whatever is
+// already stored on a profile is added to its list when the picker is built,
+// so switching these fields from free text to a picker can never silently
+// drop a value somebody typed before.
+const NATIONALITIES = ('Afghanistan,Albania,Algeria,Andorra,Angola,Antigua and Barbuda,Argentina,Armenia,Australia,Austria,Azerbaijan,Bahamas,Bahrain,Bangladesh,Barbados,Belarus,Belgium,Belize,Benin,Bhutan,Bolivia,Bosnia and Herzegovina,Botswana,Brazil,Brunei,Bulgaria,Burkina Faso,Burundi,Cabo Verde,Cambodia,Cameroon,Canada,Central African Republic,Chad,Chile,China,Colombia,Comoros,Congo,Costa Rica,Croatia,Cuba,Cyprus,Czechia,Democratic Republic of the Congo,Denmark,Djibouti,Dominica,Dominican Republic,Ecuador,Egypt,El Salvador,Equatorial Guinea,Eritrea,Estonia,Eswatini,Ethiopia,Fiji,Finland,France,Gabon,Gambia,Georgia,Germany,Ghana,Greece,Grenada,Guatemala,Guinea,Guinea-Bissau,Guyana,Haiti,Honduras,Hong Kong,Hungary,Iceland,India,Indonesia,Iran,Iraq,Ireland,Israel,Italy,Ivory Coast,Jamaica,Japan,Jordan,Kazakhstan,Kenya,Kiribati,Kosovo,Kuwait,Kyrgyzstan,Laos,Latvia,Lebanon,Lesotho,Liberia,Libya,Liechtenstein,Lithuania,Luxembourg,Macau,Madagascar,Malawi,Malaysia,Maldives,Mali,Malta,Marshall Islands,Mauritania,Mauritius,Mexico,Micronesia,Moldova,Monaco,Mongolia,Montenegro,Morocco,Mozambique,Myanmar,Namibia,Nauru,Nepal,Netherlands,New Zealand,Nicaragua,Niger,Nigeria,North Korea,North Macedonia,Norway,Oman,Pakistan,Palau,Palestine,Panama,Papua New Guinea,Paraguay,Peru,Philippines,Poland,Portugal,Qatar,Romania,Russia,Rwanda,Saint Kitts and Nevis,Saint Lucia,Saint Vincent and the Grenadines,Samoa,San Marino,Sao Tome and Principe,Saudi Arabia,Senegal,Serbia,Seychelles,Sierra Leone,Singapore,Slovakia,Slovenia,Solomon Islands,Somalia,South Africa,South Korea,South Sudan,Spain,Sri Lanka,Sudan,Suriname,Sweden,Switzerland,Syria,Taiwan,Tajikistan,Tanzania,Thailand,Timor-Leste,Togo,Tonga,Trinidad and Tobago,Tunisia,Turkey,Turkmenistan,Tuvalu,Uganda,Ukraine,United Arab Emirates,United Kingdom,United States,Uruguay,Uzbekistan,Vanuatu,Vatican City,Venezuela,Vietnam,Yemen,Zambia,Zimbabwe').split(',');
+const LANGUAGES = ('Afrikaans,Akan,Albanian,Amharic,Arabic,Armenian,Assamese,Aymara,Azerbaijani,Balochi,Bambara,Bashkir,Basque,Belarusian,Bengali,Berber,Bhojpuri,Bosnian,Bulgarian,Burmese,Cantonese,Catalan,Cebuano,Chechen,Chichewa,Chinese (Mandarin),Chittagonian,Corsican,Croatian,Czech,Danish,Dari,Deccan,Dhundhari,Dutch,Dzongkha,English,Esperanto,Estonian,Ewe,Faroese,Fijian,Filipino,Finnish,Flemish,French,Frisian,Fula,Galician,Ganda,Georgian,German,Greek,Guarani,Gujarati,Haitian Creole,Hakka,Hausa,Hawaiian,Hebrew,Hiligaynon,Hindi,Hmong,Hungarian,Icelandic,Igbo,Ilocano,Indonesian,Irish,Italian,Japanese,Javanese,Kannada,Kanuri,Kashmiri,Kazakh,Khmer,Kinyarwanda,Kirundi,Konkani,Korean,Kurdish,Kyrgyz,Lao,Latin,Latvian,Lingala,Lithuanian,Luxembourgish,Macedonian,Madurese,Magahi,Maithili,Malagasy,Malay,Malayalam,Maltese,Maori,Marathi,Marwari,Mongolian,Montenegrin,Nahuatl,Navajo,Neapolitan,Nepali,Norwegian,Occitan,Odia,Oromo,Pashto,Persian (Farsi),Polish,Portuguese,Punjabi,Quechua,Romanian,Romani,Russian,Samoan,Sango,Sanskrit,Sardinian,Scottish Gaelic,Serbian,Sesotho,Shona,Sicilian,Sindhi,Sinhala,Slovak,Slovenian,Somali,Spanish,Sundanese,Swahili,Swedish,Tagalog,Tajik,Tamil,Tatar,Telugu,Thai,Tibetan,Tigrinya,Tswana,Turkish,Turkmen,Twi,Ukrainian,Urdu,Uyghur,Uzbek,Venetian,Vietnamese,Welsh,Wolof,Xhosa,Yiddish,Yoruba,Zhuang,Zulu').split(',');
+const byName = (a,b)=>a.localeCompare(b);
+
+// A handle or a full profile link, turned into an <a> ONLY when it is safe to.
+// Anything else renders as plain escaped text rather than a live href - a
+// value like `x" onmouseover=...` must never reach an attribute.
+const SOCIAL_HOSTS = { instagram:'instagram.com', linkedin:'linkedin.com' };
+function socialUrl(kind, v){
+  const raw = String(v||'').trim();
+  if(!raw) return null;
+  if(/^https?:\/\//i.test(raw)){
+    let u; try{ u = new URL(raw); }catch(e){ return null; }
+    if(u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    const host = u.hostname.toLowerCase().replace(/^www\./,'');
+    const want = SOCIAL_HOSTS[kind];
+    return (host === want || host.endsWith('.'+want)) ? u.href : null;
+  }
+  const handle = raw.replace(/^@/,'');
+  if(!/^[A-Za-z0-9._-]{1,100}$/.test(handle)) return null;
+  return kind === 'instagram'
+    ? 'https://instagram.com/' + encodeURIComponent(handle)
+    : 'https://www.linkedin.com/in/' + encodeURIComponent(handle);
+}
+function socialLink(kind, v){
+  const raw = String(v||'').trim();
+  if(!raw) return '';
+  const href = socialUrl(kind, raw);
+  const label = (kind === 'instagram') ? '@' + raw.replace(/^@/,'') : raw;
+  return href
+    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">${esc(label)}</a>`
+    : esc(label);
+}
+// "14 March". A birthday here is a day and a month; no year is stored at all.
+function birthdayLabel(u){
+  const d = Number(u && u.birthDay), m = Number(u && u.birthMonth);
+  if(!Number.isInteger(d) || d < 1 || d > 31) return '';
+  if(!Number.isInteger(m) || m < 1 || m > 12) return '';
+  return d + ' ' + MONTH_NAMES[m-1];
 }
 
 // ── CARGOS (roles) ──────────────────────────────────────────────
@@ -3653,7 +3731,7 @@ function buildProfileHTML(u,isMyProfile){
   const pct=up.target>0?Math.min(100,Math.round(up.actual/up.target*100)):0;
   const color=pctColor(pct);
 
-  const avatarInner=u.photo?`<img src="${u.photo}" alt="">`:`<span>${getInitials(u)}</span>`;
+  const avatarInner=u.photo?`<img src="${esc(u.photo)}" alt="">`:`<span>${getInitials(u)}</span>`;
   const avatarUploadBtn=canEdit?`<div class="avatar-upload-btn" onclick="triggerAvatarUpload('${u.id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><input type="file" id="avatar-file-input-${u.id}" accept="image/*" onchange="handleAvatarChange(event,'${u.id}')" style="display:none">`:'';
 
   const detail=detailOf(u.id)||{};
@@ -3708,16 +3786,16 @@ function buildProfileHTML(u,isMyProfile){
       </div>
       <div>
         <div class="profile-name">${esc(dashFix(u.first+' '+u.last))}</div>
-        <div class="profile-job-title">${displayRole(u)} · ${displayTeam(u)}</div>
+        <div class="profile-job-title">${esc(displayRole(u))} · ${esc(displayTeam(u))}</div>
         <div class="profile-meta-chips">
-          <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${displayRole(u)}</span>
-          <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${CAMPUS_LABELS[u.campus]||u.campus}</span>
-          ${u.phone?`<span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.22h3a2 2 0 0 1 2 1.72c.128.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91A16 16 0 0 0 14 16l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.572 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${u.phone}</span>`:''}
-          ${u.instagram?`<span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>@${u.instagram}</span>`:''}
-          ${u.nationality?`<span class="meta-chip">🇧🇷 ${u.nationality}</span>`:''}
+          <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>${esc(displayRole(u))}</span>
+          <span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>${esc(CAMPUS_LABELS[u.campus]||u.campus)}</span>
+          ${u.phone?`<span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.61 4.4 2 2 0 0 1 3.6 2.22h3a2 2 0 0 1 2 1.72c.128.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91A16 16 0 0 0 14 16l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.572 2.81.7A2 2 0 0 1 22 16.92z"/></svg>${esc(u.phone)}</span>`:''}
+          ${u.instagram?`<span class="meta-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>@${esc(u.instagram)}</span>`:''}
+          ${u.nationality?`<span class="meta-chip">🌍 ${esc(u.nationality)}</span>`:''}
           <span class="meta-chip" style="background:${u.status==='active'?'var(--success-bg)':'var(--danger-bg)'};color:${u.status==='active'?'var(--success)':'var(--danger)'};border-color:${u.status==='active'?'var(--success-border)':'var(--danger-border)'}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block"></span> ${u.status==='active'?'Active':'Inactive'}</span>
         </div>
-        ${u.bio?`<p style="font-size:13.5px;color:var(--muted);line-height:1.65;margin-top:12px;max-width:520px">${u.bio}</p>`:''}
+        ${u.bio?`<p style="font-size:13.5px;color:var(--muted);line-height:1.65;margin-top:12px;max-width:520px">${esc(u.bio)}</p>`:''}
       </div>
       <div class="profile-header-actions">${editBtn}${addDocBtn}${updatePerfBtn}${backBtn}</div>
     </div>
@@ -3734,18 +3812,20 @@ function buildProfileHTML(u,isMyProfile){
         <div class="profile-section-card">
           <div class="ps-title">Personal Information</div>
           <div class="profile-field"><div class="pf-label">Full Name</div><div class="pf-value">${esc(dashFix(u.first+' '+u.last))}${u.nickname?` <span style="font-size:11px;color:var(--muted);font-weight:400">(${esc(dashFix(u.nickname))})</span>`:''}</div></div>
-          <div class="profile-field"><div class="pf-label">Email</div><div class="pf-value">${u.email}</div></div>
-          <div class="profile-field"><div class="pf-label">Phone</div><div class="pf-value ${u.phone?'':'empty'}">${u.phone||'Not provided'}</div></div>
-          <div class="profile-field"><div class="pf-label">Instagram</div><div class="pf-value ${u.instagram?'':'empty'}">${u.instagram?'<a href="https://instagram.com/'+u.instagram+'" target="_blank" style="color:var(--blue)">@'+u.instagram+'</a>':'Not provided'}</div></div>
-          <div class="profile-field"><div class="pf-label">Nationality</div><div class="pf-value ${u.nationality?'':'empty'}">${u.nationality||'Not set'}</div></div>
-          <div class="profile-field"><div class="pf-label">Language</div><div class="pf-value ${u.language?'':'empty'}">${u.language||'Not set'}</div></div>
+          <div class="profile-field"><div class="pf-label">Email</div><div class="pf-value">${esc(u.email)}</div></div>
+          <div class="profile-field"><div class="pf-label">Phone</div><div class="pf-value ${u.phone?'':'empty'}">${u.phone?esc(u.phone):'Not provided'}</div></div>
+          <div class="profile-field"><div class="pf-label">Birthday</div><div class="pf-value ${birthdayLabel(u)?'':'empty'}">${esc(birthdayLabel(u))||'Not set'}</div></div>
+          <div class="profile-field"><div class="pf-label">Instagram</div><div class="pf-value ${u.instagram?'':'empty'}">${socialLink('instagram',u.instagram)||'Not provided'}</div></div>
+          <div class="profile-field"><div class="pf-label">LinkedIn</div><div class="pf-value ${u.linkedin?'':'empty'}">${socialLink('linkedin',u.linkedin)||'Not provided'}</div></div>
+          <div class="profile-field"><div class="pf-label">Nationality</div><div class="pf-value ${u.nationality?'':'empty'}">${esc(u.nationality)||'Not set'}</div></div>
+          <div class="profile-field"><div class="pf-label">Languages</div><div class="pf-value ${(u.languages||[]).length?'':'empty'}">${esc((u.languages||[]).join(', '))||'Not set'}</div></div>
         </div>
         <div class="profile-section-card">
           <div class="ps-title">Role & Position</div>
-          <div class="profile-field"><div class="pf-label">Role</div><div class="pf-value"><span class="role-badge ${ROLE_BADGE[u.role]}">${displayRole(u)}</span></div></div>
-          <div class="profile-field"><div class="pf-label">Job Title</div><div class="pf-value ${u.jobTitle?'':'empty'}">${u.jobTitle||'Not set'}</div></div>
-          <div class="profile-field"><div class="pf-label">Team</div><div class="pf-value ${teamNameOf(u)?'':'empty'}">${displayTeam(u)}</div></div>
-          <div class="profile-field"><div class="pf-label">Campus</div><div class="pf-value">${CAMPUS_LABELS[u.campus]||u.campus}</div></div>
+          <div class="profile-field"><div class="pf-label">Role</div><div class="pf-value"><span class="role-badge ${ROLE_BADGE[u.role]||''}">${esc(displayRole(u))}</span></div></div>
+          <div class="profile-field"><div class="pf-label">Job Title</div><div class="pf-value ${displayRole(u)?'':'empty'}">${esc(displayRole(u))||'Not set'}</div></div>
+          <div class="profile-field"><div class="pf-label">Team</div><div class="pf-value ${teamNameOf(u)?'':'empty'}">${esc(displayTeam(u))}</div></div>
+          <div class="profile-field"><div class="pf-label">Campus</div><div class="pf-value">${esc(CAMPUS_LABELS[u.campus]||u.campus)}</div></div>
           <div class="profile-field"><div class="pf-label">Manager</div><div class="pf-value ${managerNameOf(u)?'':'empty'}">${esc(dashFix(managerNameOf(u)))||'Not assigned'}</div></div>
           <div class="profile-field"><div class="pf-label">Monthly Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.monthly.target)}</div></div>
           <div class="profile-field"><div class="pf-label">Annual Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.annual.target)}</div></div>
@@ -3890,14 +3970,14 @@ function buildTeamCard(u){
   const up=u.perf.monthly;
   const pct=up.target>0?Math.round(up.actual/up.target*100):0;
   const color=pctColor(pct);
-  const avatarContent=u.photo?`<img src="${u.photo}" alt="">`:getInitials(u);
+  const avatarContent=u.photo?`<img src="${esc(u.photo)}" alt="">`:getInitials(u);
   // Show nickname in parentheses if exists
   const displayName=u.nickname?`${esc(dashFix(u.first))} <span style="color:var(--muted);font-weight:400;font-size:11px">(${esc(dashFix(u.nickname))})</span>`:esc(dashFix(u.first+' '+u.last.split(' ')[0]));
   return `<div class="team-member-card" onclick="viewUserProfile('${u.id}')">
     <div class="tm-avatar ${u.photo?'':avColor(u.id)}">${avatarContent}</div>
     <div class="tm-name">${displayName}</div>
     <div class="tm-chips">
-      <span class="role-badge ${ROLE_BADGE[u.role]}" style="font-size:10px;padding:2px 7px">${displayRole(u)}</span>
+      <span class="role-badge ${ROLE_BADGE[u.role]||''}" style="font-size:10px;padding:2px 7px">${esc(displayRole(u))}</span>
     </div>
     <div style="width:100%;margin-top:2px">
       <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--muted);margin-bottom:3px"><span>${esc(displayTeam(u))}</span><span style="color:${color}">${pct}%</span></div>
@@ -3910,6 +3990,76 @@ function buildTeamCard(u){
 // ═══════════════════════════════════════
 // EDIT PROFILE MODAL
 // ═══════════════════════════════════════
+// ── EDIT PROFILE PICKERS ─────────────────────────────────────────
+// The tick list is backed by this Set, not by the DOM: the filter box only
+// shows and hides rows, so a pick made before typing survives the search.
+let epLanguages = new Set();
+
+function buildNationalitySelect(current){
+  const cur = String(current||'').trim();
+  const all = NATIONALITIES.slice();
+  if(cur && !all.includes(cur)) all.push(cur);   // never lose what was typed before
+  all.sort(byName);
+  const sel = document.getElementById('ep-nationality');
+  sel.innerHTML = '<option value="">- Not set -</option>' +
+    all.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value = cur;
+}
+
+function buildLanguagePicker(selected){
+  epLanguages = new Set((selected||[]).map(x=>String(x||'').trim()).filter(Boolean));
+  const all = LANGUAGES.slice();
+  epLanguages.forEach(n=>{ if(!all.includes(n)) all.push(n); });
+  all.sort(byName);
+  document.getElementById('ep-lang-list').innerHTML = all.map(n=>
+    `<label class="lang-opt" data-name="${esc(n.toLowerCase())}">
+      <input type="checkbox" value="${esc(n)}"${epLanguages.has(n)?' checked':''} onchange="onLangToggle(this)">
+      <span>${esc(n)}</span>
+    </label>`).join('');
+  document.getElementById('ep-lang-filter').value = '';
+  filterLangList();
+  renderLangChips();
+}
+function onLangToggle(cb){
+  if(cb.checked) epLanguages.add(cb.value); else epLanguages.delete(cb.value);
+  renderLangChips();
+}
+function removeLang(name){
+  epLanguages.delete(name);
+  document.querySelectorAll('#ep-lang-list input[type=checkbox]')
+    .forEach(cb=>{ if(cb.value === name) cb.checked = false; });
+  renderLangChips();
+}
+function renderLangChips(){
+  const box = document.getElementById('ep-lang-chips');
+  const sel = [...epLanguages].sort(byName);
+  if(!sel.length){ box.innerHTML = '<span class="form-hint" style="margin:0">None selected</span>'; return; }
+  // The remove handler is bound by index rather than interpolated into an
+  // onclick, so a language name can never become markup.
+  box.innerHTML = sel.map((n,i)=>
+    `<span class="lang-chip">${esc(n)}<button type="button" class="lang-chip-x" data-i="${i}" aria-label="Remove">&times;</button></span>`).join('');
+  box.querySelectorAll('.lang-chip-x').forEach(btn=>{
+    btn.addEventListener('click', ()=>removeLang(sel[Number(btn.dataset.i)]));
+  });
+}
+function filterLangList(){
+  const q = document.getElementById('ep-lang-filter').value.trim().toLowerCase();
+  document.querySelectorAll('#ep-lang-list .lang-opt').forEach(el=>{
+    el.style.display = (!q || el.dataset.name.includes(q)) ? '' : 'none';
+  });
+}
+function selectedLanguages(){ return [...epLanguages].sort(byName); }
+
+function buildBirthdaySelects(day, month){
+  const ds = document.getElementById('ep-birth-day'), ms = document.getElementById('ep-birth-month');
+  ds.innerHTML = '<option value="">- Day -</option>' +
+    Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');
+  ms.innerHTML = '<option value="">- Month -</option>' +
+    MONTH_NAMES.map((n,i)=>`<option value="${i+1}">${n}</option>`).join('');
+  ds.value = day ? String(day) : '';
+  ms.value = month ? String(month) : '';
+}
+
 function openEditProfile(uid){
   const u=users.find(x=>x.id===uid); if(!u) return;
   editingProfileUserId=uid;
@@ -3918,7 +4068,8 @@ function openEditProfile(uid){
   document.getElementById('ep-first').value=u.first||'';
   document.getElementById('ep-last').value=u.last||'';
   document.getElementById('ep-nickname').value=u.nickname||'';
-  document.getElementById('ep-jobtitle').value=u.jobTitle||'';
+  // The job title is the cargo now, so it is shown rather than typed.
+  document.getElementById('ep-jobtitle-ro').value=displayRole(u)||'-';
   // Managers and directors move people between teams here; everyone else sees
   // the team read-only because membership is managed on the Teams page.
   const tSel=document.getElementById('ep-team-select'), tTxt=document.getElementById('ep-team'), tHint=document.getElementById('ep-team-hint');
@@ -3933,8 +4084,10 @@ function openEditProfile(uid){
   }
   document.getElementById('ep-phone').value=u.phone||'';
   document.getElementById('ep-instagram').value=u.instagram||'';
-  document.getElementById('ep-nationality').value=u.nationality||'';
-  document.getElementById('ep-language').value=u.language||'';
+  document.getElementById('ep-linkedin').value=u.linkedin||'';
+  buildNationalitySelect(u.nationality);
+  buildLanguagePicker(u.languages);
+  buildBirthdaySelects(u.birthDay, u.birthMonth);
   document.getElementById('ep-bio').value=u.bio||'';
   // Same show/hide shape as the Team control above.
   const sIn=document.getElementById('ep-start-date'), sRo=document.getElementById('ep-start-date-ro'),
@@ -3964,7 +4117,10 @@ const PROFILE_SAVE_ERRORS={
   name_required:'First and last name are required',
   nothing_to_update:'Nothing to save',
   start_date_forbidden:'Only your manager can set your start date',
-  bad_start_date:'That start date is not a valid date'
+  bad_start_date:'That start date is not a valid date',
+  bad_languages:'One of those languages could not be saved',
+  too_many_languages:'That is too many languages to save',
+  bad_birthday:'That birthday is not a valid day and month'
 };
 
 async function saveProfile(){
@@ -3975,11 +4131,16 @@ async function saveProfile(){
     first: document.getElementById('ep-first').value.trim(),
     last: document.getElementById('ep-last').value.trim(),
     nickname: document.getElementById('ep-nickname').value.trim(),
-    job_title: document.getElementById('ep-jobtitle').value.trim(),
+    // job_title is NOT sent: it is derived from the cargo now.
     phone: document.getElementById('ep-phone').value.trim(),
     instagram: document.getElementById('ep-instagram').value.trim().replace('@',''),
-    nationality: document.getElementById('ep-nationality').value.trim(),
-    language: document.getElementById('ep-language').value.trim(),
+    linkedin: document.getElementById('ep-linkedin').value.trim(),
+    nationality: document.getElementById('ep-nationality').value,
+    languages: selectedLanguages(),
+    birth_day: document.getElementById('ep-birth-day').value
+      ? Number(document.getElementById('ep-birth-day').value) : null,
+    birth_month: document.getElementById('ep-birth-month').value
+      ? Number(document.getElementById('ep-birth-month').value) : null,
     bio: document.getElementById('ep-bio').value.trim()
   };
   // Omitted entirely when this person may not set it, so an ordinary self-edit

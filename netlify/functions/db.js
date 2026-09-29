@@ -253,7 +253,46 @@ const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Ot
 function safeFileName(n){
   return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
 }
-const PROFILE_EDITABLE = ['first','last','nickname','job_title','phone','instagram','nationality','language','bio'];
+// job_title stays here so an old client cannot be broken by its removal, but
+// nothing sends it any more: the profile derives the job title from the cargo.
+const PROFILE_EDITABLE = ['first','last','nickname','job_title','phone','instagram','linkedin','nationality','language','bio'];
+// languages is text[] and the birthday parts are integers, so none of them can
+// go through the generic string path above - it would hand Postgres a string
+// for an array column and '' for an int. Each gets its own validated branch,
+// shaped like start_date's but WITHOUT the chefia gate: these are personal
+// details, self-editable exactly like bio and phone.
+const LANGUAGES_MAX = 30;      // one person, not a dictionary
+const LANGUAGE_MAX_LEN = 50;
+// Returns {ok:true, value:[...]} or {ok:false, error}.
+function normLanguages(v){
+  if(v===null || v===undefined) return { ok:true, value:[] };
+  if(!Array.isArray(v)) return { ok:false, error:'bad_languages' };
+  const cleaned = [];
+  for(const raw of v){
+    const t = (raw===null || raw===undefined) ? '' : String(raw).trim();
+    if(t === '') continue;                       // blanks are dropped, not stored
+    if(t.length > LANGUAGE_MAX_LEN) return { ok:false, error:'bad_languages' };
+    if(!cleaned.includes(t)) cleaned.push(t);    // a tick list cannot hold duplicates
+  }
+  if(cleaned.length > LANGUAGES_MAX) return { ok:false, error:'too_many_languages' };
+  return { ok:true, value: cleaned };
+}
+// day 1-31 / month 1-12, or null. Deliberately no year and no calendar check:
+// a birthday here is a day and a month, so 31 February is storable and
+// harmless rather than a validation argument.
+const BIRTH_RANGE = { birth_day:[1,31], birth_month:[1,12] };
+function normBirthPart(k, v){
+  if(v===null || v===undefined) return { ok:true, value:null };
+  // Number([14]) is 14 and Number(true) is 1, so the type is checked before
+  // any coercion - only a number or a numeric string may become a birthday.
+  if(typeof v !== 'number' && typeof v !== 'string') return { ok:false };
+  if(String(v).trim()==='') return { ok:true, value:null };
+  const n = Number(v);
+  if(!Number.isInteger(n)) return { ok:false };
+  const [lo,hi] = BIRTH_RANGE[k];
+  if(n < lo || n > hi) return { ok:false };
+  return { ok:true, value:n };
+}
 // start_date is a date column, so it is validated on its own rather than
 // joining PROFILE_EDITABLE, whose generic path would send '' to Postgres.
 // Returns {ok:true, value:null|'YYYY-MM-DD'} or {ok:false}.
@@ -439,7 +478,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
+          .select('id,first,last,nickname,email,role,campus,phone,instagram,linkedin,nationality,language,languages,birth_day,birth_month,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -878,6 +917,17 @@ exports.handler = async (event) => {
             patch[k] = (v===null || v===undefined) ? null : String(v).trim();
           }
         });
+        if(Object.prototype.hasOwnProperty.call(fields, 'languages')){
+          const ls = normLanguages(fields.languages);
+          if(!ls.ok) return json(400,{error:ls.error});
+          patch.languages = ls.value;
+        }
+        for(const bk of Object.keys(BIRTH_RANGE)){
+          if(!Object.prototype.hasOwnProperty.call(fields, bk)) continue;
+          const bp = normBirthPart(bk, fields[bk]);
+          if(!bp.ok) return json(400,{error:'bad_birthday'});
+          patch[bk] = bp.value;
+        }
         if(Object.prototype.hasOwnProperty.call(fields, 'start_date')){
           // Refused up front, before the single .update(patch) below, so a
           // forged start_date cannot carry other field writes in with it.
