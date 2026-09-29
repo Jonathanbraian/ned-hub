@@ -76,6 +76,7 @@
   --role-leader:#92400E;--role-leader-bg:rgba(252,211,77,.2);--role-leader-border:rgba(252,211,77,.5);
   --role-supervisor:#9A3412;--role-supervisor-bg:rgba(251,146,60,.2);--role-supervisor-border:rgba(251,146,60,.4);
   --role-director:#C2410C;--role-director-bg:#FFF7ED;--role-director-border:#FED7AA;
+  --role-admin:#4338CA;--role-admin-bg:#EEF2FF;--role-admin-border:#C7D2FE;
   --org-supervisor-bg:rgba(251,146,60,.06);--org-leader-bg:rgba(252,211,77,.06);
   /* ── status + accents ── */
   --status-online:#16A34A;--status-away:#D97706;--status-busy:#DC2626;--status-offline:#9CA3AF;
@@ -114,6 +115,7 @@ html[data-theme="dark"]{
   --role-leader:#FCD34D;--role-leader-bg:rgba(252,211,77,.12);--role-leader-border:rgba(252,211,77,.32);
   --role-supervisor:#FDBA74;--role-supervisor-bg:rgba(251,146,60,.14);--role-supervisor-border:rgba(251,146,60,.32);
   --role-director:#FCA55D;--role-director-bg:#33240F;--role-director-border:#5C441A;
+  --role-admin:#A5B4FC;--role-admin-bg:#1F1D3D;--role-admin-border:#3F3A78;
   --org-supervisor-bg:rgba(251,146,60,.1);--org-leader-bg:rgba(252,211,77,.08);
   --status-online:#5FD98A;--status-away:#F5B453;--status-busy:#FF8A8A;--status-offline:#64748B;
   --star:#FCD34D;
@@ -233,6 +235,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .rp-supervisor{background:var(--role-supervisor-bg);color:var(--role-supervisor);border:1px solid var(--role-supervisor-border)}
 .rp-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .rp-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
+.rp-admin{background:var(--role-admin-bg);color:var(--role-admin);border:1px solid var(--role-admin-border)}
 .btn-logout{font-family:'Rubik',sans-serif;font-size:12px;font-weight:500;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .15s}
 .btn-logout:hover{background:var(--bg);color:var(--text)}
 .nav-avatar-btn{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid var(--border2);overflow:hidden;flex-shrink:0;transition:border-color .15s;background:var(--light-blue);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue)}
@@ -462,6 +465,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .rb-supervisor{background:var(--role-supervisor-bg);color:var(--role-supervisor);border:1px solid var(--role-supervisor-border)}
 .rb-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .rb-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
+.rb-admin{background:var(--role-admin-bg);color:var(--role-admin);border:1px solid var(--role-admin-border)}
 .status-dot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
 .sdot{width:7px;height:7px;border-radius:50%}.sdot-active{background:var(--status-online)}.sdot-inactive{background:var(--status-offline)}
 .campus-chip{font-size:11px;font-weight:500;background:var(--bg);border:1px solid var(--border);padding:2px 9px;border-radius:5px;color:var(--muted)}
@@ -981,6 +985,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
   position:relative;
 }
 .org-node-card:hover{border-color:var(--border2);box-shadow:0 4px 16px rgba(0,50,255,.1);transform:translateY(-2px)}
+.org-node-card.admin{border-color:var(--role-admin-border);background:var(--role-admin-bg)}
 .org-node-card.director{border-color:var(--role-director-border);background:var(--role-director-bg)}
 .org-node-card.manager{border-color:var(--manager-border);background:var(--manager-bg)}
 .org-node-card.supervisor{border-color:var(--role-supervisor-border);background:var(--org-supervisor-bg)}
@@ -2213,6 +2218,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
           <option value="supervisor">Supervisor</option>
           <option value="manager">Manager</option>
           <option value="director">Director</option>
+          <option value="admin">Administrator</option>
         </select>
         <div class="form-hint">This is what the cargo can do in the Hub, not what it is called.</div>
       </div>
@@ -2451,7 +2457,20 @@ const ROLE_TARGETS = {
   supervisor: 22000,
   manager: 0, // defined per campus
   director: 0,
+  admin: 0,
 };
+
+// ── ROLE HIERARCHY ───────────────────────────────────────────────
+// Mirrors ROLE_RANK/rank/outranks in db.js. Every "who may act on whom"
+// rule used to be a hand-written `role !== 'director'`, repeated a dozen
+// times; one rank table replaces them all - you may act on anyone at your
+// own tier or below, never above. The server still decides; this is the UI
+// mirror. 'admin' has a rank before it exists as a tier, so adding it later
+// changes no behaviour on its own.
+const ROLE_RANK = { agent:0, specialist:0, executive:0, leader:1,
+  supervisor:2, manager:3, director:4, admin:5 };
+function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
+function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
 
 const CERT_LIST = [
   'NED College - Organisational Overview',
@@ -2766,7 +2785,7 @@ function aggregateTargetOf(list, p, pop, valueOf, units){
 // Teams this person runs, and the teams they oversee further down the line.
 function teamsOverseenBy(me){
   if(!me) return [];
-  if(me.role==='director'||me.role==='manager') return dbTeams.filter(t=>t.active!==false);
+  if(rank(me.role) >= ROLE_RANK.manager) return dbTeams.filter(t=>t.active!==false);
   const under=new Set([me.id, ...teamSubtreeOf(me.id).map(u=>u.id)]);
   return dbTeams.filter(t=>t.leader_id && under.has(t.leader_id));
 }
@@ -2810,8 +2829,7 @@ async function loadPerformance(){
 function canUpdateFor(target){
   const me = users.find(u=>u.id===currentUserId);
   if(!me || !target || !canUpdatePerf()) return false;
-  if(me.role==='director') return true;
-  if(me.role==='manager') return target.role!=='director';
+  if(rank(me.role) >= ROLE_RANK.manager) return outranks(me.role, target.role);
   if(me.role==='supervisor') return target.reports_to===me.id || target.id===me.id;
   return false;
 }
@@ -2845,7 +2863,15 @@ let perfViewMode='team'; // 'team' | 'campus' | 'byteam' | 'individual'
 // ═══════════════════════════════════════
 // Never let an unexpected role value white-screen the app.
 const ROLE_CFG_FALLBACK = {label:'Team Member', pill:'rp-agent', mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false};
-function roleCfg(role){ return ROLE_CFG[role] || ROLE_CFG_FALLBACK; }
+// An unknown value below manager falls back to the harmless agent config.
+// One at or above manager must NOT: dropping it to Team Member would strip a
+// real leader of their nav and their team, which is the failure mode this
+// whole tier change exists to avoid. Fail open at the top, closed at the bottom.
+const ROLE_CFG_LEAD_FALLBACK = {label:'Leadership', pill:'rp-manager', mgr:true, leader:true, canUpdatePerf:true, canSeeTeam:true};
+function roleCfg(role){
+  if(ROLE_CFG[role]) return ROLE_CFG[role];
+  return (rank(role) >= ROLE_RANK.manager) ? ROLE_CFG_LEAD_FALLBACK : ROLE_CFG_FALLBACK;
+}
 
 const ROLE_CFG = {
   agent:      {label:'Agent',           pill:'rp-agent',      mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false},
@@ -2855,14 +2881,15 @@ const ROLE_CFG = {
   supervisor: {label:'Supervisor',      pill:'rp-supervisor', mgr:false, leader:true,  canUpdatePerf:true,  canSeeTeam:true},
   manager:    {label:'Manager',         pill:'rp-manager',    mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
   director:   {label:'Director',        pill:'rp-director',   mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
+  admin:      {label:'Administrator',   pill:'rp-admin',      mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
 };
 
-const ROLE_LABELS = {agent:'Agent',specialist:'Sales Specialist',executive:'Sales Executive',leader:'Team Leader',supervisor:'Supervisor',manager:'Manager',director:'Director'};
-const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent',leader:'rb-leader',supervisor:'rb-supervisor',manager:'rb-manager',director:'rb-director'};
+const ROLE_LABELS = {agent:'Agent',specialist:'Sales Specialist',executive:'Sales Executive',leader:'Team Leader',supervisor:'Supervisor',manager:'Manager',director:'Director',admin:'Administrator'};
+const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent',leader:'rb-leader',supervisor:'rb-supervisor',manager:'rb-manager',director:'rb-director',admin:'rb-admin'};
 const CAMPUS_LABELS = {dublin:'Dublin',limerick:'Limerick',both:'Both'};
 
 // Roles that can update performance
-function canUpdatePerf(){return ['supervisor','manager','director'].includes(currentRole);}
+function canUpdatePerf(){return rank(currentRole) >= ROLE_RANK.supervisor;}
 
 // Who this person reports to, resolved through reports_to
 function managerNameOf(u){
@@ -2875,11 +2902,11 @@ function managerNameOf(u){
 function getTeamForUser(uid){
   const me = users.find(u=>u.id===uid);
   if(!me) return [];
-  if(me.role==='director') return users.filter(u=>u.id!==uid);
-  if(me.role==='manager')  return users.filter(u=>u.id!==uid && u.role!=='director');
-  // Supervisor: their direct reports
+  if(rank(me.role) >= ROLE_RANK.manager)
+    return users.filter(u=>u.id!==uid && outranks(me.role, u.role));
+  // Supervisor: their direct reports, none of whom may outrank them
   if(me.role==='supervisor'){
-    return users.filter(u=>u.id!==uid && u.reports_to===uid && u.role!=='director' && u.role!=='manager');
+    return users.filter(u=>u.id!==uid && u.reports_to===uid && outranks(me.role, u.role));
   }
   // Leader: the people who report to them
   if(me.role==='leader'){
@@ -3545,8 +3572,7 @@ function canEditProfile(targetId){
   if(targetId===currentUserId) return true;
   const t=users.find(u=>u.id===targetId);
   if(!t) return false;
-  if(currentRole==='director') return true;
-  if(currentRole==='manager') return t.role!=='director';
+  if(rank(currentRole) >= ROLE_RANK.manager) return outranks(currentRole, t.role);
   if(currentRole==='supervisor'||currentRole==='leader')
     return teamSubtreeOf(currentUserId).some(x=>x.id===targetId);
   return false;
@@ -3557,7 +3583,7 @@ function canViewProfile(targetId){ return canEditProfile(targetId); }
 // one exception is a director editing their own profile, because nobody sits
 // above them to do it. The server refuses regardless of what the UI shows.
 function allowStartDate(targetId){
-  return String(currentUserId) !== String(targetId) || currentRole === 'director';
+  return String(currentUserId) !== String(targetId) || rank(currentRole) >= ROLE_RANK.director;
 }
 
 function canAddDocuments(targetId){return canEditProfile(targetId);}
@@ -3815,7 +3841,7 @@ function renderTeamProfiles(roleF=''){
   const leaders=allTeam.filter(u=>leaderRoles.includes(u.role));
   const members=allTeam.filter(u=>!leaderRoles.includes(u.role));
 
-  const canShowLeaders=cfg.canSeeTeam&&(currentRole==='supervisor'||currentRole==='manager'||currentRole==='director');
+  const canShowLeaders=cfg.canSeeTeam&&rank(currentRole) >= ROLE_RANK.supervisor;
 
   // Leaders section
   const leadersSection=document.getElementById('team-leaders-section');
@@ -4179,7 +4205,10 @@ async function deleteDocument(uid, docId){
 // ═══════════════════════════════════════
 // USER MANAGEMENT TABLE — real data via db.js
 // ═══════════════════════════════════════
-function isUserAdmin(){ return currentRole === 'manager' || currentRole === 'director'; }
+// "Admin" here is the UI sense - who may reach the management pages - and is
+// manager and up, which now includes the 'admin' tier. The gateway's isMgr()
+// is the same floor and still has the final say.
+function isUserAdmin(){ return rank(currentRole) >= ROLE_RANK.manager; }
 
 // ═══════════════════════════════════════
 // LOCATIONS - Manager / Director
@@ -4274,7 +4303,7 @@ async function refreshAfterLocationChange(){
 // ═══════════════════════════════════════
 function teamMembers(teamId){ return users.filter(u=>String(u.team_id)===String(teamId)); }
 function leaderCandidates(){
-  return users.filter(u=>['leader','supervisor','manager','director'].includes(u.role))
+  return users.filter(u=>rank(u.role) >= ROLE_RANK.leader)
               .sort((a,b)=>(a.first+a.last).localeCompare(b.first+b.last));
 }
 
@@ -4467,7 +4496,7 @@ const ROLE_CRUD_ERRORS={
   bad_base_level:'Pick a permission level',
   bad_number:'Targets must be zero or more',
   forbidden:"You don't have permission for this",
-  forbidden_role:"You can't manage a director-level cargo",
+  forbidden_role:"You can't manage a cargo above your own level",
   in_use:'This cargo is assigned to users - deactivate it instead',
   not_found:'That cargo no longer exists'
 };
@@ -4639,7 +4668,7 @@ function renderUsers(){
 function updateStats(){
   document.getElementById('stat-total').textContent=dbUsers.length;
   document.getElementById('stat-active').textContent=dbUsers.filter(u=>u.status==='active').length;
-  document.getElementById('stat-managers').textContent=dbUsers.filter(u=>['supervisor','manager','director'].includes(u.role)).length;
+  document.getElementById('stat-managers').textContent=dbUsers.filter(u=>rank(u.role) >= ROLE_RANK.supervisor).length;
   document.getElementById('stat-temp').textContent=dbUsers.filter(u=>u.tempPw).length;
 }
 
@@ -4705,8 +4734,7 @@ function openBackdrop(id){document.getElementById(id).classList.add('open');}
 function fillReportsTo(){
   const sel=document.getElementById('au-reports-to');
   if(!sel) return;
-  const LEADS=['leader','supervisor','manager','director'];
-  const opts=dbUsers.filter(u=>LEADS.includes(u.role))
+  const opts=dbUsers.filter(u=>rank(u.role) >= ROLE_RANK.leader)
     .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} &mdash; ${esc(displayRole(u))}</option>`)
     .join('');
   sel.innerHTML='<option value="">&mdash; None (top level) &mdash;</option>'+opts;
@@ -4843,7 +4871,7 @@ function renderHomePerf(){
   if(!me) return;
   const p='monthly';
   const el=document.getElementById('home-perf-content');
-  const isLeader=['supervisor','manager','director','leader'].includes(me.role);
+  const isLeader=rank(me.role) >= ROLE_RANK.leader;
 
   if(!isLeader){
     // INDIVIDUAL widget
@@ -6388,8 +6416,7 @@ document.querySelectorAll('.report-include-check').forEach(lbl=>{
 function reportPopulation(){
   const me=users.find(u=>u.id===currentUserId);
   if(!me) return [];
-  if(me.role==='director') return users.slice();
-  if(me.role==='manager')  return users.filter(u=>u.role!=='director');
+  if(rank(me.role) >= ROLE_RANK.manager) return users.filter(u=>outranks(me.role, u.role));
   if(me.role==='supervisor'||me.role==='leader')
     return users.filter(u=>String(u.reports_to)===String(me.id)||u.id===me.id);
   return [me];
@@ -6949,7 +6976,7 @@ function renderOrgChart(){
   // Does this person pass the active filter?
   function pass(u){
     // Leadership is never filtered
-    if(['director','manager','supervisor','leader'].includes(u.role)) return true;
+    if(rank(u.role) >= ROLE_RANK.leader) return true;
     if(orgCampus==='dublin'  && u.campus!=='dublin'  && u.campus!=='both') return false;
     if(orgCampus==='limerick'&& u.campus!=='limerick' && u.campus!=='both') return false;
     if(!orgTeams.has('all') && !orgTeams.has(teamFilterKey(u))) return false;
@@ -6960,12 +6987,16 @@ function renderOrgChart(){
   function directReports(id){
     return users.filter(u=>u.reports_to===id && u.id!==id);
   }
-  const BRANCH_ROLES=['manager','supervisor','leader'];
+  // Anyone at leader tier or above opens a branch. This used to be a literal
+  // list without 'director', which was harmless only while a director was
+  // always a root; with a tier above them a director has a parent, and would
+  // otherwise render as a childless leaf with their whole org hidden.
+  const isBranch=r=>rank(r) >= ROLE_RANK.leader;
   const LEAF_ROLES=['agent','specialist','executive'];
   // A node renders as its own kind of subtree, whatever level it sits at.
   function subtree(u){
     if(u.role==='leader') return leaderTree(u);
-    if(BRANCH_ROLES.includes(u.role)) return branchTree(u);
+    if(isBranch(u.role)) return branchTree(u);
     return `<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(u)}</div>`;
   }
 
@@ -6984,7 +7015,7 @@ function renderOrgChart(){
   // Manager / supervisor subtree: leadership branches, then leaves grouped by team
   function branchTree(node){
     const rpts=directReports(node.id);
-    const branches=rpts.filter(u=>BRANCH_ROLES.includes(u.role));
+    const branches=rpts.filter(u=>isBranch(u.role));
     const leaves=rpts.filter(u=>LEAF_ROLES.includes(u.role)).filter(pass);
     const suffix=node.role==='manager'?' (Direct)':'';
 
