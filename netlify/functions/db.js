@@ -39,6 +39,10 @@ function isMgr(role){ return rank(role) >= ROLE_RANK.manager; }
 // its own list. Membership here grants READ scope and nothing else: every
 // write gate is rank- or isMgr-based and senior_exec is rank 0.
 const VIEW_ALL_ROLES = ['senior_exec'];
+// Tiers that can have people reporting to them. NOT the same question as rank:
+// 'senior_exec' sits at rank 0 and reads the whole company, but leads nobody,
+// and the individual contributors lead nobody either.
+const LEADER_ROLES = new Set(['leader','supervisor','manager','director','admin']);
 function seesEverything(role){ return VIEW_ALL_ROLES.includes(role); }
 
 const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
@@ -856,16 +860,21 @@ exports.handler = async (event) => {
           .select('id,role,reports_to,status').eq('id', raw).single();
         if(!boss || boss.status === 'inactive') return json(400,{error:'bad_manager'});
         if(String(boss.id) === String(tgt.id)) return json(400,{error:'self_manager'});
-        // A manager is a HIGHER tier than their report - strictly, so two peers
-        // can never be made to manage each other.
-        if(rank(boss.role) <= rank(tgt.role)) return json(403,{error:'manager_not_senior'});
+        // Two separate questions. First: can this tier lead anyone at all? An
+        // agent or a senior_exec cannot, whatever their rank.
+        if(!LEADER_ROLES.has(boss.role)) return json(400,{error:'manager_not_leader'});
+        // Second: they must be at the report's level or above. Same-rank is
+        // allowed - one supervisor may run another - which is exactly why the
+        // cycle walk below is now load-bearing rather than belt-and-braces.
+        if(rank(boss.role) < rank(tgt.role)) return json(403,{error:'manager_not_senior'});
         // And you cannot hand out a boss who outranks you.
         if(rank(me.role) < rank(boss.role)) return json(403,{error:'forbidden'});
 
-        // The strict rank rule above makes a cycle impossible among rows this
-        // action wrote, but set_member_team sets reports_to from a team's
-        // leader with NO rank check, so the existing tree can already contain
-        // edges that do not climb. Walk it for real, bounded, from one read.
+        // With same-rank bosses allowed, this action can now close a loop on
+        // its own - A under B and then B under A, both supervisors - so the
+        // walk is load-bearing, not a safety net. set_member_team also writes
+        // reports_to from a team's leader with no rank check at all, which can
+        // leave edges that do not climb. Walk it for real, bounded, one read.
         const { data: allRows } = await admin.from('profiles').select('id,reports_to');
         const parentOf = {};
         (allRows||[]).forEach(r=>{ parentOf[r.id] = r.reports_to; });
