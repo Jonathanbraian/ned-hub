@@ -30,9 +30,11 @@
 <meta name="description" content="NED College Sales Hub - internal sales platform for the Dublin and Limerick teams.">
 <!-- Manifest -->
 <link rel="manifest" id="pwa-manifest">
-<!-- Apple touch icons (generated from logo) -->
-<link rel="apple-touch-icon" sizes="180x180" href="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300">
-<link rel="icon" type="image/png" sizes="32x32" href="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300">
+<!-- Favicons and touch icons, served from the repo root next to this file -->
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <title>NED Sales Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
@@ -191,6 +193,15 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 36px;height:64px;gap:16px}
 .nav-logo{display:flex;align-items:center;gap:12px;flex-shrink:0;cursor:pointer}
 .nav-logo img{height:34px}
+/* ── BRAND WORDMARK ──────────────────────────────────────────────
+   Two variants of the same lockup, one per theme, swapped by CSS alone.
+   The <head> bootstrap sets data-theme before this sheet parses, so the
+   right one is painted first - no flash, and no JS in the swap at all.
+   No attribute (JS off entirely) falls back to the light-background art. */
+.brand-logo{display:inline-block}
+.brand-logo.brand-dark{display:none}
+html[data-theme="dark"] .brand-logo.brand-light{display:none}
+html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .nav-div{width:1px;height:26px;background:var(--border)}
 .nav-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
 .nav-links{display:flex;gap:2px;list-style:none;flex:1;flex-wrap:wrap;align-items:center}
@@ -1159,7 +1170,8 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 <div id="login-screen">
   <div class="login-left">
     <div class="login-logo">
-      <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300" alt="NED College" onerror="this.style.display='none'">
+      <img class="brand-logo brand-light" src="assets/logo-light.png" alt="SalesHub" onerror="this.style.display='none'">
+      <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="SalesHub" onerror="this.style.display='none'">
       <div class="ll-div"></div><span class="ll-label">Sales Hub</span>
     </div>
     <h1 class="login-heading">Welcome back</h1>
@@ -1190,7 +1202,8 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 <div id="change-pw-screen">
   <div class="change-pw-card">
     <div class="login-logo">
-      <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300" alt="NED College" onerror="this.style.display='none'">
+      <img class="brand-logo brand-light" src="assets/logo-light.png" alt="SalesHub" onerror="this.style.display='none'">
+      <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="SalesHub" onerror="this.style.display='none'">
       <div class="ll-div"></div><span class="ll-label">Sales Hub</span>
     </div>
     <div class="change-pw-badge">
@@ -1218,7 +1231,8 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 <div id="app">
   <nav class="nav">
     <div class="nav-logo" onclick="showPage('home')">
-      <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300" alt="NED College" style="height:34px" onerror="this.style.display='none'">
+      <img class="brand-logo brand-light" src="assets/logo-light.png" alt="SalesHub" style="height:34px" onerror="this.style.display='none'">
+      <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="SalesHub" style="height:34px" onerror="this.style.display='none'">
       <div class="nav-div"></div><span class="nav-label">Sales Hub</span>
     </div>
     <ul class="nav-links" id="nav-links"></ul>
@@ -1934,7 +1948,8 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 
   <footer class="footer">
     <div class="footer-l">
-      <img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w200" alt="" style="height:20px" onerror="this.style.display='none'">
+      <img class="brand-logo brand-light" src="assets/logo-light.png" alt="" style="height:20px" onerror="this.style.display='none'">
+      <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="" style="height:20px" onerror="this.style.display='none'">
       <span class="footer-copy">Sales Hub - Internal use only</span>
     </div>
     <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a></div>
@@ -2137,7 +2152,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 
 <!-- PWA INSTALL BANNER -->
 <div class="pwa-install-banner" id="pwa-install-banner">
-  <div class="pwa-install-icon"><img src="https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300" alt="NED"></div>
+  <div class="pwa-install-icon"><img src="assets/icon-192.png" alt="Sales Hub"></div>
   <div class="pwa-install-text"><strong>Install NED Sales Hub</strong><span>Add to home screen for quick access</span></div>
   <div class="pwa-install-btns">
     <button class="pwa-btn-install" id="pwa-btn-install">Install App</button>
@@ -6390,7 +6405,9 @@ async function deleteMeeting(id){
 // ═══════════════════════════════════════════════════
 function setupPWA(){
   // ── Manifest ──────────────────────────────────────
-  const LOGO='https://lh3.googleusercontent.com/sitesv/AA5AbUCBgr2Tl503SJ-wE-fyw-iIwwXaDobEfr7u2YPt23TFGtIMGLe5vuFScdpDMCOStn3DkrvagDXGvR-x-jiglCnzxnO9xQ0_XDxZ-NZcQEDKHvjw_MVEVI43_bDGmhN8y7_PPwk0E8io3bAIyPrAgfs_00_PyJvrdZsQF8H4LniBZZq2BkztcSDE9nk=w300';
+  // Absolute, derived from the page, so the Blob manifest (whose own URL is a
+  // blob:) still resolves them against the site rather than against itself.
+  const A = new URL('assets/', location.href).href;
   const manifest={
     name:'NED College Sales Hub',
     short_name:'NED Sales',
@@ -6403,14 +6420,15 @@ function setupPWA(){
     background_color: currentTheme()==='dark' ? '#0F1526' : '#F4F6FB',
     categories:['business','productivity'],
     icons:[
-      {src:LOGO,sizes:'72x72',  type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'96x96',  type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'128x128',type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'144x144',type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'152x152',type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'192x192',type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'384x384',type:'image/png',purpose:'any maskable'},
-      {src:LOGO,sizes:'512x512',type:'image/png',purpose:'any maskable'},
+      {src:A+'icon-72.png',  sizes:'72x72',   type:'image/png'},
+      {src:A+'icon-96.png',  sizes:'96x96',   type:'image/png'},
+      {src:A+'icon-128.png', sizes:'128x128', type:'image/png'},
+      {src:A+'icon-144.png', sizes:'144x144', type:'image/png'},
+      {src:A+'icon-152.png', sizes:'152x152', type:'image/png'},
+      {src:A+'icon-192.png', sizes:'192x192', type:'image/png', purpose:'any'},
+      {src:A+'icon-384.png', sizes:'384x384', type:'image/png'},
+      {src:A+'icon-512.png', sizes:'512x512', type:'image/png', purpose:'any'},
+      {src:A+'icon-maskable-512.png', sizes:'512x512', type:'image/png', purpose:'maskable'},
     ],
     shortcuts:[
       {name:'Performance',short_name:'Perf',url:window.location.href+'#performance',description:'View team performance'},
@@ -6440,7 +6458,7 @@ self.addEventListener('fetch',e=>{
 });
 self.addEventListener('push',e=>{
   const data=e.data?.json()||{title:'NED Sales',body:'New notification'};
-  e.waitUntil(self.registration.showNotification(data.title,{body:data.body,icon:'${LOGO}',badge:'${LOGO}',vibrate:[200,100,200]}));
+  e.waitUntil(self.registration.showNotification(data.title,{body:data.body,icon:'${A+'icon-192.png'}',badge:'${A+'saleshub-symbol.png'}',vibrate:[200,100,200]}));
 });
 `;
   if('serviceWorker' in navigator){
