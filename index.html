@@ -2366,6 +2366,11 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
         <input class="form-input" type="text" id="ep-team" readonly>
         <div class="form-hint" id="ep-team-hint">Managed in Teams</div>
       </div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Cargo</label>
+        <select class="form-select" id="ep-cargo-select" style="display:none"></select>
+        <input class="form-input" type="text" id="ep-cargo" readonly>
+        <div class="form-hint" id="ep-cargo-hint">Managed in Cargos</div>
+      </div><div class="form-group"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">LinkedIn</label><input class="form-input" type="text" id="ep-linkedin" placeholder="username or full profile link"></div><div class="form-group"><label class="form-label">Nationality</label><select class="form-select" id="ep-nationality"></select></div></div>
       <div class="form-group"><label class="form-label">Languages</label>
@@ -2697,6 +2702,40 @@ function fillRoleFilters(){
   if(um){ const v=um.value; um.innerHTML='<option value="">All roles</option>'+opts; um.value=v; }
   const pf=document.getElementById('perf-filter-role');
   if(pf){ const v=pf.value; pf.innerHTML='<option value="">All Roles</option>'+opts; pf.value=v; }
+}
+// Who may hand out a cargo, mirrored from set_user_role in db.js purely so the
+// UI matches; the server decides. Three separate questions: are you a manager
+// type, is this someone else, and do you outrank them today.
+function canChangeCargoOf(targetId){
+  if(String(targetId) === String(currentUserId)) return false;
+  if(!isUserAdmin()) return false;
+  const t = users.find(u=>u.id===targetId);
+  return !!t && outranks(currentRole, t.role);
+}
+// Only cargos at or below the viewer's own tier: a manager never sees a
+// director cargo on the list, so they cannot pick one and be refused.
+function assignableCargos(){
+  // The manager-type floor lives here too, not only in canChangeCargoOf: a
+  // supervisor outranks an agent cargo on rank alone, and this list must never
+  // read as "cargos a supervisor may hand out".
+  if(!isUserAdmin()) return [];
+  return activeCargos().filter(r=>outranks(currentRole, r.base_level));
+}
+function fillAssignableCargoSelect(selId, selected){
+  const sel=document.getElementById(selId);
+  if(!sel) return;
+  const list=assignableCargos();
+  const rows=list.map(r=>({ id:r.id, label:dashFix(r.name) }));
+  // Two ways the prefill would otherwise lie, and both would SILENTLY change
+  // the person's cargo on save: their current one was deactivated after it was
+  // given to them, or they have no cargo at all. Keep a matching option for
+  // each so "unchanged" stays selectable.
+  const cur = (selected!=null) ? rolesById[selected] : null;
+  if(cur && !list.some(r=>String(r.id)===String(cur.id)))
+    rows.unshift({ id:cur.id, label:dashFix(cur.name)+' (inactive)' });
+  if(selected==null) rows.unshift({ id:'', label:'- Not set -' });
+  sel.innerHTML=rows.map(r=>`<option value="${esc(r.id)}">${esc(r.label)}</option>`).join('');
+  sel.value=(selected!=null)?String(selected):'';
 }
 function fillCargoSelect(selId, selected){
   const sel=document.getElementById(selId);
@@ -4082,6 +4121,20 @@ function openEditProfile(uid){
     tTxt.value=displayTeam(u);
     tHint.textContent='Managed in Teams';
   }
+  // Cargo: the same show/hide shape as Team above. A cargo change is what
+  // gives or removes powers, so it is chefia-only and never about yourself.
+  const cSel=document.getElementById('ep-cargo-select'), cTxt=document.getElementById('ep-cargo'),
+        cHint=document.getElementById('ep-cargo-hint');
+  if(canChangeCargoOf(uid)){
+    fillAssignableCargoSelect('ep-cargo-select', u.role_id);
+    cSel.style.display=''; cTxt.style.display='none';
+    cHint.textContent='Sets what this person can do in the Hub, from their next sign-in.';
+  } else {
+    cSel.style.display='none'; cTxt.style.display='';
+    cTxt.value=displayRole(u)||'-';
+    cHint.textContent=(String(uid)===String(currentUserId))
+      ? 'You cannot change your own cargo.' : 'Managed in Cargos';
+  }
   document.getElementById('ep-phone').value=u.phone||'';
   document.getElementById('ep-instagram').value=u.instagram||'';
   document.getElementById('ep-linkedin').value=u.linkedin||'';
@@ -4123,6 +4176,16 @@ const PROFILE_SAVE_ERRORS={
   bad_birthday:'That birthday is not a valid day and month'
 };
 
+const ROLE_CHANGE_ERRORS={
+  forbidden:"You can't change this person's cargo",
+  out_of_scope:"You can't change this person's cargo",
+  forbidden_role:"You can't assign a cargo above your level",
+  cannot_change_own_role:"You can't change your own cargo",
+  role_not_found:'That cargo no longer exists',
+  role_inactive:'That cargo is inactive',
+  not_found:'That person no longer exists'
+};
+
 async function saveProfile(){
   const uid=document.getElementById('ep-uid').value;
   const u=users.find(x=>x.id===uid); if(!u) return;
@@ -4149,6 +4212,18 @@ async function saveProfile(){
   if(!fields.first||!fields.last){ showToast('First and last name are required.','error'); return; }
   const r=await callDb('update_profile',{ user_id:uid, fields });
   if(!r||!r.ok){ showToast(PROFILE_SAVE_ERRORS[r&&r.error]||'Could not save this profile','error'); return; }
+
+  // The cargo is its own action too: role and role_id never travel through
+  // update_profile, whose allowlist has neither.
+  const cSel2=document.getElementById('ep-cargo-select');
+  if(cSel2 && cSel2.style.display!=='none'){
+    const wantRole=cSel2.value?Number(cSel2.value):null;
+    if(wantRole!=null && String(wantRole)!==String(u.role_id||'')){
+      const rr=await callDb('set_user_role',{ user_id:uid, role_id:wantRole });
+      if(!rr||!rr.ok) showToast(
+        (ROLE_CHANGE_ERRORS[rr&&rr.error]||'The cargo could not be changed')+' - the rest was saved.','warning');
+    }
+  }
 
   // Team membership is a separate action, and only admins see the picker.
   const tSel=document.getElementById('ep-team-select');
