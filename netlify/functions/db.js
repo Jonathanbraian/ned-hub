@@ -825,6 +825,36 @@ exports.handler = async (event) => {
         if(error) return json(500,{error:'delete_failed', detail:error.message});
         return json(200,{ ok:true });
       }
+      // Changing someone's cargo changes what they can DO, so it is its own
+      // action with its own guards rather than a field on update_profile -
+      // whose allowlist deliberately has no role or role_id in it.
+      case 'set_user_role': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        // Nobody promotes themselves, at any tier. Checked before the target is
+        // even loaded, so the reason is never confused with a scope failure.
+        if(String(uid) === String(me.id)) return json(403,{error:'cannot_change_own_role'});
+        const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        // Two separate questions: may you act on this PERSON, and may you hand
+        // out this CARGO. A manager can do neither to a director.
+        if(!outranks(me.role, tgt.role)) return json(403,{error:'out_of_scope'});
+        if(!p.role_id) return json(400,{error:'missing_role_id'});
+        const { data: cargo } = await admin.from('roles')
+          .select('id,base_level,active').eq('id', p.role_id).single();
+        if(!cargo) return json(404,{error:'role_not_found'});
+        if(cargo.active === false) return json(400,{error:'role_inactive'});
+        if(!ROLE_LEVELS.includes(cargo.base_level)) return json(400,{error:'bad_role'});
+        if(!outranks(me.role, cargo.base_level)) return json(403,{error:'forbidden_role'});
+        // role and role_id move together, exactly as create_user sets them.
+        // team_id and reports_to are somebody else's action and stay put.
+        const { error } = await admin.from('profiles')
+          .update({ role: cargo.base_level, role_id: cargo.id }).eq('id',uid);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, role: cargo.base_level, role_id: cargo.id });
+      }
       case 'set_member_team': {
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
