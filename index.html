@@ -2540,6 +2540,11 @@ function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); 
 // the whole company" used to be the same predicate; a read-only viewer breaks
 // that, so breadth of VIEW gets its own list and never touches a write gate.
 const VIEW_ALL_ROLES = ['senior_exec'];
+// Mirrors LEADER_ROLES in db.js: tiers that can have people reporting to them.
+// Deliberately NOT ROLE_CFG[x].leader - that flag is true for 'senior_exec'
+// too, purely so the tier can open the leadership VIEW screens, and a viewer
+// who leads nobody must never appear as a candidate manager.
+const LEADER_ROLES = new Set(['leader','supervisor','manager','director','admin']);
 function seesEverything(role){ return VIEW_ALL_ROLES.includes(role); }
 
 const CERT_LIST = [
@@ -2763,7 +2768,8 @@ function assignableManagersFor(target){
   return users
     .filter(u => u.id !== target.id
               && u.status !== 'inactive'
-              && rank(u.role) > rank(target.role)
+              && LEADER_ROLES.has(u.role)
+              && rank(u.role) >= rank(target.role)
               && rank(currentRole) >= rank(u.role))
     .sort((a,b) => rank(b.role) - rank(a.role)
                 || (a.first+' '+a.last).localeCompare(b.first+' '+b.last));
@@ -3818,10 +3824,29 @@ async function renderMyProfile(){
   el.innerHTML=buildProfileHTML(me,true);
 }
 
+// The page currently on screen, so a save can redraw what the person is
+// actually looking at instead of throwing them somewhere else.
+function activePageName(){
+  const el=document.querySelector('.page.active');
+  return el ? el.id.replace(/^page-/,'') : '';
+}
+// Whose profile #page-view-profile is showing, so it can be refreshed in place.
+let viewingProfileId = null;
+// Refill the open profile card WITHOUT navigating. Deliberately not
+// viewUserProfile(), which calls showPage() and scrolls to the top.
+async function refreshOpenProfile(){
+  const el=document.getElementById('view-profile-content');
+  if(!el || !viewingProfileId) return;
+  await loadProfileDetail(viewingProfileId);
+  const u=users.find(x=>x.id===viewingProfileId);
+  if(u) el.innerHTML=buildProfileHTML(u, viewingProfileId===currentUserId);
+}
+
 async function viewUserProfile(uid){
   if(!canViewProfile(uid)){ showToast("You don't have access to that profile.",'warning'); return; }
   const el=document.getElementById('view-profile-content');
   el.innerHTML=PROFILE_LOADING;
+  viewingProfileId=uid;
   showPage('view-profile');
   const r=await loadProfileDetail(uid);
   if(!r){ el.innerHTML='<div style="padding:60px;text-align:center;color:var(--muted)">Profile not available.</div>'; return; }
@@ -4262,7 +4287,8 @@ const MANAGER_CHANGE_ERRORS={
   forbidden:"You can't change this person's manager",
   out_of_scope:"You can't change this person's manager",
   cannot_change_own_manager:"You can't change your own manager",
-  manager_not_senior:'The manager must be a higher-level role',
+  manager_not_leader:'The manager must be a leader role',
+  manager_not_senior:'The manager must be the same level or higher',
   would_create_cycle:'That would create a loop in the hierarchy',
   self_manager:'Somebody cannot report to themselves',
   bad_manager:'That person cannot be a manager',
@@ -4346,12 +4372,18 @@ async function saveProfile(){
   await loadDirectory();
   await loadProfileDetail(uid);
   const fresh=users.find(x=>x.id===uid)||u;
-  if(uid===currentUserId){ await renderMyProfile(); updateNavAvatar(fresh); }
-  else await viewUserProfile(uid);
+  if(uid===currentUserId) updateNavAvatar(fresh);
+  // Redraw the page they are ACTUALLY on. This used to call viewUserProfile(),
+  // which calls showPage() - so saving an edit made from the Users page or the
+  // org chart threw the editor onto the profile page and scrolled them to the
+  // top of it. Nothing here navigates, reloads or signs anybody out.
+  const here=activePageName();
+  if(here==='my-profile') await renderMyProfile();
+  else if(here==='view-profile') await refreshOpenProfile();
   renderTeamProfiles();
   // A manager change reshapes the hierarchy, so the chart is redrawn when open.
-  if(document.getElementById('page-orgchart')?.classList.contains('active')) renderOrgChart();
-  if(document.getElementById('page-users')?.classList.contains('active')) await refreshUserManagement();
+  if(here==='orgchart') renderOrgChart();
+  if(here==='users') await refreshUserManagement();
   showToast(`${fresh.first} ${fresh.last}'s profile updated.`,'success');
 }
 
