@@ -2350,7 +2350,11 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
       </div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Nationality</label><input class="form-input" type="text" id="ep-nationality" placeholder="e.g. Brazil"></div><div class="form-group"><label class="form-label">Language</label><input class="form-input" type="text" id="ep-language" placeholder="e.g. Portuguese, English"></div></div>
-      <div class="modal-row"><div class="form-group"><label class="form-label">Start date</label><input class="form-input" type="date" id="ep-start-date"><div class="form-hint">Targets before this month are not charged</div></div><div class="form-group"></div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Start date</label>
+        <input class="form-input" type="date" id="ep-start-date">
+        <input class="form-input" type="text" id="ep-start-date-ro" readonly style="display:none">
+        <div class="form-hint" id="ep-start-date-hint">Targets before this month are not charged</div>
+      </div><div class="form-group"></div></div>
       <div class="form-group"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-edit-profile')">Cancel</button><button class="btn-save mgr-save" onclick="saveProfile()">Save Profile</button></div>
@@ -3576,6 +3580,13 @@ function canEditProfile(targetId){
 }
 function canViewProfile(targetId){ return canEditProfile(targetId); }
 
+// Mirrors allowStart() in db.js: a start date is set for you, not by you. The
+// one exception is a director editing their own profile, because nobody sits
+// above them to do it. The server refuses regardless of what the UI shows.
+function allowStartDate(targetId){
+  return String(currentUserId) !== String(targetId) || currentRole === 'director';
+}
+
 function canAddDocuments(targetId){return canEditProfile(targetId);}
 
 // Certificates, appraisals and documents come from the database per profile.
@@ -3906,7 +3917,18 @@ function openEditProfile(uid){
   document.getElementById('ep-nationality').value=u.nationality||'';
   document.getElementById('ep-language').value=u.language||'';
   document.getElementById('ep-bio').value=u.bio||'';
-  document.getElementById('ep-start-date').value=(u.start_date||'').slice(0,10);
+  // Same show/hide shape as the Team control above.
+  const sIn=document.getElementById('ep-start-date'), sRo=document.getElementById('ep-start-date-ro'),
+        sHint=document.getElementById('ep-start-date-hint');
+  const stored=(u.start_date||'').slice(0,10);
+  if(allowStartDate(uid)){
+    sIn.value=stored; sIn.style.display=''; sRo.style.display='none';
+    sHint.textContent='Targets before this month are not charged';
+  } else {
+    sIn.value=''; sIn.style.display='none';
+    sRo.style.display=''; sRo.value=stored||'-';
+    sHint.textContent='Set by your manager';
+  }
   openBackdrop('modal-edit-profile');
 }
 
@@ -3921,7 +3943,9 @@ const PROFILE_SAVE_ERRORS={
   out_of_scope:"You can't edit this person's profile",
   forbidden:"You can't edit this person's profile",
   name_required:'First and last name are required',
-  nothing_to_update:'Nothing to save'
+  nothing_to_update:'Nothing to save',
+  start_date_forbidden:'Only your manager can set your start date',
+  bad_start_date:'That start date is not a valid date'
 };
 
 async function saveProfile(){
@@ -3937,9 +3961,11 @@ async function saveProfile(){
     instagram: document.getElementById('ep-instagram').value.trim().replace('@',''),
     nationality: document.getElementById('ep-nationality').value.trim(),
     language: document.getElementById('ep-language').value.trim(),
-    bio: document.getElementById('ep-bio').value.trim(),
-    start_date: document.getElementById('ep-start-date').value || null
+    bio: document.getElementById('ep-bio').value.trim()
   };
+  // Omitted entirely when this person may not set it, so an ordinary self-edit
+  // still saves every other field instead of being refused wholesale.
+  if(allowStartDate(uid)) fields.start_date=document.getElementById('ep-start-date').value || null;
   if(!fields.first||!fields.last){ showToast('First and last name are required.','error'); return; }
   const r=await callDb('update_profile',{ user_id:uid, fields });
   if(!r||!r.ok){ showToast(PROFILE_SAVE_ERRORS[r&&r.error]||'Could not save this profile','error'); return; }

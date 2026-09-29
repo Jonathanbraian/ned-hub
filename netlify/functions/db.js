@@ -236,6 +236,13 @@ function normStartDate(v){
     return { ok:false };
   return { ok:true, value:t };
 }
+// Who may set someone's start date: anyone already cleared to edit that
+// profile, as long as it is not their own - a person does not decide when they
+// joined. A director editing themselves is the documented exception, since
+// nobody sits above them to do it for them. The client mirrors this rule.
+function allowStart(me, targetId){
+  return String(me.id) !== String(targetId) || me.role === 'director';
+}
 // Copied verbatim from the client's CERT_LIST.
 const CERT_SEED = [
   'NED College - Organisational Overview',
@@ -838,6 +845,9 @@ exports.handler = async (event) => {
           }
         });
         if(Object.prototype.hasOwnProperty.call(fields, 'start_date')){
+          // Refused up front, before the single .update(patch) below, so a
+          // forged start_date cannot carry other field writes in with it.
+          if(!allowStart(me, uid)) return json(403,{error:'start_date_forbidden'});
           const sd = normStartDate(fields.start_date);
           if(!sd.ok) return json(400,{error:'bad_start_date'});
           patch.start_date = sd.value;
