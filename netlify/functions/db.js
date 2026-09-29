@@ -828,6 +828,58 @@ exports.handler = async (event) => {
       // Changing someone's cargo changes what they can DO, so it is its own
       // action with its own guards rather than a field on update_profile -
       // whose allowlist deliberately has no role or role_id in it.
+      // Who someone reports to is the shape of the org chart, so it gets its
+      // own action with its own guards rather than a field on update_profile -
+      // whose allowlist has no reports_to in it.
+      case 'set_reports_to': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        // Nobody re-parents themselves. Checked before the target is loaded, so
+        // the reason is never confused with a scope failure.
+        if(String(uid) === String(me.id)) return json(403,{error:'cannot_change_own_manager'});
+        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!outranks(me.role, tgt.role)) return json(403,{error:'out_of_scope'});
+
+        const raw = p.reports_to;
+        // Clearing it puts the person at the top of the tree, which needs no
+        // boss to validate.
+        if(raw === null || raw === undefined || raw === ''){
+          const { error } = await admin.from('profiles').update({ reports_to:null }).eq('id',uid);
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+          return json(200,{ ok:true, reports_to:null });
+        }
+
+        const { data: boss } = await admin.from('profiles')
+          .select('id,role,reports_to,status').eq('id', raw).single();
+        if(!boss || boss.status === 'inactive') return json(400,{error:'bad_manager'});
+        if(String(boss.id) === String(tgt.id)) return json(400,{error:'self_manager'});
+        // A manager is a HIGHER tier than their report - strictly, so two peers
+        // can never be made to manage each other.
+        if(rank(boss.role) <= rank(tgt.role)) return json(403,{error:'manager_not_senior'});
+        // And you cannot hand out a boss who outranks you.
+        if(rank(me.role) < rank(boss.role)) return json(403,{error:'forbidden'});
+
+        // The strict rank rule above makes a cycle impossible among rows this
+        // action wrote, but set_member_team sets reports_to from a team's
+        // leader with NO rank check, so the existing tree can already contain
+        // edges that do not climb. Walk it for real, bounded, from one read.
+        const { data: allRows } = await admin.from('profiles').select('id,reports_to');
+        const parentOf = {};
+        (allRows||[]).forEach(r=>{ parentOf[r.id] = r.reports_to; });
+        let cur = boss.reports_to, hops = 0;
+        while(cur != null && hops++ < 50){
+          if(String(cur) === String(uid)) return json(409,{error:'would_create_cycle'});
+          cur = parentOf[cur];
+        }
+        if(hops >= 50) return json(409,{error:'would_create_cycle'});
+
+        const { error } = await admin.from('profiles').update({ reports_to: boss.id }).eq('id',uid);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, reports_to: boss.id });
+      }
       case 'set_user_role': {
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
