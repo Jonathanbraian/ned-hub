@@ -2392,7 +2392,11 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
         <select class="form-select" id="ep-cargo-select" style="display:none"></select>
         <input class="form-input" type="text" id="ep-cargo" readonly>
         <div class="form-hint" id="ep-cargo-hint">Managed in Cargos</div>
-      </div><div class="form-group"></div></div>
+      </div><div class="form-group"><label class="form-label">Reports to</label>
+        <select class="form-select" id="ep-mgr-select" style="display:none"></select>
+        <input class="form-input" type="text" id="ep-mgr" readonly>
+        <div class="form-hint" id="ep-mgr-hint">Set by the team or on creation</div>
+      </div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">LinkedIn</label><input class="form-input" type="text" id="ep-linkedin" placeholder="username or full profile link"></div><div class="form-group"><label class="form-label">Nationality</label><select class="form-select" id="ep-nationality"></select></div></div>
       <div class="form-group"><label class="form-label">Languages</label>
@@ -2742,6 +2746,45 @@ function assignableCargos(){
   // read as "cargos a supervisor may hand out".
   if(!isUserAdmin()) return [];
   return activeCargos().filter(r=>outranks(currentRole, r.base_level));
+}
+// Who may re-parent someone, mirrored from set_reports_to in db.js purely so
+// the UI matches; the server decides. Same three questions as the cargo
+// control: manager type, someone else, and do you outrank them today.
+function canChangeManagerOf(targetId){
+  if(String(targetId) === String(currentUserId)) return false;
+  if(!isUserAdmin()) return false;
+  const t = users.find(u=>u.id===targetId);
+  return !!t && outranks(currentRole, t.role);
+}
+// A boss must be a strictly higher tier than the report, and never above the
+// viewer's own tier. Sorted strongest first so the obvious picks are on top.
+function assignableManagersFor(target){
+  if(!isUserAdmin() || !target) return [];
+  return users
+    .filter(u => u.id !== target.id
+              && u.status !== 'inactive'
+              && rank(u.role) > rank(target.role)
+              && rank(currentRole) >= rank(u.role))
+    .sort((a,b) => rank(b.role) - rank(a.role)
+                || (a.first+' '+a.last).localeCompare(b.first+' '+b.last));
+}
+function fillManagerSelect(selId, target){
+  const sel=document.getElementById(selId);
+  if(!sel) return;
+  const list=assignableManagersFor(target);
+  const cur=target && target.reports_to;
+  const rows=list.map(u=>({ id:u.id, label:dashFix(u.first+' '+u.last)+' - '+displayRole(u) }));
+  // The person's current manager may no longer qualify - deactivated, or made
+  // their equal by a cargo change. Keep them on the list, marked, so the
+  // prefill is honest: otherwise the picker would show somebody ELSE and
+  // saving would silently re-parent them.
+  if(cur && !list.some(u=>String(u.id)===String(cur))){
+    const m=users.find(u=>u.id===cur);
+    if(m) rows.unshift({ id:m.id, label:dashFix(m.first+' '+m.last)+' - '+displayRole(m)+' (current)' });
+  }
+  sel.innerHTML='<option value="">- None (top level) -</option>'+
+    rows.map(r=>`<option value="${esc(r.id)}">${esc(r.label)}</option>`).join('');
+  sel.value = cur ? String(cur) : '';
 }
 function fillAssignableCargoSelect(selId, selected){
   const sel=document.getElementById(selId);
@@ -4160,6 +4203,20 @@ function openEditProfile(uid){
     cHint.textContent=(String(uid)===String(currentUserId))
       ? 'You cannot change your own cargo.' : 'Managed in Cargos';
   }
+  // Reports to: the same show/hide shape again. Re-parenting reshapes the org
+  // chart and every scope helper that walks it, so it is chefia-only.
+  const mSel=document.getElementById('ep-mgr-select'), mTxt=document.getElementById('ep-mgr'),
+        mHint=document.getElementById('ep-mgr-hint');
+  if(canChangeManagerOf(uid)){
+    fillManagerSelect('ep-mgr-select', u);
+    mSel.style.display=''; mTxt.style.display='none';
+    mHint.textContent='Moves this person under a different manager on the org chart.';
+  } else {
+    mSel.style.display='none'; mTxt.style.display='';
+    mTxt.value=managerNameOf(u)||'- (top level)';
+    mHint.textContent=(String(uid)===String(currentUserId))
+      ? 'You cannot change your own manager.' : 'Set by the team or on creation';
+  }
   document.getElementById('ep-phone').value=u.phone||'';
   document.getElementById('ep-instagram').value=u.instagram||'';
   document.getElementById('ep-linkedin').value=u.linkedin||'';
@@ -4199,6 +4256,17 @@ const PROFILE_SAVE_ERRORS={
   bad_languages:'One of those languages could not be saved',
   too_many_languages:'That is too many languages to save',
   bad_birthday:'That birthday is not a valid day and month'
+};
+
+const MANAGER_CHANGE_ERRORS={
+  forbidden:"You can't change this person's manager",
+  out_of_scope:"You can't change this person's manager",
+  cannot_change_own_manager:"You can't change your own manager",
+  manager_not_senior:'The manager must be a higher-level role',
+  would_create_cycle:'That would create a loop in the hierarchy',
+  self_manager:'Somebody cannot report to themselves',
+  bad_manager:'That person cannot be a manager',
+  not_found:'That person no longer exists'
 };
 
 const ROLE_CHANGE_ERRORS={
@@ -4260,6 +4328,19 @@ async function saveProfile(){
     }
   }
 
+  // Reports-to is its own action too, and it runs AFTER the team one on
+  // purpose: joining a team re-parents the person behind that team's leader,
+  // so an explicit choice here has to land last or the team would win.
+  const mSel2=document.getElementById('ep-mgr-select');
+  if(mSel2 && mSel2.style.display!=='none'){
+    const wantMgr=mSel2.value || null;
+    if(String(wantMgr||'')!==String(u.reports_to||'')){
+      const mr=await callDb('set_reports_to',{ user_id:uid, reports_to:wantMgr });
+      if(!mr||!mr.ok) showToast(
+        (MANAGER_CHANGE_ERRORS[mr&&mr.error]||'The manager could not be changed')+' - the rest was saved.','warning');
+    }
+  }
+
   closeModal('modal-edit-profile');
   await loadTeams();
   await loadDirectory();
@@ -4268,6 +4349,8 @@ async function saveProfile(){
   if(uid===currentUserId){ await renderMyProfile(); updateNavAvatar(fresh); }
   else await viewUserProfile(uid);
   renderTeamProfiles();
+  // A manager change reshapes the hierarchy, so the chart is redrawn when open.
+  if(document.getElementById('page-orgchart')?.classList.contains('active')) renderOrgChart();
   if(document.getElementById('page-users')?.classList.contains('active')) await refreshUserManagement();
   showToast(`${fresh.first} ${fresh.last}'s profile updated.`,'success');
 }
