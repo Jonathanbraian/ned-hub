@@ -77,6 +77,7 @@
   --role-supervisor:#9A3412;--role-supervisor-bg:rgba(251,146,60,.2);--role-supervisor-border:rgba(251,146,60,.4);
   --role-director:#C2410C;--role-director-bg:#FFF7ED;--role-director-border:#FED7AA;
   --role-admin:#4338CA;--role-admin-bg:#EEF2FF;--role-admin-border:#C7D2FE;
+  --role-senior-exec:#0E7490;--role-senior-exec-bg:#ECFEFF;--role-senior-exec-border:#A5F3FC;
   --org-supervisor-bg:rgba(251,146,60,.06);--org-leader-bg:rgba(252,211,77,.06);
   /* ── status + accents ── */
   --status-online:#16A34A;--status-away:#D97706;--status-busy:#DC2626;--status-offline:#9CA3AF;
@@ -116,6 +117,7 @@ html[data-theme="dark"]{
   --role-supervisor:#FDBA74;--role-supervisor-bg:rgba(251,146,60,.14);--role-supervisor-border:rgba(251,146,60,.32);
   --role-director:#FCA55D;--role-director-bg:#33240F;--role-director-border:#5C441A;
   --role-admin:#A5B4FC;--role-admin-bg:#1F1D3D;--role-admin-border:#3F3A78;
+  --role-senior-exec:#67E8F9;--role-senior-exec-bg:#0C2A31;--role-senior-exec-border:#1B505C;
   --org-supervisor-bg:rgba(251,146,60,.1);--org-leader-bg:rgba(252,211,77,.08);
   --status-online:#5FD98A;--status-away:#F5B453;--status-busy:#FF8A8A;--status-offline:#64748B;
   --star:#FCD34D;
@@ -236,6 +238,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .rp-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .rp-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
 .rp-admin{background:var(--role-admin-bg);color:var(--role-admin);border:1px solid var(--role-admin-border)}
+.rp-senior-exec{background:var(--role-senior-exec-bg);color:var(--role-senior-exec);border:1px solid var(--role-senior-exec-border)}
 .btn-logout{font-family:'Rubik',sans-serif;font-size:12px;font-weight:500;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .15s}
 .btn-logout:hover{background:var(--bg);color:var(--text)}
 .nav-avatar-btn{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid var(--border2);overflow:hidden;flex-shrink:0;transition:border-color .15s;background:var(--light-blue);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue)}
@@ -466,6 +469,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .rb-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .rb-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
 .rb-admin{background:var(--role-admin-bg);color:var(--role-admin);border:1px solid var(--role-admin-border)}
+.rb-senior-exec{background:var(--role-senior-exec-bg);color:var(--role-senior-exec);border:1px solid var(--role-senior-exec-border)}
 .status-dot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
 .sdot{width:7px;height:7px;border-radius:50%}.sdot-active{background:var(--status-online)}.sdot-inactive{background:var(--status-offline)}
 .campus-chip{font-size:11px;font-weight:500;background:var(--bg);border:1px solid var(--border);padding:2px 9px;border-radius:5px;color:var(--muted)}
@@ -986,6 +990,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 }
 .org-node-card:hover{border-color:var(--border2);box-shadow:0 4px 16px rgba(0,50,255,.1);transform:translateY(-2px)}
 .org-node-card.admin{border-color:var(--role-admin-border);background:var(--role-admin-bg)}
+.org-node-card.senior_exec{border-color:var(--role-senior-exec-border);background:var(--role-senior-exec-bg)}
 .org-node-card.director{border-color:var(--role-director-border);background:var(--role-director-bg)}
 .org-node-card.manager{border-color:var(--manager-border);background:var(--manager-bg)}
 .org-node-card.supervisor{border-color:var(--role-supervisor-border);background:var(--org-supervisor-bg)}
@@ -2218,6 +2223,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
           <option value="supervisor">Supervisor</option>
           <option value="manager">Manager</option>
           <option value="director">Director</option>
+          <option value="senior_exec">Senior Executive</option>
           <option value="admin">Administrator</option>
         </select>
         <div class="form-hint">This is what the cargo can do in the Hub, not what it is called.</div>
@@ -2458,6 +2464,7 @@ const ROLE_TARGETS = {
   manager: 0, // defined per campus
   director: 0,
   admin: 0,
+  senior_exec: 0,
 };
 
 // ── ROLE HIERARCHY ───────────────────────────────────────────────
@@ -2467,10 +2474,16 @@ const ROLE_TARGETS = {
 // own tier or below, never above. The server still decides; this is the UI
 // mirror. 'admin' has a rank before it exists as a tier, so adding it later
 // changes no behaviour on its own.
-const ROLE_RANK = { agent:0, specialist:0, executive:0, leader:1,
+const ROLE_RANK = { agent:0, specialist:0, executive:0, senior_exec:0, leader:1,
   supervisor:2, manager:3, director:4, admin:5 };
 function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
 function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
+
+// Mirrors VIEW_ALL_ROLES in db.js. "Sees the whole company" and "may act on
+// the whole company" used to be the same predicate; a read-only viewer breaks
+// that, so breadth of VIEW gets its own list and never touches a write gate.
+const VIEW_ALL_ROLES = ['senior_exec'];
+function seesEverything(role){ return VIEW_ALL_ROLES.includes(role); }
 
 const CERT_LIST = [
   'NED College - Organisational Overview',
@@ -2882,10 +2895,14 @@ const ROLE_CFG = {
   manager:    {label:'Manager',         pill:'rp-manager',    mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
   director:   {label:'Director',        pill:'rp-director',   mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
   admin:      {label:'Administrator',   pill:'rp-admin',      mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
+  // Read-only viewer. leader:true opens the Leaders dropdown so the view
+  // screens are reachable; mgr:false keeps User Management, Cargos, Teams and
+  // Locations out of it; canUpdatePerf:false removes the Update control.
+  senior_exec:{label:'Senior Executive',pill:'rp-senior-exec',mgr:false, leader:true,  canUpdatePerf:false, canSeeTeam:true},
 };
 
-const ROLE_LABELS = {agent:'Agent',specialist:'Sales Specialist',executive:'Sales Executive',leader:'Team Leader',supervisor:'Supervisor',manager:'Manager',director:'Director',admin:'Administrator'};
-const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent',leader:'rb-leader',supervisor:'rb-supervisor',manager:'rb-manager',director:'rb-director',admin:'rb-admin'};
+const ROLE_LABELS = {agent:'Agent',specialist:'Sales Specialist',executive:'Sales Executive',leader:'Team Leader',supervisor:'Supervisor',manager:'Manager',director:'Director',admin:'Administrator',senior_exec:'Senior Executive'};
+const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent',leader:'rb-leader',supervisor:'rb-supervisor',manager:'rb-manager',director:'rb-director',admin:'rb-admin',senior_exec:'rb-senior-exec'};
 const CAMPUS_LABELS = {dublin:'Dublin',limerick:'Limerick',both:'Both'};
 
 // Roles that can update performance
@@ -2902,6 +2919,9 @@ function managerNameOf(u){
 function getTeamForUser(uid){
   const me = users.find(u=>u.id===uid);
   if(!me) return [];
+  // A pure viewer sees everyone, tiers above them included - the set carries
+  // no authority, so outranks() does not apply.
+  if(seesEverything(me.role)) return users.filter(u=>u.id!==uid);
   if(rank(me.role) >= ROLE_RANK.manager)
     return users.filter(u=>u.id!==uid && outranks(me.role, u.role));
   // Supervisor: their direct reports, none of whom may outrank them
@@ -3841,7 +3861,7 @@ function renderTeamProfiles(roleF=''){
   const leaders=allTeam.filter(u=>leaderRoles.includes(u.role));
   const members=allTeam.filter(u=>!leaderRoles.includes(u.role));
 
-  const canShowLeaders=cfg.canSeeTeam&&rank(currentRole) >= ROLE_RANK.supervisor;
+  const canShowLeaders=cfg.canSeeTeam&&(rank(currentRole) >= ROLE_RANK.supervisor || seesEverything(currentRole));
 
   // Leaders section
   const leadersSection=document.getElementById('team-leaders-section');
@@ -6416,6 +6436,7 @@ document.querySelectorAll('.report-include-check').forEach(lbl=>{
 function reportPopulation(){
   const me=users.find(u=>u.id===currentUserId);
   if(!me) return [];
+  if(seesEverything(me.role)) return users.slice();
   if(rank(me.role) >= ROLE_RANK.manager) return users.filter(u=>outranks(me.role, u.role));
   if(me.role==='supervisor'||me.role==='leader')
     return users.filter(u=>String(u.reports_to)===String(me.id)||u.id===me.id);
@@ -6992,7 +7013,11 @@ function renderOrgChart(){
   // always a root; with a tier above them a director has a parent, and would
   // otherwise render as a childless leaf with their whole org hidden.
   const isBranch=r=>rank(r) >= ROLE_RANK.leader;
-  const LEAF_ROLES=['agent','specialist','executive'];
+  // A leaf is simply anyone who is not a branch. This was the literal list
+  // ['agent','specialist','executive'], which silently DROPPED any role that
+  // was neither a branch nor on it - a hole that only opened once a non-leader
+  // tier outside the sales ladder existed.
+  const isLeaf=r=>!isBranch(r);
   // A node renders as its own kind of subtree, whatever level it sits at.
   function subtree(u){
     if(u.role==='leader') return leaderTree(u);
@@ -7016,7 +7041,7 @@ function renderOrgChart(){
   function branchTree(node){
     const rpts=directReports(node.id);
     const branches=rpts.filter(u=>isBranch(u.role));
-    const leaves=rpts.filter(u=>LEAF_ROLES.includes(u.role)).filter(pass);
+    const leaves=rpts.filter(u=>isLeaf(u.role)).filter(pass);
     const suffix=node.role==='manager'?' (Direct)':'';
 
     const cols=[];
