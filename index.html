@@ -130,6 +130,22 @@ body{font-family:'Rubik',sans-serif;background:var(--bg);color:var(--text);min-h
 a{text-decoration:none;color:inherit}
 
 /* ════════ LOGIN ════════ */
+/* ── BOOT SPLASH ─────────────────────────────────────────────────
+   Painted from the very first frame (it is in the markup, not injected), so
+   the login screen underneath is never visible while we work out whether
+   there is a session. Its background is explicit rather than inherited, and
+   the wordmark uses the same .brand-logo variants as everywhere else, so it
+   is correct in dark mode from that first frame too. */
+#boot-splash{position:fixed;inset:0;z-index:4000;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px}
+#boot-splash.hidden{display:none}
+#boot-splash .brand-logo{height:42px}
+.boot-spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--border);
+  border-top-color:var(--blue);animation:boot-spin .8s linear infinite}
+@keyframes boot-spin{to{transform:rotate(360deg)}}
+.boot-msg{font-size:13px;color:var(--muted);text-align:center;max-width:340px;line-height:1.55}
+#boot-retry{max-width:220px}
+@media(prefers-reduced-motion:reduce){ .boot-spinner{animation:none} }
 #login-screen{min-height:100vh;display:flex}
 .login-left{width:440px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:52px 48px}
 .login-logo{display:flex;align-items:center;gap:12px;margin-bottom:56px}
@@ -1175,6 +1191,17 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 <body>
 
 <!-- ═══ LOGIN ═══ -->
+<!-- Shown until boot reaches a terminal state: the app, the login screen, or
+     the retry state. Never injected late - it must beat the login screen to
+     the first paint. -->
+<div id="boot-splash">
+  <img class="brand-logo brand-light" src="assets/logo-light.png" alt="SalesHub" onerror="this.style.display='none'">
+  <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="SalesHub" onerror="this.style.display='none'">
+  <div class="boot-spinner" id="boot-spinner"></div>
+  <div class="boot-msg" id="boot-msg">Restoring your session&hellip;</div>
+  <button class="btn-primary-full" id="boot-retry" style="display:none" onclick="retryBoot()">Try again</button>
+</div>
+
 <div id="login-screen">
   <div class="login-left">
     <div class="login-logo">
@@ -2518,15 +2545,6 @@ sb.auth.onAuthStateChange((_event, session) => {
 // path that used to be fatal: the restore promise rejected, nothing caught it,
 // and a signed-in person was left looking at the login screen.
 //
-// One retry, because a single cold start should not cost somebody their
-// session. Returns null rather than throwing.
-async function callDbRetry(action, payload = {}){
-  for(let i=0;i<2;i++){
-    try { return await callDb(action, payload); }
-    catch(e){ if(i) console.warn('[boot] '+action+' failed twice', e); }
-  }
-  return null;
-}
 // A secondary loader that fails must cost its own data and nothing else.
 // Returns true when it worked.
 async function softLoad(label, fn){
@@ -7522,29 +7540,127 @@ syncThemeToggle(currentTheme());
 setupPWA();
 
 // ═══════════════════════════════════════════════════
-// KEEP-ALIVE — restore an existing Supabase session
+// BOOT — decide app vs login from the LOCAL session, never from the network
 // ═══════════════════════════════════════════════════
-(async () => {
+// The old version asked the gateway for a profile and fell through to the
+// login screen when that call failed. A cold-start 502 therefore logged out a
+// perfectly valid session. getSession() is local and answers the only question
+// that matters - are you signed in - so it alone picks the screen. The gateway
+// decides WHICH screen, and when it cannot answer we wait rather than sign out.
+function hideBootSplash(){
+  const s=document.getElementById('boot-splash');
+  if(s) s.classList.add('hidden');
+}
+function bootMessage(msg, offerRetry){
+  const m=document.getElementById('boot-msg'),
+        sp=document.getElementById('boot-spinner'),
+        rt=document.getElementById('boot-retry');
+  if(m) m.textContent=msg;
+  if(sp) sp.style.display = offerRetry ? 'none' : '';
+  if(rt) rt.style.display = offerRetry ? '' : 'none';
+}
+function showLoginScreen(msg){
+  hideBootSplash();
+  document.getElementById('app').style.display='none';
+  document.getElementById('change-pw-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  const e=document.getElementById('login-error');
+  if(e){ if(msg){ e.style.display='block'; e.textContent=msg; } else { e.style.display='none'; } }
+}
+async function hasLocalSession(){
   try {
     // Destructured defensively: getSession() can resolve with a null data on
-    // its error paths, and `data:{session}` would throw a TypeError there -
-    // which, unhandled, is itself a way to end up back on the login screen.
+    // its error paths, and `data:{session}` would throw a TypeError there.
     const { data } = await sb.auth.getSession();
-    const session = data && data.session;
-    // No session is the ONLY ordinary reason to sit on the login screen.
-    if(!session) return;
-    const r = await callDbRetry('get_my_profile');
-    const profile = r && r.profile;
-    if(!profile || profile.status === 'inactive') return;
-    if(profile.must_change_password){ pendingLoginProfile = profile; showChangePwScreen(); return; }
-    await completeLoginReal(profile);
-  } catch(e){
-    // Deliberately NOT signing out and NOT clearing storage: the stored
-    // session may be perfectly good, and a bad moment on the network must not
-    // cost it. The login screen is already showing; the next reload retries.
-    console.warn('[boot] session restore failed', e);
+    return !!(data && data.session);
+  } catch(e){ return false; }
+}
+
+// Three outcomes, and the difference matters: 'ok' with a profile, 'ok' with
+// none (a definitive answer - the row or the session is gone), or 'down',
+// meaning the gateway could not answer and asking again might work.
+// A cold start returns a 502 whose body is HTML, so callDb() rejects on
+// res.json(); a 401 or 404 comes back as a clean JSON error instead.
+const PROFILE_FATAL = new Set(['unauthorized','profile_not_found']);
+async function fetchProfileWithRetry(attempts=4, waits=[400,800,1600]){
+  for(let i=0;i<attempts;i++){
+    try{
+      const r = await callDb('get_my_profile');
+      if(r && r.profile) return { state:'ok', profile:r.profile };
+      if(r && PROFILE_FATAL.has(r.error)) return { state:'ok', profile:null, reason:r.error };
+    }catch(e){ /* dropped connection, or a body that is not JSON */ }
+    if(i < attempts-1) await new Promise(res=>setTimeout(res, waits[Math.min(i, waits.length-1)]));
   }
-})();
+  console.warn('[boot] get_my_profile did not answer after '+attempts+' attempts');
+  return { state:'down', profile:null };
+}
+
+let bootInFlight = false;
+async function bootRestore(){
+  if(bootInFlight) return;
+  bootInFlight = true;
+  bootMessage('Restoring your session\u2026', false);
+  try {
+    // THE decision. No network call can change it.
+    if(!await hasLocalSession()){ showLoginScreen(); return; }
+
+    const res = await fetchProfileWithRetry();
+    if(res.state === 'down'){
+      // The session is valid; the server is not. Signing in again cannot fix a
+      // server that is down, so the login screen would be a lie - and it would
+      // cost the person their session for nothing. Wait, and offer a retry.
+      bootMessage("We couldn't reach the server. You are still signed in - try again in a moment.", true);
+      return;
+    }
+    const profile = res.profile;
+    // A definitive no: the token is dead or the profile is gone. Only here does
+    // a signed-in boot end at the login screen.
+    if(!profile){
+      await sb.auth.signOut().catch(()=>{});
+      showLoginScreen(res.reason === 'profile_not_found'
+        ? 'No profile found for this account.' : 'Please sign in again.');
+      return;
+    }
+    if(profile.status === 'inactive'){
+      await sb.auth.signOut().catch(()=>{});
+      showLoginScreen('Account inactive');
+      return;
+    }
+    if(profile.must_change_password){
+      pendingLoginProfile = profile;
+      hideBootSplash();
+      showChangePwScreen();
+      return;
+    }
+    await completeLoginReal(profile);
+    hideBootSplash();
+  } catch(e){
+    console.warn('[boot] restore failed', e);
+    // An unexpected throw is not evidence that the session is bad, so the
+    // decision is re-made the same way: local session wins.
+    if(await hasLocalSession()) bootMessage('Something went wrong loading the app.', true);
+    else showLoginScreen();
+  } finally {
+    bootInFlight = false;
+    // Belt and braces: whatever happened above, the splash must never be left
+    // spinning on top of an app that already rendered.
+    if(document.getElementById('app').style.display === 'block') hideBootSplash();
+  }
+}
+function retryBoot(){ bootRestore(); }
+
+// A hang somewhere (a fetch that never settles) must still reach a terminal
+// state. It resolves the SAME way: a session means the retry state, never the
+// login screen.
+setTimeout(async () => {
+  const s=document.getElementById('boot-splash');
+  if(!s || s.classList.contains('hidden')) return;
+  if(document.getElementById('app').style.display === 'block'){ hideBootSplash(); return; }
+  if(await hasLocalSession()) bootMessage('This is taking longer than usual.', true);
+  else showLoginScreen();
+}, 20000);
+
+bootRestore();
 
 
 
