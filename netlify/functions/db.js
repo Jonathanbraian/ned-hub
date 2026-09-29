@@ -18,14 +18,24 @@ async function callerProfile(caller){
   const { data } = await admin.from('profiles').select('*').eq('id', caller.id).single();
   return data || null;
 }
+// ── ROLE HIERARCHY ───────────────────────────────────────────────
+// Until now every "who may act on whom" rule was a hand-written
+// `tgt.role !== 'director'`, repeated a dozen times. One rank table replaces
+// them all: you may act on anyone at your own tier or below, never above.
+// 'admin' has a rank here before it exists as a tier, so adding it later
+// changes no behaviour on its own.
+const ROLE_RANK = { agent:0, specialist:0, executive:0, leader:1,
+  supervisor:2, manager:3, director:4, admin:5 };
+function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
+function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
+
 function isMgr(role){ return role === 'manager' || role === 'director'; }
 
 const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
   supervisor:22000, manager:0, director:0 };
 function canUpdatePerf(role){ return role==='supervisor'||role==='manager'||role==='director'; }
 function inScope(me, tgt){
-  if(me.role==='director') return true;
-  if(me.role==='manager') return tgt.role!=='director';
+  if(isMgr(me.role)) return outranks(me.role, tgt.role);
   if(me.role==='supervisor') return tgt.reports_to===me.id || tgt.id===me.id;
   return false;
 }
@@ -136,8 +146,7 @@ async function subtreeIds(me){
 async function canEditProfileOf(me, tgt){
   if(!me || !tgt) return false;
   if(me.id === tgt.id) return true;
-  if(me.role === 'director') return true;
-  if(me.role === 'manager') return tgt.role !== 'director';
+  if(isMgr(me.role)) return outranks(me.role, tgt.role);
   if(me.role === 'supervisor' || me.role === 'leader') return (await subtreeIds(me)).has(tgt.id);
   return false;
 }
@@ -156,8 +165,7 @@ async function gatesFor(me, tgt){
   const needSub = (me.role === 'supervisor' || me.role === 'leader');
   const sub = needSub ? await subtreeIds(me) : null;
   let chain;
-  if(me.role === 'director') chain = true;
-  else if(me.role === 'manager') chain = tgt.role !== 'director';
+  if(isMgr(me.role)) chain = outranks(me.role, tgt.role);
   else if(needSub) chain = sub.has(tgt.id);
   else chain = false;
   const chefia = chain && !(self && me.role !== 'director');
@@ -260,8 +268,7 @@ const CERT_SEED = [
 ];
 async function accessibleIds(me){
   const { data: all } = await admin.from('profiles').select('id,role,reports_to');
-  if(me.role==='director') return all.map(u=>u.id);
-  if(me.role==='manager') return all.filter(u=>u.role!=='director').map(u=>u.id);
+  if(isMgr(me.role)) return all.filter(u=>outranks(me.role, u.role)).map(u=>u.id);
   if(me.role==='supervisor'||me.role==='leader'){
     const ids = all.filter(u=>u.reports_to===me.id).map(u=>u.id); ids.push(me.id); return ids;
   }
@@ -412,11 +419,12 @@ exports.handler = async (event) => {
       case 'list_users': {
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
-        let q = admin.from('profiles').select('*').order('first',{ascending:true});
-        if(me.role === 'manager') q = q.neq('role','director');
-        const { data, error } = await q;
+        const { data, error } = await admin.from('profiles')
+          .select('*').order('first',{ascending:true});
         if(error) return json(500,{error:'list_failed'});
-        return json(200,{ users:data });
+        // .neq() takes a single value, so the rank filter runs here instead of
+        // in the query - it has to exclude every tier above the caller.
+        return json(200,{ users:(data||[]).filter(u=>outranks(me.role, u.role)) });
       }
       case 'create_user': {
         const me = await callerProfile(caller);
@@ -438,7 +446,7 @@ exports.handler = async (event) => {
         const role = cargo.base_level;
         if(!ROLES.includes(role)) return json(400,{error:'bad_role'});
         if(password.length < 6) return json(400,{error:'weak_password'});
-        if(me.role === 'manager' && role === 'director') return json(403,{error:'forbidden_role'});
+        if(!outranks(me.role, role)) return json(403,{error:'forbidden_role'});
         // Resolve the team before anything is created, so a bad team can never
         // leave an orphaned auth user behind. Its leader wins as reports_to.
         let teamId = null, reportsTo = b.reports_to || null;
@@ -483,7 +491,7 @@ exports.handler = async (event) => {
         if(password.length < 6) return json(400,{error:'weak_password'});
         const { data: tgt } = await admin.from('profiles').select('role').eq('id',targetId).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(me.role === 'manager' && tgt.role === 'director') return json(403,{error:'forbidden'});
+        if(!outranks(me.role, tgt.role)) return json(403,{error:'forbidden'});
         const { error:aErr } = await admin.auth.admin.updateUserById(targetId,{ password });
         if(aErr) return json(500,{error:'reset_failed', detail:aErr.message});
         await admin.from('profiles').update({ must_change_password:true }).eq('id',targetId);
@@ -497,7 +505,7 @@ exports.handler = async (event) => {
         if(targetId === me.id) return json(400,{error:'cannot_change_self'});
         const { data: tgt } = await admin.from('profiles').select('role').eq('id',targetId).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(me.role === 'manager' && tgt.role === 'director') return json(403,{error:'forbidden'});
+        if(!outranks(me.role, tgt.role)) return json(403,{error:'forbidden'});
         const { error } = await admin.from('profiles').update({ status }).eq('id',targetId);
         if(error) return json(500,{error:'status_failed'});
         return json(200,{ ok:true });
@@ -608,8 +616,8 @@ exports.handler = async (event) => {
         const base_level = (p.base_level||'').toString().trim();
         if(!name) return json(400,{error:'missing_name'});
         if(!ROLE_LEVELS.includes(base_level)) return json(400,{error:'bad_base_level'});
-        // A manager may not mint a director tier, mirroring create_user.
-        if(me.role==='manager' && base_level==='director') return json(403,{error:'forbidden_role'});
+        // You may not mint a tier above your own, mirroring create_user.
+        if(!outranks(me.role, base_level)) return json(403,{error:'forbidden_role'});
         const individual_target = numOrNull(p.individual_target);
         if(individual_target===false) return json(400,{error:'bad_number'});
         const { data, error } = await admin.from('roles')
@@ -634,8 +642,8 @@ exports.handler = async (event) => {
         if(individual_target===false) return json(400,{error:'bad_number'});
         const { data: existing } = await admin.from('roles').select('id,base_level').eq('id',id).single();
         if(!existing) return json(404,{error:'not_found'});
-        // A manager may neither create a director tier nor edit one.
-        if(me.role==='manager' && (base_level==='director' || existing.base_level==='director'))
+        // Neither the new tier nor the tier being replaced may outrank you.
+        if(!outranks(me.role, base_level) || !outranks(me.role, existing.base_level))
           return json(403,{error:'forbidden_role'});
         const { error } = await admin.from('roles')
           .update({ name, base_level, individual_target, active: p.active !== false })
@@ -659,7 +667,7 @@ exports.handler = async (event) => {
         const { data: existing } = await admin.from('roles').select('id,base_level').eq('id',id).single();
         if(!existing) return json(404,{error:'not_found'});
         // Permission before state, so the caller gets the honest reason.
-        if(me.role==='manager' && existing.base_level==='director') return json(403,{error:'forbidden_role'});
+        if(!outranks(me.role, existing.base_level)) return json(403,{error:'forbidden_role'});
         const { data: holders } = await admin.from('profiles').select('id').eq('role_id', id);
         if(holders && holders.length) return json(409,{error:'in_use', count:holders.length});
         const { error } = await admin.from('roles').delete().eq('id',id);
@@ -757,7 +765,7 @@ exports.handler = async (event) => {
         if(!uid) return json(400,{error:'missing_id'});
         const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(me.role === 'manager' && tgt.role === 'director') return json(403,{error:'forbidden'});
+        if(!outranks(me.role, tgt.role)) return json(403,{error:'forbidden'});
         const teamId = (p.team_id===null || p.team_id===undefined || p.team_id==='') ? null : p.team_id;
         if(teamId === null){
           // Leaving a team does not move anyone in the hierarchy.

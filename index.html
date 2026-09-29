@@ -2453,6 +2453,18 @@ const ROLE_TARGETS = {
   director: 0,
 };
 
+// ── ROLE HIERARCHY ───────────────────────────────────────────────
+// Mirrors ROLE_RANK/rank/outranks in db.js. Every "who may act on whom"
+// rule used to be a hand-written `role !== 'director'`, repeated a dozen
+// times; one rank table replaces them all - you may act on anyone at your
+// own tier or below, never above. The server still decides; this is the UI
+// mirror. 'admin' has a rank before it exists as a tier, so adding it later
+// changes no behaviour on its own.
+const ROLE_RANK = { agent:0, specialist:0, executive:0, leader:1,
+  supervisor:2, manager:3, director:4, admin:5 };
+function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
+function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
+
 const CERT_LIST = [
   'NED College - Organisational Overview',
   'Sales Process - NED Limerick',
@@ -2810,8 +2822,7 @@ async function loadPerformance(){
 function canUpdateFor(target){
   const me = users.find(u=>u.id===currentUserId);
   if(!me || !target || !canUpdatePerf()) return false;
-  if(me.role==='director') return true;
-  if(me.role==='manager') return target.role!=='director';
+  if(rank(me.role) >= ROLE_RANK.manager) return outranks(me.role, target.role);
   if(me.role==='supervisor') return target.reports_to===me.id || target.id===me.id;
   return false;
 }
@@ -2875,11 +2886,11 @@ function managerNameOf(u){
 function getTeamForUser(uid){
   const me = users.find(u=>u.id===uid);
   if(!me) return [];
-  if(me.role==='director') return users.filter(u=>u.id!==uid);
-  if(me.role==='manager')  return users.filter(u=>u.id!==uid && u.role!=='director');
-  // Supervisor: their direct reports
+  if(rank(me.role) >= ROLE_RANK.manager)
+    return users.filter(u=>u.id!==uid && outranks(me.role, u.role));
+  // Supervisor: their direct reports, none of whom may outrank them
   if(me.role==='supervisor'){
-    return users.filter(u=>u.id!==uid && u.reports_to===uid && u.role!=='director' && u.role!=='manager');
+    return users.filter(u=>u.id!==uid && u.reports_to===uid && outranks(me.role, u.role));
   }
   // Leader: the people who report to them
   if(me.role==='leader'){
@@ -3545,8 +3556,7 @@ function canEditProfile(targetId){
   if(targetId===currentUserId) return true;
   const t=users.find(u=>u.id===targetId);
   if(!t) return false;
-  if(currentRole==='director') return true;
-  if(currentRole==='manager') return t.role!=='director';
+  if(rank(currentRole) >= ROLE_RANK.manager) return outranks(currentRole, t.role);
   if(currentRole==='supervisor'||currentRole==='leader')
     return teamSubtreeOf(currentUserId).some(x=>x.id===targetId);
   return false;
@@ -6388,8 +6398,7 @@ document.querySelectorAll('.report-include-check').forEach(lbl=>{
 function reportPopulation(){
   const me=users.find(u=>u.id===currentUserId);
   if(!me) return [];
-  if(me.role==='director') return users.slice();
-  if(me.role==='manager')  return users.filter(u=>u.role!=='director');
+  if(rank(me.role) >= ROLE_RANK.manager) return users.filter(u=>outranks(me.role, u.role));
   if(me.role==='supervisor'||me.role==='leader')
     return users.filter(u=>String(u.reports_to)===String(me.id)||u.id===me.id);
   return [me];
