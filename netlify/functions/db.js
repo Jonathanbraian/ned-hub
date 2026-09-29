@@ -404,7 +404,7 @@ exports.handler = async (event) => {
       }
       case 'get_directory': {
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,team,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
+          .select('id,first,last,nickname,email,role,campus,phone,instagram,nationality,language,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
@@ -463,7 +463,7 @@ exports.handler = async (event) => {
           ? (b.campus).toLowerCase() : 'dublin';
         const { error: pErr } = await admin.from('profiles').insert({
           id:newId, first, last, email, role, campus, role_id: cargo.id,
-          team: b.team || 'All', team_id: teamId, phone: b.phone || '',
+          team_id: teamId, phone: b.phone || '',
           reports_to: reportsTo, start_date: startDate,
           status: (b.status === 'inactive') ? 'inactive' : 'active',
           must_change_password:true
@@ -597,7 +597,7 @@ exports.handler = async (event) => {
       }
       case 'get_roles': {
         const { data, error } = await admin.from('roles')
-          .select('id,name,base_level,individual_target,team_target,active').order('name',{ascending:true});
+          .select('id,name,base_level,individual_target,active').order('name',{ascending:true});
         if(error) return json(500,{error:'roles_failed'});
         return json(200,{ roles:data||[] });
       }
@@ -611,10 +611,9 @@ exports.handler = async (event) => {
         // A manager may not mint a director tier, mirroring create_user.
         if(me.role==='manager' && base_level==='director') return json(403,{error:'forbidden_role'});
         const individual_target = numOrNull(p.individual_target);
-        const team_target = numOrNull(p.team_target);
-        if(individual_target===false || team_target===false) return json(400,{error:'bad_number'});
+        if(individual_target===false) return json(400,{error:'bad_number'});
         const { data, error } = await admin.from('roles')
-          .insert({ name, base_level, individual_target, team_target, active:true })
+          .insert({ name, base_level, individual_target, active:true })
           .select('id').single();
         if(error){
           if(error.code === '23505') return json(409,{error:'name_exists'});
@@ -632,15 +631,14 @@ exports.handler = async (event) => {
         if(!name) return json(400,{error:'missing_name'});
         if(!ROLE_LEVELS.includes(base_level)) return json(400,{error:'bad_base_level'});
         const individual_target = numOrNull(p.individual_target);
-        const team_target = numOrNull(p.team_target);
-        if(individual_target===false || team_target===false) return json(400,{error:'bad_number'});
+        if(individual_target===false) return json(400,{error:'bad_number'});
         const { data: existing } = await admin.from('roles').select('id,base_level').eq('id',id).single();
         if(!existing) return json(404,{error:'not_found'});
         // A manager may neither create a director tier nor edit one.
         if(me.role==='manager' && (base_level==='director' || existing.base_level==='director'))
           return json(403,{error:'forbidden_role'});
         const { error } = await admin.from('roles')
-          .update({ name, base_level, individual_target, team_target, active: p.active !== false })
+          .update({ name, base_level, individual_target, active: p.active !== false })
           .eq('id',id);
         if(error){
           if(error.code === '23505') return json(409,{error:'name_exists'});

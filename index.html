@@ -1401,7 +1401,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
               <label class="report-include-check active"><input type="checkbox" checked id="inc-kpis"> KPI Cards</label>
               <label class="report-include-check active"><input type="checkbox" checked id="inc-table"> Detailed Table</label>
               <label class="report-include-check active"><input type="checkbox" checked id="inc-chart"> Visual Chart</label>
-              <label class="report-include-check"><input type="checkbox" id="inc-notes"> Notes & Comments</label>
             </div>
           </div>
         </div>
@@ -1876,7 +1875,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
         <button class="btn-add-user" onclick="openRoleModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>New cargo</button>
       </div>
       <div class="um-table-wrap"><table class="um-table">
-        <thead><tr><th>Cargo</th><th>Permission level</th><th>Individual target</th><th>Team target</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Cargo</th><th>Permission level</th><th>Individual target</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody id="roles-tbody"></tbody>
       </table></div>
     </div>
@@ -2219,9 +2218,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
       </div>
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Individual target (&euro; / month)</label><input class="form-input" type="number" id="role-ind-target" placeholder="Leave blank for the level default" min="0" step="500"></div>
-        <div class="form-group"><label class="form-label">Team target (&euro; / month)</label><input class="form-input" type="number" id="role-team-target" placeholder="Leave blank for none" min="0" step="500">
-          <div class="form-hint">Not used any more - team targets are set on the team itself.</div>
-        </div>
       </div>
       <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
         <input type="checkbox" id="role-active" style="width:14px;height:14px;cursor:pointer" checked>
@@ -2250,7 +2246,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modal-user-title">Add New User</div><button class="modal-close" onclick="closeModal('modal-user')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="modal-body">
-      <input type="hidden" id="edit-user-id">
       <div class="modal-row"><div class="form-group"><label class="form-label">First Name</label><input class="form-input" type="text" id="u-first" placeholder="e.g. Alice"></div><div class="form-group"><label class="form-label">Last Name</label><input class="form-input" type="text" id="u-last" placeholder="e.g. Almeida"></div></div>
       <div class="form-group"><label class="form-label">Email Address</label><input class="form-input" type="email" id="u-email" placeholder="alice.almeida@ned.ie"></div>
       <div class="modal-row">
@@ -2406,19 +2401,6 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
   </div>
 </div>
 
-<div class="modal-backdrop" id="modal-add-doc">
-  <div class="modal">
-    <div class="modal-header"><div class="modal-title">Add Document</div><button class="modal-close" onclick="closeModal('modal-add-doc')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-    <div class="modal-body">
-      <input type="hidden" id="doc-uid">
-      <div class="form-group"><label class="form-label">Document Name</label><input class="form-input" type="text" id="doc-name" placeholder="e.g. Employment Contract 2025"></div>
-      <div class="modal-row"><div class="form-group"><label class="form-label">Category</label><select class="form-select" id="doc-cat"><option value="Contract">Contract</option><option value="Certificate">Certificate</option><option value="Appraisal">Appraisal</option><option value="Training">Training Record</option><option value="ID">ID / Compliance</option><option value="Other">Other</option></select></div><div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="doc-date"></div></div>
-      <div class="form-group"><label class="form-label">Notes (optional)</label><textarea class="form-textarea" id="doc-notes" placeholder="Any notes about this document..." style="min-height:60px"></textarea></div>
-    </div>
-    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-add-doc')">Cancel</button><button class="btn-save" onclick="saveDocument()">Add Document</button></div>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <script>
@@ -2571,7 +2553,7 @@ function mapProfileToUser(u){
   const d = dashFix;
   return {
     id:u.id, first:d(u.first), last:d(u.last), nickname:d(u.nickname)||'', email:u.email, role:u.role,
-    campus:u.campus, team:d(u.team), phone:u.phone||'', instagram:u.instagram||'',
+    campus:u.campus, phone:u.phone||'', instagram:u.instagram||'',
     nationality:d(u.nationality)||'', language:d(u.language)||'', jobTitle:d(u.job_title)||'',
     status:u.status, reports_to:u.reports_to||null, photo:u.photo||'', bio:d(u.bio)||'',
     start_date: u.start_date || null,
@@ -2615,8 +2597,8 @@ function fillCargoSelect(selId, selected){
 }
 
 // ── TEAMS ───────────────────────────────────────────────────────
-// Teams are real rows now. profiles.team (the old string) is still stored but
-// nothing renders it any more.
+// Teams are real rows now. The old profiles.team string is no longer read or
+// written by this app; the column itself is dropped separately.
 let dbTeams = [];
 let teamsById = {};
 
@@ -2782,7 +2764,6 @@ function aggregateTargetOf(list, p, pop, valueOf, units){
 }
 
 // Teams this person runs, and the teams they oversee further down the line.
-function teamsLedBy(uid){ return dbTeams.filter(t=>String(t.leader_id)===String(uid)); }
 function teamsOverseenBy(me){
   if(!me) return [];
   if(me.role==='director'||me.role==='manager') return dbTeams.filter(t=>t.active!==false);
@@ -2847,7 +2828,7 @@ function dashFix(s){ return s==null?s:String(s).replace(/[\u2014\u2013]/g,'-'); 
 
 let users = [];  // filled from Supabase by loadDirectory()
 let currentRole=null, currentUserId=null;
-let deactTargetId=null, editingId=null, editingProfileUserId=null, addingDocUserId=null;
+let deactTargetId=null, editingId=null, editingProfileUserId=null;
 let currentStars=0, currentPerfPeriod='monthly', pendingLoginUserId=null;
 let pendingLoginProfile=null; // Supabase profile awaiting a password change
 // Real profiles behind the User Management page (the demo `users` array above
@@ -2963,14 +2944,6 @@ function checkStrPw(v){
   if(v.length>=8)s++;if(/[A-Z]/.test(v))s++;if(/[0-9]/.test(v))s++;if(/[^A-Za-z0-9]/.test(v))s++;
   const c=[{w:'0%',b:'transparent',t:''},{w:'30%',b:'var(--danger)',t:'Weak'},{w:'55%',b:'var(--warning)',t:'Fair'},{w:'80%',b:'var(--success)',t:'Good'},{w:'100%',b:'var(--blue)',t:'Strong'}][s];
   bar.style.width=c.w;bar.style.background=c.b;lbl.textContent=c.t;lbl.style.color=c.b;
-}
-
-function completeLogin(uid){
-  currentUserId=uid;
-  const u=users.find(x=>x.id===uid);
-  currentRole=u.role;
-  u.lastLogin='Just now';
-  startApp(u);
 }
 
 // Load the real staff directory, then start the app as the signed-in person.
@@ -4203,45 +4176,6 @@ async function deleteDocument(uid, docId){
   await refreshProfile(uid,'documents');
 }
 
-// Documents
-function openAddDoc(uid){
-  // The documents tab is read-only this phase; adding lands in the next one.
-  umNotYet('Adding documents'); return;
-  /* eslint-disable no-unreachable */
-  addingDocUserId=uid;
-  document.getElementById('doc-uid').value=uid;
-  document.getElementById('doc-name').value='';
-  document.getElementById('doc-cat').value='Contract';
-  document.getElementById('doc-date').value='';
-  document.getElementById('doc-notes').value='';
-  openBackdrop('modal-add-doc');
-  /* eslint-enable no-unreachable */
-}
-
-function saveDocument(){
-  const uid=document.getElementById('doc-uid').value;
-  const name=document.getElementById('doc-name').value.trim();
-  if(!name){showToast('Please enter a document name.','error');return;}
-  const cat=document.getElementById('doc-cat').value;
-  const dateRaw=document.getElementById('doc-date').value;
-  const notes=document.getElementById('doc-notes').value.trim();
-  const u=users.find(x=>x.id===uid);if(!u)return;
-  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let dateStr='';
-  if(dateRaw){const d=new Date(dateRaw);dateStr=months[d.getMonth()]+' '+d.getFullYear();}
-  u.documents.push({name,cat,date:dateStr,notes});
-  closeModal('modal-add-doc');
-  if(uid===currentUserId) renderMyProfile(); else viewUserProfile(uid);
-  showToast('Document added.','success');
-}
-
-function deleteDoc(uid,idx){
-  const u=users.find(x=>x.id===uid);if(!u)return;
-  u.documents.splice(idx,1);
-  if(uid===currentUserId) renderMyProfile(); else viewUserProfile(uid);
-  showToast('Document removed.','warning');
-}
-
 // ═══════════════════════════════════════
 // USER MANAGEMENT TABLE — real data via db.js
 // ═══════════════════════════════════════
@@ -4501,7 +4435,7 @@ function renderRoles(){
   const tbody=document.getElementById('roles-tbody');
   if(!tbody) return;
   if(!isUserAdmin()){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Only managers and directors can manage cargos.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">Only managers and directors can manage cargos.</td></tr>';
     return;
   }
   const holders={};
@@ -4513,7 +4447,6 @@ function renderRoles(){
       <td><div class="user-name">${esc(dashFix(r.name))}</div><div class="user-email">${n} ${n===1?'person':'people'}</div></td>
       <td><span class="role-badge ${ROLE_BADGE[r.base_level]||''}">${esc(ROLE_LABELS[r.base_level]||r.base_level)}</span></td>
       <td class="right">${r.individual_target!=null?fmt(Number(r.individual_target)):'<span style="color:var(--muted)">Level default</span>'}</td>
-      <td class="right">${r.team_target!=null?fmt(Number(r.team_target)):'<span style="color:var(--muted)">None</span>'}</td>
       <td><span class="status-dot"><span class="sdot ${r.active!==false?'sdot-active':'sdot-inactive'}"></span>${r.active!==false?'Active':'Inactive'}</span></td>
       <td>
         <div class="table-actions">
@@ -4523,7 +4456,7 @@ function renderRoles(){
         </div>
       </td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No cargos yet.</td></tr>';
+  }).join('')||'<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted)">No cargos yet.</td></tr>';
 }
 
 function showRoleError(m){const e=document.getElementById('role-error');if(e){e.textContent=m;e.style.display='block';}}
@@ -4546,7 +4479,6 @@ function openRoleModal(id){
   document.getElementById('role-name').value=r?r.name:'';
   document.getElementById('role-base').value=r?r.base_level:'agent';
   document.getElementById('role-ind-target').value=(r&&r.individual_target!=null)?r.individual_target:'';
-  document.getElementById('role-team-target').value=(r&&r.team_target!=null)?r.team_target:'';
   document.getElementById('role-active').checked=r?r.active!==false:true;
   clearRoleError();
   openBackdrop('modal-role');
@@ -4557,15 +4489,12 @@ async function saveRole(){
   const name=document.getElementById('role-name').value.trim();
   const base_level=document.getElementById('role-base').value;
   const indRaw=document.getElementById('role-ind-target').value.trim();
-  const teamRaw=document.getElementById('role-team-target').value.trim();
   const active=document.getElementById('role-active').checked;
   clearRoleError();
   if(!name){showRoleError('Give the cargo a name');return;}
   if(indRaw!=='' && !(Number(indRaw)>=0)){showRoleError('Targets must be zero or more');return;}
-  if(teamRaw!=='' && !(Number(teamRaw)>=0)){showRoleError('Targets must be zero or more');return;}
   const payload={name, base_level,
-    individual_target: indRaw===''?null:Number(indRaw),
-    team_target: teamRaw===''?null:Number(teamRaw)};
+    individual_target: indRaw===''?null:Number(indRaw)};
   const btn=document.getElementById('btn-save-role');
   btn.disabled=true;
   try{
@@ -4583,7 +4512,7 @@ async function saveRole(){
 async function toggleRoleActive(id){
   const r=dbRoles.find(x=>String(x.id)===String(id)); if(!r) return;
   const res=await callDb('update_role',{id:Number(r.id), name:r.name, base_level:r.base_level,
-    individual_target:r.individual_target, team_target:r.team_target, active:r.active===false});
+    individual_target:r.individual_target, active:r.active===false});
   if(!res||!res.ok){showToast(ROLE_CRUD_ERRORS[res&&res.error]||'Could not update this cargo','error');return;}
   showToast(r.active===false?'Cargo activated':'Cargo deactivated','success');
   await refreshAfterRoleChange();
@@ -4652,7 +4581,7 @@ async function loadDbUsers(){
   const rows = (r && r.users) || [];
   dbUsers = rows.map(u => ({
     id:u.id, first:dashFix(u.first), last:dashFix(u.last), nickname:dashFix(u.nickname)||'', email:u.email,
-    role:u.role, campus:u.campus, team:dashFix(u.team), phone:u.phone||'',
+    role:u.role, campus:u.campus, phone:u.phone||'',
     role_id:u.role_id!=null?u.role_id:null,
     role_name: dashFix((rolesById[u.role_id]||{}).name) || null,
     team_id:u.team_id!=null?u.team_id:null,
@@ -5557,7 +5486,6 @@ const PRESENCE_RANK={ online:0, busy:1, away:2 };
 const PRESENCE_LABELS={ online:'Online', away:'Away', busy:'Busy', offline:'Offline' };
 // select value -> mode. 'auto' follows activity; the rest are forced.
 const STATUS_MODES={ online:'auto', away:'away', busy:'busy', offline:'hidden' };
-const MODE_STATUS={ auto:'online', away:'away', busy:'busy', hidden:'offline' };
 
 let presenceChannel=null;
 let presenceState={};                          // uid -> 'online' | 'away' | 'busy'
@@ -6332,7 +6260,6 @@ function closeInstallGuide(e){
 }
 
 // ── Mobile Bottom Nav ──────────────────────────────────
-const MOB_PAGES=['home','procedures','trainings','performance','materials','tools'];
 const MOB_LEADER_ITEMS=[
   {id:'team-profiles',  label:'Team',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'},
   {id:'reports',        label:'Reports',           icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'},
@@ -6385,7 +6312,6 @@ function mobNavIcon(page){
   showPage(page);
 }
 // Sync mobile nav highlight when showPage is called
-const _showPageOrig=showPage;
 window._mobNavSync=function(name){
   // Highlight correct mobile nav item
   document.querySelectorAll('.mob-nav-item').forEach(b=>b.classList.remove('active'));
@@ -6989,8 +6915,6 @@ function toggleOrgTeam(v, lbl){
   renderOrgChart();
 }
 
-function filterOrg(f,btn){} // kept for compat
-
 function renderOrgChart(){
   const container=document.getElementById('org-chart-container');
   if(!container) return;
@@ -7124,9 +7048,6 @@ setupPWA();
   }
 })();
 
-// Also call renderCalendar when calendar page opens
-const _origShowPage=showPage;
-// (already handled in showPage with if(name==='calendar') renderCalendar())
 
 
 </script>
