@@ -24,7 +24,7 @@ async function callerProfile(caller){
 // them all: you may act on anyone at your own tier or below, never above.
 // 'admin' has a rank here before it exists as a tier, so adding it later
 // changes no behaviour on its own.
-const ROLE_RANK = { agent:0, specialist:0, executive:0, leader:1,
+const ROLE_RANK = { agent:0, specialist:0, executive:0, senior_exec:0, leader:1,
   supervisor:2, manager:3, director:4, admin:5 };
 function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
 function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
@@ -32,8 +32,17 @@ function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); 
 // "Leadership" is now a floor, not a list: manager and up.
 function isMgr(role){ return rank(role) >= ROLE_RANK.manager; }
 
+// ── VIEW WITHOUT AUTHORITY ───────────────────────────────────────
+// Until now "sees the whole company" and "may act on the whole company" were
+// the same predicate: rank. 'senior_exec' breaks that - it reads everything
+// and may act on nobody - so it cannot be expressed as a rank floor and gets
+// its own list. Membership here grants READ scope and nothing else: every
+// write gate is rank- or isMgr-based and senior_exec is rank 0.
+const VIEW_ALL_ROLES = ['senior_exec'];
+function seesEverything(role){ return VIEW_ALL_ROLES.includes(role); }
+
 const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
-  supervisor:22000, manager:0, director:0, admin:0 };
+  supervisor:22000, manager:0, director:0, admin:0, senior_exec:0 };
 function canUpdatePerf(role){ return rank(role) >= ROLE_RANK.supervisor; }
 function inScope(me, tgt){
   if(isMgr(me.role)) return outranks(me.role, tgt.role);
@@ -42,8 +51,10 @@ function inScope(me, tgt){
 }
 // Mirrors the user_role enum in Postgres, lowest tier first. 'admin' sits
 // above 'director': same reach, plus the three places a director was named
-// outright. Nothing holds it until someone is given it.
-const ROLE_LEVELS = ['agent','specialist','executive','leader','supervisor','manager','director','admin'];
+// outright. 'senior_exec' sits at rank 0 with the individual contributors -
+// it reads company-wide but commands nobody, so it is NOT ordered by what it
+// can see. Nothing holds either until someone is given it.
+const ROLE_LEVELS = ['agent','specialist','executive','senior_exec','leader','supervisor','manager','director','admin'];
 // null / '' clears the value; a bad number returns false so callers can 400.
 function numOrNull(v){
   if(v===null || v===undefined || v==='') return null;
@@ -59,7 +70,7 @@ function validCampus(v){
 // Teams a caller can see figures for: leadership sees all, a supervisor or
 // leader sees the teams they lead plus the teams their people sit on.
 function accessibleTeamIds(me, allTeams, allProfs){
-  if(isMgr(me.role)) return allTeams.map(t=>t.id);
+  if(isMgr(me.role) || seesEverything(me.role)) return allTeams.map(t=>t.id);
   if(me.role==='supervisor' || me.role==='leader'){
     const mine = new Set();
     allTeams.forEach(t => { if(t.leader_id === me.id) mine.add(t.id); });
@@ -154,18 +165,26 @@ async function canEditProfileOf(me, tgt){
   if(me.role === 'supervisor' || me.role === 'leader') return (await subtreeIds(me)).has(tgt.id);
   return false;
 }
-// Viewing is the same set: editors, plus nothing extra. Leadership sees broadly
-// because the two clauses above already cover it.
+// Viewing used to be the same set as editing. It no longer is: a company-wide
+// viewer reads every profile and edits none of them.
 async function canViewProfileOf(me, tgt){
+  // Viewing and editing were the same predicate until a read-only tier
+  // existed. They are not the same question any more.
+  if(me && seesEverything(me.role)) return true;
   return canEditProfileOf(me, tgt);
 }
 // All the profile gates in one place, computed from a single subtree walk.
-//   view/edit : self, or up the chain
-//   certs     : chain only - below director tier you cannot manage your own
+//   view      : self, up the chain, or a company-wide viewer
+//   edit      : self, or up the chain - never a viewer
+//   certs     : view follows canView; managing is chain only, and below
+//               director tier you cannot manage your own
 //   appraisals: chain only, never about yourself, not at any tier
 //   documents : chain only - below director tier you cannot see your own
 async function gatesFor(me, tgt){
   const self = me.id === tgt.id;
+  // Read-only breadth. Deliberately absent from canEdit, certManage,
+  // appraisal and doc: this tier changes nothing and sees no private HR file.
+  const viewAll = seesEverything(me.role);
   const needSub = (me.role === 'supervisor' || me.role === 'leader');
   const sub = needSub ? await subtreeIds(me) : null;
   let chain;
@@ -176,9 +195,9 @@ async function gatesFor(me, tgt){
   // exception is the top of the tree, because nobody sits above them to do it.
   const chefia = chain && !(self && rank(me.role) < ROLE_RANK.director);
   return {
-    canView: self || chain,
+    canView: self || chain || viewAll,
     canEdit: self || chain,
-    certView: self || chain,
+    certView: self || chain || viewAll,
     certManage: chefia,
     appraisal: !self && chain,
     doc: chefia
@@ -274,6 +293,9 @@ const CERT_SEED = [
 ];
 async function accessibleIds(me){
   const { data: all } = await admin.from('profiles').select('id,role,reports_to');
+  // A pure viewer reads everyone, including the tiers above them - there is no
+  // authority attached to the set, so outranks() does not apply.
+  if(seesEverything(me.role)) return all.map(u=>u.id);
   if(isMgr(me.role)) return all.filter(u=>outranks(me.role, u.role)).map(u=>u.id);
   if(me.role==='supervisor'||me.role==='leader'){
     const ids = all.filter(u=>u.reports_to===me.id).map(u=>u.id); ids.push(me.id); return ids;
