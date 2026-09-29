@@ -2478,7 +2478,21 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 // ═══════════════════════════════════════
 const SUPABASE_URL = 'https://acwgfgsctgmuepeofdkj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjd2dmZ3NjdGdtdWVwZW9mZGtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1NDg3NTQsImV4cCI6MjEwNTEyNDc1NH0.KHVCNbr_C9064aWCF25wNymhvTA1qljK41MSv966lbk';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// persistSession + autoRefreshToken are supabase-js v2 defaults, but they are
+// the whole reason a reload keeps you signed in, so they are written down
+// rather than assumed. storageKey is FIXED - anything per-load (a timestamp, a
+// random id) would orphan the stored session on every refresh.
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    // This is supabase-js's OWN default for this project URL, written out so
+    // it is visible and fixed. It is deliberately NOT a new name: changing the
+    // key would orphan every session already in a browser and sign everybody
+    // out once - the exact thing this change exists to stop.
+    storageKey: 'sb-acwgfgsctgmuepeofdkj-auth-token',
+  }
+});
 
 // Realtime authorizes with whatever token the socket carries. Without this it
 // carries the anon key, RLS matches nothing, and postgres_changes deliver
@@ -2497,6 +2511,28 @@ sb.auth.onAuthStateChange((_event, session) => {
   // can drop the tracked meta, so re-assert it.
   if(session && typeof trackPresence === 'function'){ try { trackPresence(); } catch(e){} }
 });
+
+// ── BOOT RESILIENCE ─────────────────────────────────────────────
+// callDb() throws on a dropped connection or a non-JSON body (a cold-start 502
+// from the gateway returns HTML, and res.json() rejects on it). On the boot
+// path that used to be fatal: the restore promise rejected, nothing caught it,
+// and a signed-in person was left looking at the login screen.
+//
+// One retry, because a single cold start should not cost somebody their
+// session. Returns null rather than throwing.
+async function callDbRetry(action, payload = {}){
+  for(let i=0;i<2;i++){
+    try { return await callDb(action, payload); }
+    catch(e){ if(i) console.warn('[boot] '+action+' failed twice', e); }
+  }
+  return null;
+}
+// A secondary loader that fails must cost its own data and nothing else.
+// Returns true when it worked.
+async function softLoad(label, fn){
+  try { await fn(); return true; }
+  catch(e){ console.warn('[boot] '+label+' did not load; continuing without it', e); return false; }
+}
 
 async function callDb(action, payload = {}) {
   const { data:{ session } } = await sb.auth.getSession();
@@ -3184,18 +3220,30 @@ function checkStrPw(v){
 // Load the real staff directory, then start the app as the signed-in person.
 async function completeLoginReal(profile){
   applyThemeFromProfile(profile);   // before any rendering, so nothing flashes
-  await loadRoles();        // names resolve during mapping, so these come first
-  await loadTeams();
-  await loadLocations();
-  await loadCertCatalog();
-  await loadDirectory();
-  await loadPerformance();
+  // Roles, teams, locations and the catalog are SECONDARY: the app renders
+  // without them, just with thinner labels. A transient failure in any one of
+  // them used to reject this whole function and strand the person on login.
+  await softLoad('roles', loadRoles);        // names resolve during mapping, so these come first
+  await softLoad('teams', loadTeams);
+  await softLoad('locations', loadLocations);
+  await softLoad('certificates', loadCertCatalog);
+  // The directory is the one the app really needs - names, cargos and every
+  // scope helper read it - so it gets a second attempt. Even if both fail we
+  // still render: the person IS signed in, and a soft warning beats a login
+  // screen they do not need.
+  let dirOk = await softLoad('directory', loadDirectory);
+  if(!dirOk) dirOk = await softLoad('directory (retry)', loadDirectory);
+  await softLoad('performance', loadPerformance);
   currentUserId = profile.id; currentRole = profile.role;
   let me = users.find(x => x.id === profile.id);
   if(!me){ me = mapProfileToUser(profile); users.push(me); }
-  callDb('update_last_login');
+  // Fire-and-forget, so its rejection must be swallowed here or it surfaces as
+  // an unhandled rejection on every login.
+  Promise.resolve(callDb('update_last_login')).catch(()=>{});
   startApp(me);
-  startChat();          // realtime auth + subscribe + first thread load
+  if(!dirOk) showToast('Some data could not be loaded. Refresh in a moment.','warning');
+  // Realtime is a bonus, never a gate on getting into the app.
+  Promise.resolve(startChat()).catch(e=>console.warn('[boot] chat did not start', e));
 }
 
 function startApp(user){
@@ -3369,30 +3417,34 @@ function showPage(name){
   const na=document.getElementById('nav-'+name);
   if(na) na.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
+  // These loaders are fired and not awaited, so a failed one used to surface as
+  // an unhandled rejection - including on every boot, because startApp() lands
+  // on home. softLoad() swallows and logs it; the render below still runs, and
+  // mapProfileToUser already gives every user a zeroed perf object to draw.
   if(name==='roles'){
-    if(isUserAdmin()) (async()=>{ await loadRoles(); renderRoles(); })();
+    if(isUserAdmin()) (async()=>{ await softLoad('roles', loadRoles); renderRoles(); })();
     else renderRoles();
   }
   if(name==='locations'){
-    if(isUserAdmin()) (async()=>{ await loadLocations(); renderLocations(); })();
+    if(isUserAdmin()) (async()=>{ await softLoad('locations', loadLocations); renderLocations(); })();
     else renderLocations();
   }
   if(name==='teams'){
-    if(isUserAdmin()) (async()=>{ await loadTeams(); renderTeams(); })();
+    if(isUserAdmin()) (async()=>{ await softLoad('teams', loadTeams); renderTeams(); })();
     else renderTeams();
   }
   if(name==='users'){
-    if(isUserAdmin()) (async()=>{ await loadDbUsers(); renderUsers(); updateStats(); })();
+    if(isUserAdmin()) (async()=>{ await softLoad('users', loadDbUsers); renderUsers(); updateStats(); })();
     else { renderUsers(); updateStats(); }
   }
   if(name==='my-profile') renderMyProfile();
-  if(name==='performance') (async()=>{ await loadPerformance(); renderPerformancePage(); })();
+  if(name==='performance') (async()=>{ await softLoad('performance', loadPerformance); renderPerformancePage(); })();
   if(name==='team-profiles') renderTeamProfiles();
-  if(name==='home') (async()=>{ await loadPerformance(); renderHomePerf(); })();
+  if(name==='home') (async()=>{ await softLoad('performance', loadPerformance); renderHomePerf(); })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
   if(name==='orgchart'){ fillOrgTeamFilter(); renderOrgChart(); }
-  if(name==='reports') (async()=>{ await loadPerformance(); seedCurrentYearCells(); renderReportsPage(); })();
+  if(name==='reports') (async()=>{ await softLoad('performance', loadPerformance); seedCurrentYearCells(); renderReportsPage(); })();
   // Sync mobile nav highlight
   if(window._mobNavSync) window._mobNavSync(name);
 }
@@ -7473,13 +7525,24 @@ setupPWA();
 // KEEP-ALIVE — restore an existing Supabase session
 // ═══════════════════════════════════════════════════
 (async () => {
-  const { data:{ session } } = await sb.auth.getSession();
-  if(session){
-    const r = await callDb('get_my_profile');
-    if(r.profile && r.profile.status !== 'inactive'){
-      if(r.profile.must_change_password){ pendingLoginProfile = r.profile; showChangePwScreen(); }
-      else await completeLoginReal(r.profile);
-    }
+  try {
+    // Destructured defensively: getSession() can resolve with a null data on
+    // its error paths, and `data:{session}` would throw a TypeError there -
+    // which, unhandled, is itself a way to end up back on the login screen.
+    const { data } = await sb.auth.getSession();
+    const session = data && data.session;
+    // No session is the ONLY ordinary reason to sit on the login screen.
+    if(!session) return;
+    const r = await callDbRetry('get_my_profile');
+    const profile = r && r.profile;
+    if(!profile || profile.status === 'inactive') return;
+    if(profile.must_change_password){ pendingLoginProfile = profile; showChangePwScreen(); return; }
+    await completeLoginReal(profile);
+  } catch(e){
+    // Deliberately NOT signing out and NOT clearing storage: the stored
+    // session may be perfectly good, and a bad moment on the network must not
+    // cost it. The login screen is already showing; the next reload retries.
+    console.warn('[boot] session restore failed', e);
   }
 })();
 
