@@ -2785,7 +2785,7 @@ function aggregateTargetOf(list, p, pop, valueOf, units){
 // Teams this person runs, and the teams they oversee further down the line.
 function teamsOverseenBy(me){
   if(!me) return [];
-  if(me.role==='director'||me.role==='manager') return dbTeams.filter(t=>t.active!==false);
+  if(rank(me.role) >= ROLE_RANK.manager) return dbTeams.filter(t=>t.active!==false);
   const under=new Set([me.id, ...teamSubtreeOf(me.id).map(u=>u.id)]);
   return dbTeams.filter(t=>t.leader_id && under.has(t.leader_id));
 }
@@ -2889,7 +2889,7 @@ const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent'
 const CAMPUS_LABELS = {dublin:'Dublin',limerick:'Limerick',both:'Both'};
 
 // Roles that can update performance
-function canUpdatePerf(){return ['supervisor','manager','director'].includes(currentRole);}
+function canUpdatePerf(){return rank(currentRole) >= ROLE_RANK.supervisor;}
 
 // Who this person reports to, resolved through reports_to
 function managerNameOf(u){
@@ -3583,7 +3583,7 @@ function canViewProfile(targetId){ return canEditProfile(targetId); }
 // one exception is a director editing their own profile, because nobody sits
 // above them to do it. The server refuses regardless of what the UI shows.
 function allowStartDate(targetId){
-  return String(currentUserId) !== String(targetId) || currentRole === 'director';
+  return String(currentUserId) !== String(targetId) || rank(currentRole) >= ROLE_RANK.director;
 }
 
 function canAddDocuments(targetId){return canEditProfile(targetId);}
@@ -3841,7 +3841,7 @@ function renderTeamProfiles(roleF=''){
   const leaders=allTeam.filter(u=>leaderRoles.includes(u.role));
   const members=allTeam.filter(u=>!leaderRoles.includes(u.role));
 
-  const canShowLeaders=cfg.canSeeTeam&&(currentRole==='supervisor'||currentRole==='manager'||currentRole==='director');
+  const canShowLeaders=cfg.canSeeTeam&&rank(currentRole) >= ROLE_RANK.supervisor;
 
   // Leaders section
   const leadersSection=document.getElementById('team-leaders-section');
@@ -4205,7 +4205,10 @@ async function deleteDocument(uid, docId){
 // ═══════════════════════════════════════
 // USER MANAGEMENT TABLE — real data via db.js
 // ═══════════════════════════════════════
-function isUserAdmin(){ return currentRole === 'manager' || currentRole === 'director'; }
+// "Admin" here is the UI sense - who may reach the management pages - and is
+// manager and up, which now includes the 'admin' tier. The gateway's isMgr()
+// is the same floor and still has the final say.
+function isUserAdmin(){ return rank(currentRole) >= ROLE_RANK.manager; }
 
 // ═══════════════════════════════════════
 // LOCATIONS - Manager / Director
@@ -4300,7 +4303,7 @@ async function refreshAfterLocationChange(){
 // ═══════════════════════════════════════
 function teamMembers(teamId){ return users.filter(u=>String(u.team_id)===String(teamId)); }
 function leaderCandidates(){
-  return users.filter(u=>['leader','supervisor','manager','director'].includes(u.role))
+  return users.filter(u=>rank(u.role) >= ROLE_RANK.leader)
               .sort((a,b)=>(a.first+a.last).localeCompare(b.first+b.last));
 }
 
@@ -4493,7 +4496,7 @@ const ROLE_CRUD_ERRORS={
   bad_base_level:'Pick a permission level',
   bad_number:'Targets must be zero or more',
   forbidden:"You don't have permission for this",
-  forbidden_role:"You can't manage a director-level cargo",
+  forbidden_role:"You can't manage a cargo above your own level",
   in_use:'This cargo is assigned to users - deactivate it instead',
   not_found:'That cargo no longer exists'
 };
@@ -4665,7 +4668,7 @@ function renderUsers(){
 function updateStats(){
   document.getElementById('stat-total').textContent=dbUsers.length;
   document.getElementById('stat-active').textContent=dbUsers.filter(u=>u.status==='active').length;
-  document.getElementById('stat-managers').textContent=dbUsers.filter(u=>['supervisor','manager','director'].includes(u.role)).length;
+  document.getElementById('stat-managers').textContent=dbUsers.filter(u=>rank(u.role) >= ROLE_RANK.supervisor).length;
   document.getElementById('stat-temp').textContent=dbUsers.filter(u=>u.tempPw).length;
 }
 
@@ -4731,8 +4734,7 @@ function openBackdrop(id){document.getElementById(id).classList.add('open');}
 function fillReportsTo(){
   const sel=document.getElementById('au-reports-to');
   if(!sel) return;
-  const LEADS=['leader','supervisor','manager','director'];
-  const opts=dbUsers.filter(u=>LEADS.includes(u.role))
+  const opts=dbUsers.filter(u=>rank(u.role) >= ROLE_RANK.leader)
     .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} &mdash; ${esc(displayRole(u))}</option>`)
     .join('');
   sel.innerHTML='<option value="">&mdash; None (top level) &mdash;</option>'+opts;
@@ -4869,7 +4871,7 @@ function renderHomePerf(){
   if(!me) return;
   const p='monthly';
   const el=document.getElementById('home-perf-content');
-  const isLeader=['supervisor','manager','director','leader'].includes(me.role);
+  const isLeader=rank(me.role) >= ROLE_RANK.leader;
 
   if(!isLeader){
     // INDIVIDUAL widget
@@ -6974,7 +6976,7 @@ function renderOrgChart(){
   // Does this person pass the active filter?
   function pass(u){
     // Leadership is never filtered
-    if(['director','manager','supervisor','leader'].includes(u.role)) return true;
+    if(rank(u.role) >= ROLE_RANK.leader) return true;
     if(orgCampus==='dublin'  && u.campus!=='dublin'  && u.campus!=='both') return false;
     if(orgCampus==='limerick'&& u.campus!=='limerick' && u.campus!=='both') return false;
     if(!orgTeams.has('all') && !orgTeams.has(teamFilterKey(u))) return false;
@@ -6985,12 +6987,16 @@ function renderOrgChart(){
   function directReports(id){
     return users.filter(u=>u.reports_to===id && u.id!==id);
   }
-  const BRANCH_ROLES=['manager','supervisor','leader'];
+  // Anyone at leader tier or above opens a branch. This used to be a literal
+  // list without 'director', which was harmless only while a director was
+  // always a root; with a tier above them a director has a parent, and would
+  // otherwise render as a childless leaf with their whole org hidden.
+  const isBranch=r=>rank(r) >= ROLE_RANK.leader;
   const LEAF_ROLES=['agent','specialist','executive'];
   // A node renders as its own kind of subtree, whatever level it sits at.
   function subtree(u){
     if(u.role==='leader') return leaderTree(u);
-    if(BRANCH_ROLES.includes(u.role)) return branchTree(u);
+    if(isBranch(u.role)) return branchTree(u);
     return `<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(u)}</div>`;
   }
 
@@ -7009,7 +7015,7 @@ function renderOrgChart(){
   // Manager / supervisor subtree: leadership branches, then leaves grouped by team
   function branchTree(node){
     const rpts=directReports(node.id);
-    const branches=rpts.filter(u=>BRANCH_ROLES.includes(u.role));
+    const branches=rpts.filter(u=>isBranch(u.role));
     const leaves=rpts.filter(u=>LEAF_ROLES.includes(u.role)).filter(pass);
     const suffix=node.role==='manager'?' (Direct)':'';
 

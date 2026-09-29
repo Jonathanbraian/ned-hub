@@ -161,9 +161,9 @@ async function canViewProfileOf(me, tgt){
 }
 // All the profile gates in one place, computed from a single subtree walk.
 //   view/edit : self, or up the chain
-//   certs     : chain only - a non-director cannot manage their own
-//   appraisals: chain only, never about yourself, not even for a director
-//   documents : chain only - a non-director cannot see their own
+//   certs     : chain only - below director tier you cannot manage your own
+//   appraisals: chain only, never about yourself, not at any tier
+//   documents : chain only - below director tier you cannot see your own
 async function gatesFor(me, tgt){
   const self = me.id === tgt.id;
   const needSub = (me.role === 'supervisor' || me.role === 'leader');
@@ -172,7 +172,9 @@ async function gatesFor(me, tgt){
   if(isMgr(me.role)) chain = outranks(me.role, tgt.role);
   else if(needSub) chain = sub.has(tgt.id);
   else chain = false;
-  const chefia = chain && !(self && me.role !== 'director');
+  // Certs, appraisals and documents are set FOR you, not BY you. The one
+  // exception is the top of the tree, because nobody sits above them to do it.
+  const chefia = chain && !(self && rank(me.role) < ROLE_RANK.director);
   return {
     canView: self || chain,
     canEdit: self || chain,
@@ -194,9 +196,9 @@ async function resolveLocation(locationId){
   if(data.active === false) return { ok:false, error:'location_inactive' };
   return { ok:true, id:data.id };
 }
-// The organiser runs their own meeting; a director can step in.
+// The organiser runs their own meeting; director tier and above can step in.
 function canManageMeeting(me, meeting){
-  return meeting.created_by === me.id || me.role === 'director';
+  return meeting.created_by === me.id || rank(me.role) >= ROLE_RANK.director;
 }
 // A meeting's attendee ids, creator always included.
 async function attendeeIdsOf(meetingId, createdBy){
@@ -250,10 +252,10 @@ function normStartDate(v){
 }
 // Who may set someone's start date: anyone already cleared to edit that
 // profile, as long as it is not their own - a person does not decide when they
-// joined. A director editing themselves is the documented exception, since
-// nobody sits above them to do it for them. The client mirrors this rule.
+// joined. Director tier and above editing themselves is the documented
+// exception, since nobody sits above them to do it. The client mirrors this.
 function allowStart(me, targetId){
-  return String(me.id) !== String(targetId) || me.role === 'director';
+  return String(me.id) !== String(targetId) || rank(me.role) >= ROLE_RANK.director;
 }
 // Copied verbatim from the client's CERT_LIST.
 const CERT_SEED = [
