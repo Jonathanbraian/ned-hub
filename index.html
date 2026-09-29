@@ -76,6 +76,7 @@
   --role-leader:#92400E;--role-leader-bg:rgba(252,211,77,.2);--role-leader-border:rgba(252,211,77,.5);
   --role-supervisor:#9A3412;--role-supervisor-bg:rgba(251,146,60,.2);--role-supervisor-border:rgba(251,146,60,.4);
   --role-director:#C2410C;--role-director-bg:#FFF7ED;--role-director-border:#FED7AA;
+  --role-admin:#4338CA;--role-admin-bg:#EEF2FF;--role-admin-border:#C7D2FE;
   --org-supervisor-bg:rgba(251,146,60,.06);--org-leader-bg:rgba(252,211,77,.06);
   /* ── status + accents ── */
   --status-online:#16A34A;--status-away:#D97706;--status-busy:#DC2626;--status-offline:#9CA3AF;
@@ -114,6 +115,7 @@ html[data-theme="dark"]{
   --role-leader:#FCD34D;--role-leader-bg:rgba(252,211,77,.12);--role-leader-border:rgba(252,211,77,.32);
   --role-supervisor:#FDBA74;--role-supervisor-bg:rgba(251,146,60,.14);--role-supervisor-border:rgba(251,146,60,.32);
   --role-director:#FCA55D;--role-director-bg:#33240F;--role-director-border:#5C441A;
+  --role-admin:#A5B4FC;--role-admin-bg:#1F1D3D;--role-admin-border:#3F3A78;
   --org-supervisor-bg:rgba(251,146,60,.1);--org-leader-bg:rgba(252,211,77,.08);
   --status-online:#5FD98A;--status-away:#F5B453;--status-busy:#FF8A8A;--status-offline:#64748B;
   --star:#FCD34D;
@@ -233,6 +235,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .rp-supervisor{background:var(--role-supervisor-bg);color:var(--role-supervisor);border:1px solid var(--role-supervisor-border)}
 .rp-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .rp-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
+.rp-admin{background:var(--role-admin-bg);color:var(--role-admin);border:1px solid var(--role-admin-border)}
 .btn-logout{font-family:'Rubik',sans-serif;font-size:12px;font-weight:500;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .15s}
 .btn-logout:hover{background:var(--bg);color:var(--text)}
 .nav-avatar-btn{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid var(--border2);overflow:hidden;flex-shrink:0;transition:border-color .15s;background:var(--light-blue);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--blue)}
@@ -462,6 +465,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .rb-supervisor{background:var(--role-supervisor-bg);color:var(--role-supervisor);border:1px solid var(--role-supervisor-border)}
 .rb-manager{background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .rb-director{background:var(--role-director-bg);color:var(--role-director);border:1px solid var(--role-director-border)}
+.rb-admin{background:var(--role-admin-bg);color:var(--role-admin);border:1px solid var(--role-admin-border)}
 .status-dot{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
 .sdot{width:7px;height:7px;border-radius:50%}.sdot-active{background:var(--status-online)}.sdot-inactive{background:var(--status-offline)}
 .campus-chip{font-size:11px;font-weight:500;background:var(--bg);border:1px solid var(--border);padding:2px 9px;border-radius:5px;color:var(--muted)}
@@ -981,6 +985,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
   position:relative;
 }
 .org-node-card:hover{border-color:var(--border2);box-shadow:0 4px 16px rgba(0,50,255,.1);transform:translateY(-2px)}
+.org-node-card.admin{border-color:var(--role-admin-border);background:var(--role-admin-bg)}
 .org-node-card.director{border-color:var(--role-director-border);background:var(--role-director-bg)}
 .org-node-card.manager{border-color:var(--manager-border);background:var(--manager-bg)}
 .org-node-card.supervisor{border-color:var(--role-supervisor-border);background:var(--org-supervisor-bg)}
@@ -2213,6 +2218,7 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
           <option value="supervisor">Supervisor</option>
           <option value="manager">Manager</option>
           <option value="director">Director</option>
+          <option value="admin">Administrator</option>
         </select>
         <div class="form-hint">This is what the cargo can do in the Hub, not what it is called.</div>
       </div>
@@ -2451,6 +2457,7 @@ const ROLE_TARGETS = {
   supervisor: 22000,
   manager: 0, // defined per campus
   director: 0,
+  admin: 0,
 };
 
 // ── ROLE HIERARCHY ───────────────────────────────────────────────
@@ -2856,7 +2863,15 @@ let perfViewMode='team'; // 'team' | 'campus' | 'byteam' | 'individual'
 // ═══════════════════════════════════════
 // Never let an unexpected role value white-screen the app.
 const ROLE_CFG_FALLBACK = {label:'Team Member', pill:'rp-agent', mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false};
-function roleCfg(role){ return ROLE_CFG[role] || ROLE_CFG_FALLBACK; }
+// An unknown value below manager falls back to the harmless agent config.
+// One at or above manager must NOT: dropping it to Team Member would strip a
+// real leader of their nav and their team, which is the failure mode this
+// whole tier change exists to avoid. Fail open at the top, closed at the bottom.
+const ROLE_CFG_LEAD_FALLBACK = {label:'Leadership', pill:'rp-manager', mgr:true, leader:true, canUpdatePerf:true, canSeeTeam:true};
+function roleCfg(role){
+  if(ROLE_CFG[role]) return ROLE_CFG[role];
+  return (rank(role) >= ROLE_RANK.manager) ? ROLE_CFG_LEAD_FALLBACK : ROLE_CFG_FALLBACK;
+}
 
 const ROLE_CFG = {
   agent:      {label:'Agent',           pill:'rp-agent',      mgr:false, leader:false, canUpdatePerf:false, canSeeTeam:false},
@@ -2866,10 +2881,11 @@ const ROLE_CFG = {
   supervisor: {label:'Supervisor',      pill:'rp-supervisor', mgr:false, leader:true,  canUpdatePerf:true,  canSeeTeam:true},
   manager:    {label:'Manager',         pill:'rp-manager',    mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
   director:   {label:'Director',        pill:'rp-director',   mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
+  admin:      {label:'Administrator',   pill:'rp-admin',      mgr:true,  leader:true,  canUpdatePerf:true,  canSeeTeam:true},
 };
 
-const ROLE_LABELS = {agent:'Agent',specialist:'Sales Specialist',executive:'Sales Executive',leader:'Team Leader',supervisor:'Supervisor',manager:'Manager',director:'Director'};
-const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent',leader:'rb-leader',supervisor:'rb-supervisor',manager:'rb-manager',director:'rb-director'};
+const ROLE_LABELS = {agent:'Agent',specialist:'Sales Specialist',executive:'Sales Executive',leader:'Team Leader',supervisor:'Supervisor',manager:'Manager',director:'Director',admin:'Administrator'};
+const ROLE_BADGE  = {agent:'rb-agent',specialist:'rb-agent',executive:'rb-agent',leader:'rb-leader',supervisor:'rb-supervisor',manager:'rb-manager',director:'rb-director',admin:'rb-admin'};
 const CAMPUS_LABELS = {dublin:'Dublin',limerick:'Limerick',both:'Both'};
 
 // Roles that can update performance

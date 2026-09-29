@@ -29,17 +29,21 @@ const ROLE_RANK = { agent:0, specialist:0, executive:0, leader:1,
 function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
 function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
 
-function isMgr(role){ return role === 'manager' || role === 'director'; }
+// "Leadership" is now a floor, not a list: manager and up.
+function isMgr(role){ return rank(role) >= ROLE_RANK.manager; }
 
 const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
-  supervisor:22000, manager:0, director:0 };
-function canUpdatePerf(role){ return role==='supervisor'||role==='manager'||role==='director'; }
+  supervisor:22000, manager:0, director:0, admin:0 };
+function canUpdatePerf(role){ return rank(role) >= ROLE_RANK.supervisor; }
 function inScope(me, tgt){
   if(isMgr(me.role)) return outranks(me.role, tgt.role);
   if(me.role==='supervisor') return tgt.reports_to===me.id || tgt.id===me.id;
   return false;
 }
-const ROLE_LEVELS = ['agent','specialist','executive','leader','supervisor','manager','director'];
+// Mirrors the user_role enum in Postgres, lowest tier first. 'admin' sits
+// above 'director': same reach, plus the three places a director was named
+// outright. Nothing holds it until someone is given it.
+const ROLE_LEVELS = ['agent','specialist','executive','leader','supervisor','manager','director','admin'];
 // null / '' clears the value; a bad number returns false so callers can 400.
 function numOrNull(v){
   if(v===null || v===undefined || v==='') return null;
@@ -55,7 +59,7 @@ function validCampus(v){
 // Teams a caller can see figures for: leadership sees all, a supervisor or
 // leader sees the teams they lead plus the teams their people sit on.
 function accessibleTeamIds(me, allTeams, allProfs){
-  if(me.role==='director' || me.role==='manager') return allTeams.map(t=>t.id);
+  if(isMgr(me.role)) return allTeams.map(t=>t.id);
   if(me.role==='supervisor' || me.role==='leader'){
     const mine = new Set();
     allTeams.forEach(t => { if(t.leader_id === me.id) mine.add(t.id); });
