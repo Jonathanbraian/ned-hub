@@ -29,7 +29,11 @@ const ROLE_RANK = { agent:0, specialist:0, executive:0, senior_exec:0, leader:1,
 function rank(r){ const v = ROLE_RANK[r]; return (v===undefined) ? 0 : v; }
 function outranks(meRole, targetRole){ return rank(meRole) >= rank(targetRole); }
 
-// "Leadership" is now a floor, not a list: manager and up.
+// "Leadership" is now a floor, not a list: manager and up. This answers WHO
+// MAY USE a management action at all - never WHOM it may be used on. The two
+// questions were the same thing while every tier above supervisor reached the
+// whole company; they are not any more, so do NOT tighten this: shrinking it
+// would shrink director and admin too.
 function isMgr(role){ return rank(role) >= ROLE_RANK.manager; }
 
 // ── VIEW WITHOUT AUTHORITY ───────────────────────────────────────
@@ -45,13 +49,58 @@ const VIEW_ALL_ROLES = ['senior_exec'];
 const LEADER_ROLES = new Set(['leader','supervisor','manager','director','admin']);
 function seesEverything(role){ return VIEW_ALL_ROLES.includes(role); }
 
+// ── SCOPE: WHERE a caller's authority reaches ────────────────────
+// Rank answers who you may act ON. It never answered WHERE, because until now
+// everyone above supervisor reached the whole company and the question did not
+// exist. 'manager' is now LOCAL: their own branch of reports_to, transitively,
+// exactly like supervisor and leader. So the company-wide tiers are named
+// outright instead of being inferred from a rank floor.
+// Deliberately NOT isMgr(): that floor still has to include manager, or
+// managers would lose the management screens altogether.
+function seesWholeCompany(role){
+  return rank(role) >= ROLE_RANK.director || seesEverything(role);
+}
+// The tiers whose reach is their own branch and nothing else. A list rather
+// than a rank window because it is not one: manager sits above supervisor in
+// rank and beside it in scope.
+function isLocalLeader(role){
+  return role === 'manager' || role === 'supervisor' || role === 'leader';
+}
+// The people inside a caller's scope, themselves included. `null` means
+// "everyone" so a caller can skip filtering altogether rather than materialise
+// the whole directory.
+async function scopeIdsFor(me){
+  if(seesWholeCompany(me.role)) return null;
+  if(isLocalLeader(me.role)){
+    const ids = await subtreeIds(me);
+    ids.add(me.id);
+    return ids;
+  }
+  return new Set([me.id]);
+}
+// The one "may I act on this person" predicate, shared by every write gate.
+// Two independent questions, both of which must pass for a local leader: is
+// this person in my branch, and do I outrank them.
+async function canActOn(me, tgt){
+  if(!me || !tgt) return false;
+  // Reads everything, commands nobody. First, so no rank arithmetic below can
+  // accidentally let a rank-0 viewer act on a rank-0 person.
+  if(seesEverything(me.role)) return false;
+  if(rank(me.role) >= ROLE_RANK.director) return outranks(me.role, tgt.role);
+  if(isLocalLeader(me.role))
+    return (await subtreeIds(me)).has(tgt.id) && outranks(me.role, tgt.role);
+  return false;
+}
+
 const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
   supervisor:22000, manager:0, director:0, admin:0, senior_exec:0 };
 function canUpdatePerf(role){ return rank(role) >= ROLE_RANK.supervisor; }
-function inScope(me, tgt){
-  if(isMgr(me.role)) return outranks(me.role, tgt.role);
-  if(me.role==='supervisor') return tgt.reports_to===me.id || tgt.id===me.id;
-  return false;
+// Whose sales figures a caller may write. Your own are always in scope - both
+// call sites have already established you may write figures at all - and
+// everyone else is the ordinary "may I act on this person" question.
+async function inScope(me, tgt){
+  if(String(tgt.id) === String(me.id)) return true;
+  return canActOn(me, tgt);
 }
 // Mirrors the user_role enum in Postgres, lowest tier first. 'admin' sits
 // above 'director': same reach, plus the three places a director was named
@@ -71,15 +120,23 @@ function validCampus(v){
   const c = String(v).toLowerCase();
   return ['dublin','limerick','both'].includes(c) ? c : false;
 }
-// Teams a caller can see figures for: leadership sees all, a supervisor or
-// leader sees the teams they lead plus the teams their people sit on.
-function accessibleTeamIds(me, allTeams, allProfs){
-  if(isMgr(me.role) || seesEverything(me.role)) return allTeams.map(t=>t.id);
-  if(me.role==='supervisor' || me.role==='leader'){
+// Teams a caller can see figures for: the company-wide tiers (director, admin
+// and the read-only viewer) see all; a local leader sees the teams led from
+// inside their branch, plus the teams their branch's people sit on. Two
+// widenings against the old supervisor rule, both deliberate: the membership
+// test walks the whole subtree rather than direct reports only, so it agrees
+// with every other gate; and the leader test accepts any leader inside the
+// branch, not just the caller, so a manager is not locked out of a team run by
+// their own supervisor. This is what the client's teamsOverseenBy already said.
+async function accessibleTeamIds(me, allTeams, allProfs){
+  if(seesWholeCompany(me.role)) return allTeams.map(t=>t.id);
+  if(isLocalLeader(me.role)){
+    const sub = await subtreeIds(me);
+    const branch = new Set([me.id, ...sub]);
     const mine = new Set();
-    allTeams.forEach(t => { if(t.leader_id === me.id) mine.add(t.id); });
+    allTeams.forEach(t => { if(t.leader_id!=null && branch.has(t.leader_id)) mine.add(t.id); });
     allProfs.forEach(u => {
-      if(u.team_id!=null && (u.reports_to === me.id || u.id === me.id)) mine.add(u.team_id);
+      if(u.team_id!=null && branch.has(u.id)) mine.add(u.team_id);
     });
     return [...mine];
   }
@@ -165,9 +222,7 @@ async function subtreeIds(me){
 async function canEditProfileOf(me, tgt){
   if(!me || !tgt) return false;
   if(me.id === tgt.id) return true;
-  if(isMgr(me.role)) return outranks(me.role, tgt.role);
-  if(me.role === 'supervisor' || me.role === 'leader') return (await subtreeIds(me)).has(tgt.id);
-  return false;
+  return canActOn(me, tgt);
 }
 // Viewing used to be the same set as editing. It no longer is: a company-wide
 // viewer reads every profile and edits none of them.
@@ -189,12 +244,9 @@ async function gatesFor(me, tgt){
   // Read-only breadth. Deliberately absent from canEdit, certManage,
   // appraisal and doc: this tier changes nothing and sees no private HR file.
   const viewAll = seesEverything(me.role);
-  const needSub = (me.role === 'supervisor' || me.role === 'leader');
-  const sub = needSub ? await subtreeIds(me) : null;
-  let chain;
-  if(isMgr(me.role)) chain = outranks(me.role, tgt.role);
-  else if(needSub) chain = sub.has(tgt.id);
-  else chain = false;
+  // "Up the chain" is now the same predicate as every write gate, so a manager
+  // who cannot edit a profile cannot see its HR file either.
+  const chain = await canActOn(me, tgt);
   // Certs, appraisals and documents are set FOR you, not BY you. The one
   // exception is the top of the tree, because nobody sits above them to do it.
   const chefia = chain && !(self && rank(me.role) < ROLE_RANK.director);
@@ -339,9 +391,13 @@ async function accessibleIds(me){
   // A pure viewer reads everyone, including the tiers above them - there is no
   // authority attached to the set, so outranks() does not apply.
   if(seesEverything(me.role)) return all.map(u=>u.id);
-  if(isMgr(me.role)) return all.filter(u=>outranks(me.role, u.role)).map(u=>u.id);
-  if(me.role==='supervisor'||me.role==='leader'){
-    const ids = all.filter(u=>u.reports_to===me.id).map(u=>u.id); ids.push(me.id); return ids;
+  if(seesWholeCompany(me.role)) return all.filter(u=>outranks(me.role, u.role)).map(u=>u.id);
+  // A local leader reads their own branch, transitively, plus themselves. No
+  // rank filter: a report never outranks the person they report to, and when a
+  // cargo change makes them equal they are still that person's to manage.
+  if(isLocalLeader(me.role)){
+    const sub = await subtreeIds(me);
+    const ids = all.filter(u=>sub.has(u.id)).map(u=>u.id); ids.push(me.id); return ids;
   }
   return [me.id];
 }
@@ -494,8 +550,13 @@ exports.handler = async (event) => {
           .select('*').order('first',{ascending:true});
         if(error) return json(500,{error:'list_failed'});
         // .neq() takes a single value, so the rank filter runs here instead of
-        // in the query - it has to exclude every tier above the caller.
-        return json(200,{ users:(data||[]).filter(u=>outranks(me.role, u.role)) });
+        // in the query - it has to exclude every tier above the caller. A local
+        // leader is then narrowed again to their own branch: this list feeds
+        // every management screen and every "reports to" picker.
+        const scope = await scopeIdsFor(me);
+        return json(200,{ users:(data||[])
+          .filter(u => outranks(me.role, u.role))
+          .filter(u => scope === null || scope.has(u.id)) });
       }
       case 'create_user': {
         const me = await callerProfile(caller);
@@ -527,6 +588,15 @@ exports.handler = async (event) => {
           if(team.active === false) return json(400,{error:'team_inactive'});
           teamId = team.id;
           if(team.leader_id) reportsTo = team.leader_id;
+        }
+        // A local leader may only hang a new person off their own branch -
+        // otherwise create_user is a way to grow a tree you do not own. The
+        // caller counts as in scope, so reporting someone to yourself is fine.
+        // Checked before anything is created, like the team above.
+        if(reportsTo != null){
+          const scope = await scopeIdsFor(me);
+          if(scope !== null && !scope.has(reportsTo))
+            return json(403,{error:'reports_to_out_of_scope'});
         }
         // Validated before anything is created: a bad date must not leave an
         // orphaned auth user behind, the same reason the team is resolved above.
@@ -560,9 +630,9 @@ exports.handler = async (event) => {
         const targetId = p.id; const password = p.password || '';
         if(!targetId) return json(400,{error:'missing_id'});
         if(password.length < 6) return json(400,{error:'weak_password'});
-        const { data: tgt } = await admin.from('profiles').select('role').eq('id',targetId).single();
+        const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',targetId).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!outranks(me.role, tgt.role)) return json(403,{error:'forbidden'});
+        if(!await canActOn(me, tgt)) return json(403,{error:'forbidden'});
         const { error:aErr } = await admin.auth.admin.updateUserById(targetId,{ password });
         if(aErr) return json(500,{error:'reset_failed', detail:aErr.message});
         await admin.from('profiles').update({ must_change_password:true }).eq('id',targetId);
@@ -574,9 +644,9 @@ exports.handler = async (event) => {
         const targetId = p.id; const status = p.status;
         if(!targetId || !['active','inactive'].includes(status)) return json(400,{error:'bad_input'});
         if(targetId === me.id) return json(400,{error:'cannot_change_self'});
-        const { data: tgt } = await admin.from('profiles').select('role').eq('id',targetId).single();
+        const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',targetId).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!outranks(me.role, tgt.role)) return json(403,{error:'forbidden'});
+        if(!await canActOn(me, tgt)) return json(403,{error:'forbidden'});
         const { error } = await admin.from('profiles').update({ status }).eq('id',targetId);
         if(error) return json(500,{error:'status_failed'});
         return json(200,{ ok:true });
@@ -608,7 +678,7 @@ exports.handler = async (event) => {
         const { data: allTeams } = await admin.from('teams')
           .select('id,name,leader_id,campus,team_target,active');
         const { data: allProfs } = await admin.from('profiles').select('id,team_id,reports_to');
-        const teamIds = accessibleTeamIds(me, allTeams||[], allProfs||[]);
+        const teamIds = await accessibleTeamIds(me, allTeams||[], allProfs||[]);
         const memberIds = (allProfs||[])
           .filter(u => u.team_id!=null && teamIds.includes(u.team_id)).map(u => u.id);
         // Team actuals need every member's rows, even ones outside the caller's
@@ -651,7 +721,7 @@ exports.handler = async (event) => {
         if(!(target>=0)||!(actual>=0)) return json(400,{error:'bad_numbers'});
         const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
         const { error } = await admin.from('sales_results').upsert(
           { user_id:uid, year, month, target, actual, notes,
             updated_by:me.id, updated_at:new Date().toISOString() },
@@ -669,7 +739,7 @@ exports.handler = async (event) => {
         if(val!=null && !(val>=0)) return json(400,{error:'bad_number'});
         const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
         const { error } = await admin.from('profiles').update({monthly_target:val}).eq('id',uid);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
@@ -754,8 +824,20 @@ exports.handler = async (event) => {
         if(team_target===false) return json(400,{error:'bad_number'});
         const { data: team } = await admin.from('teams').select('id,leader_id').eq('id',teamId).single();
         if(!team) return json(404,{error:'not_found'});
-        // Managers and directors, or the team's own leader.
-        if(!isMgr(me.role) && team.leader_id !== me.id) return json(403,{error:'out_of_scope'});
+        // The company-wide AUTHORITY tiers, the team's own leader, or - new - a
+        // manager, bounded to the teams inside their own branch.
+        // Deliberately NOT seesWholeCompany and NOT accessibleTeamIds on their
+        // own: both of those include the read-only viewer, which sees every
+        // team's figures and may set none of them. The extra reads only happen
+        // for a manager who does not lead the team outright, so director, admin
+        // and supervisor run exactly the queries they always did.
+        let maySet = rank(me.role) >= ROLE_RANK.director || team.leader_id === me.id;
+        if(!maySet && isMgr(me.role)){
+          const { data: scopeTeams } = await admin.from('teams').select('id,leader_id');
+          const { data: scopeProfs } = await admin.from('profiles').select('id,team_id,reports_to');
+          maySet = (await accessibleTeamIds(me, scopeTeams||[], scopeProfs||[])).includes(team.id);
+        }
+        if(!maySet) return json(403,{error:'out_of_scope'});
         const { error } = await admin.from('teams').update({ team_target }).eq('id',teamId);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
@@ -845,7 +927,7 @@ exports.handler = async (event) => {
         if(String(uid) === String(me.id)) return json(403,{error:'cannot_change_own_manager'});
         const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!outranks(me.role, tgt.role)) return json(403,{error:'out_of_scope'});
+        if(!await canActOn(me, tgt)) return json(403,{error:'out_of_scope'});
 
         const raw = p.reports_to;
         // Clearing it puts the person at the top of the tree, which needs no
@@ -869,6 +951,12 @@ exports.handler = async (event) => {
         if(rank(boss.role) < rank(tgt.role)) return json(403,{error:'manager_not_senior'});
         // And you cannot hand out a boss who outranks you.
         if(rank(me.role) < rank(boss.role)) return json(403,{error:'forbidden'});
+        // The new boss has to be inside your own branch as well, or a local
+        // leader could graft their people onto a tree they do not own - and
+        // lose sight of them in the same move.
+        const bossScope = await scopeIdsFor(me);
+        if(bossScope !== null && !bossScope.has(boss.id))
+          return json(403,{error:'boss_out_of_scope'});
 
         // With same-rank bosses allowed, this action can now close a loop on
         // its own - A under B and then B under A, both supervisors - so the
@@ -899,9 +987,10 @@ exports.handler = async (event) => {
         if(String(uid) === String(me.id)) return json(403,{error:'cannot_change_own_role'});
         const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        // Two separate questions: may you act on this PERSON, and may you hand
-        // out this CARGO. A manager can do neither to a director.
-        if(!outranks(me.role, tgt.role)) return json(403,{error:'out_of_scope'});
+        // Two separate questions: may you act on this PERSON - rank AND, for a
+        // local leader, their place in your branch - and may you hand out this
+        // CARGO, which is a rank ceiling and nothing else.
+        if(!await canActOn(me, tgt)) return json(403,{error:'out_of_scope'});
         if(!p.role_id) return json(400,{error:'missing_role_id'});
         const { data: cargo } = await admin.from('roles')
           .select('id,base_level,active').eq('id', p.role_id).single();
@@ -923,7 +1012,7 @@ exports.handler = async (event) => {
         if(!uid) return json(400,{error:'missing_id'});
         const { data: tgt } = await admin.from('profiles').select('id,role').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
-        if(!outranks(me.role, tgt.role)) return json(403,{error:'forbidden'});
+        if(!await canActOn(me, tgt)) return json(403,{error:'forbidden'});
         const teamId = (p.team_id===null || p.team_id===undefined || p.team_id==='') ? null : p.team_id;
         if(teamId === null){
           // Leaving a team does not move anyone in the hierarchy.
@@ -934,9 +1023,37 @@ exports.handler = async (event) => {
         const { data: team } = await admin.from('teams').select('id,active,leader_id').eq('id',teamId).single();
         if(!team) return json(404,{error:'team_not_found'});
         if(team.active === false) return json(400,{error:'team_inactive'});
-        // Joining a team with a leader also lines the hierarchy up behind them.
+        // The destination has to be a team the caller actually oversees. Only
+        // asked of a local leader, so the company-wide tiers run exactly the
+        // queries they always did.
+        if(!seesWholeCompany(me.role)){
+          const { data: scopeTeams } = await admin.from('teams').select('id,leader_id');
+          const { data: scopeProfs } = await admin.from('profiles').select('id,team_id,reports_to');
+          const okTeams = await accessibleTeamIds(me, scopeTeams||[], scopeProfs||[]);
+          // An UNCLAIMED team - no leader and nobody on it - belongs to no
+          // branch, so putting your own person on it discloses nothing to
+          // anyone and merges their figures with nobody's. Allowed, or a local
+          // leader could never populate a team created without a leader. The
+          // moment it holds somebody else's person it stops being unclaimed.
+          const unclaimed = team.leader_id == null
+            && !(scopeProfs||[]).some(u => String(u.team_id) === String(team.id));
+          if(!okTeams.includes(team.id) && !unclaimed)
+            return json(403,{error:'team_out_of_scope'});
+        }
+        // Joining a team with a leader also lines the hierarchy up behind them -
+        // but only when that leader is somebody the caller could have handed out
+        // directly. A team reaches a local leader's scope through its MEMBERS as
+        // well as its leader, so without this a manager could move their own
+        // person onto such a team and silently re-parent them under another
+        // branch's leader: the exact thing set_reports_to refuses as
+        // boss_out_of_scope, through a different door. The team move still
+        // happens; only the reporting line stays put, as it already does for a
+        // team with no leader at all.
         const patch = { team_id: team.id };
-        if(team.leader_id && team.leader_id !== uid) patch.reports_to = team.leader_id;
+        if(team.leader_id && team.leader_id !== uid){
+          const lScope = await scopeIdsFor(me);
+          if(lScope === null || lScope.has(team.leader_id)) patch.reports_to = team.leader_id;
+        }
         const { error } = await admin.from('profiles').update(patch).eq('id',uid);
         if(error) return json(500,{error:'save_failed', detail:error.message});
         return json(200,{ ok:true, reports_to: patch.reports_to || null });

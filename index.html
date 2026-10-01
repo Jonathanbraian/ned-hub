@@ -2601,6 +2601,18 @@ const VIEW_ALL_ROLES = ['senior_exec'];
 const LEADER_ROLES = new Set(['leader','supervisor','manager','director','admin']);
 function seesEverything(role){ return VIEW_ALL_ROLES.includes(role); }
 
+// Mirrors seesWholeCompany/isLocalLeader in db.js. Rank answers who you may
+// act ON; these answer WHERE. 'manager' is LOCAL - its own branch of
+// reports_to, transitively - so the company-wide tiers are named outright
+// rather than inferred from a rank floor. isUserAdmin() is NOT this question:
+// it is "may I reach the management screens", and manager still can.
+function seesWholeCompany(role){
+  return rank(role) >= ROLE_RANK.director || seesEverything(role);
+}
+function isLocalLeader(role){
+  return role === 'manager' || role === 'supervisor' || role === 'leader';
+}
+
 const CERT_LIST = [
   'NED College - Organisational Overview',
   'Sales Process - NED Limerick',
@@ -2794,8 +2806,7 @@ function fillRoleFilters(){
 function canChangeCargoOf(targetId){
   if(String(targetId) === String(currentUserId)) return false;
   if(!isUserAdmin()) return false;
-  const t = users.find(u=>u.id===targetId);
-  return !!t && outranks(currentRole, t.role);
+  return canActOn(users.find(u=>u.id===targetId));
 }
 // Only cargos at or below the viewer's own tier: a manager never sees a
 // director cargo on the list, so they cannot pick one and be refused.
@@ -2812,19 +2823,21 @@ function assignableCargos(){
 function canChangeManagerOf(targetId){
   if(String(targetId) === String(currentUserId)) return false;
   if(!isUserAdmin()) return false;
-  const t = users.find(u=>u.id===targetId);
-  return !!t && outranks(currentRole, t.role);
+  return canActOn(users.find(u=>u.id===targetId));
 }
-// A boss must be a strictly higher tier than the report, and never above the
-// viewer's own tier. Sorted strongest first so the obvious picks are on top.
+// A boss must be at the report's tier or above, never above the viewer's own
+// tier, and - mirroring set_reports_to's boss_out_of_scope - inside the
+// viewer's own branch. Sorted strongest first so the obvious picks are on top.
 function assignableManagersFor(target){
   if(!isUserAdmin() || !target) return [];
+  const inScope = new Set(scopedPopulation().map(u=>u.id));
   return users
     .filter(u => u.id !== target.id
               && u.status !== 'inactive'
               && LEADER_ROLES.has(u.role)
               && rank(u.role) >= rank(target.role)
-              && rank(currentRole) >= rank(u.role))
+              && rank(currentRole) >= rank(u.role)
+              && inScope.has(u.id))
     .sort((a,b) => rank(b.role) - rank(a.role)
                 || (a.first+' '+a.last).localeCompare(b.first+' '+b.last));
 }
@@ -2910,6 +2923,17 @@ async function loadTeams(){
   fillTeamFilters();
 }
 function activeTeams(){ return dbTeams.filter(t=>t.active!==false); }
+// The teams a MEMBER PICKER may offer: mirrors set_member_team's
+// team_out_of_scope, so a local leader is never shown a destination the gateway
+// would refuse. Report and meeting filters keep activeTeams() - they filter a
+// population that is already scoped, and narrowing them would hide a team the
+// viewer's own people sit on.
+function assignableTeams(){
+  const me=users.find(u=>u.id===currentUserId);
+  if(!me || seesWholeCompany(me.role)) return activeTeams();
+  const over=new Set(teamsOverseenBy(me).map(t=>String(t.id)));
+  return activeTeams().filter(t=>over.has(String(t.id)));
+}
 // The team's real name, or null when the person is on no team.
 function teamNameOf(u){ return (u && u.team_name) ? u.team_name : null; }
 function displayTeam(u){ return teamNameOf(u) || 'Individual'; }
@@ -2927,8 +2951,19 @@ function fillTeamFilters(){
 function fillTeamSelect(selId, selected, noneLabel){
   const sel=document.getElementById(selId);
   if(!sel) return;
+  const list=assignableTeams();
+  const rows=list.map(t=>({ id:t.id, label:dashFix(t.name) }));
+  // The person's CURRENT team may not be one this viewer may assign - it can
+  // belong to another branch, or have been deactivated. Keep it on the list,
+  // marked, exactly as fillManagerSelect keeps a current manager: otherwise the
+  // picker would show the blank option and saving would silently take the
+  // person off their team.
+  if(selected!=null && !list.some(t=>String(t.id)===String(selected))){
+    const cur=dbTeams.find(t=>String(t.id)===String(selected));
+    if(cur) rows.unshift({ id:cur.id, label:dashFix(cur.name)+' (current)' });
+  }
   sel.innerHTML=`<option value="">${noneLabel||'- None / Individual -'}</option>`+
-    activeTeams().map(t=>`<option value="${esc(t.id)}">${esc(dashFix(t.name))}</option>`).join('');
+    rows.map(r=>`<option value="${esc(r.id)}">${esc(r.label)}</option>`).join('');
   sel.value=(selected!=null)?String(selected):'';
 }
 // Does this person match a team filter value ('' = all, 'none' = no team)?
@@ -2982,6 +3017,35 @@ function teamSubtreeOf(leaderId){
     frontier=next;
   }
   return out;
+}
+
+// ── SCOPE: WHO THE VIEWER MAY SEE ────────────────────────────────
+// Mirrors accessibleIds/scopeIdsFor in db.js. get_directory is company-wide on
+// purpose - the name list is shared and chat depends on it - so `users` holds
+// everybody and the scoped screens filter through here instead of through the
+// data they were given.
+function scopedPopulation(){
+  const me=users.find(u=>u.id===currentUserId);
+  if(!me) return [];
+  if(seesEverything(me.role)) return users.slice();
+  if(seesWholeCompany(me.role)) return users.filter(u=>outranks(me.role, u.role));
+  if(isLocalLeader(me.role)){
+    const sub=new Set(teamSubtreeOf(me.id).map(u=>u.id));
+    return users.filter(u=>sub.has(u.id)||u.id===me.id);
+  }
+  return [me];
+}
+// Mirrors canActOn in db.js; the server still decides. NOT expressible as
+// seesWholeCompany + outranks: a read-only viewer sits at rank 0, so outranks()
+// would hand it every other rank-0 person. It acts on nobody, and that has to
+// be the first thing this says.
+function canActOn(t){
+  if(!t) return false;
+  if(seesEverything(currentRole)) return false;
+  if(rank(currentRole) >= ROLE_RANK.director) return outranks(currentRole, t.role);
+  if(isLocalLeader(currentRole))
+    return teamSubtreeOf(currentUserId).some(x=>x.id===t.id) && outranks(currentRole, t.role);
+  return false;
 }
 
 const PERIOD_MULT={monthly:1,quarterly:3,annual:12};
@@ -3040,16 +3104,37 @@ function aggregateTargetOf(list, p, pop, valueOf, units){
 // Teams this person runs, and the teams they oversee further down the line.
 function teamsOverseenBy(me){
   if(!me) return [];
-  if(rank(me.role) >= ROLE_RANK.manager) return dbTeams.filter(t=>t.active!==false);
+  // The company-wide AUTHORITY tiers. Deliberately not seesWholeCompany, which
+  // includes the read-only viewer: it SEES every team's figures and oversees
+  // none of them, and "overseen" is the authority question.
+  if(rank(me.role) >= ROLE_RANK.director) return dbTeams.filter(t=>t.active!==false);
+  // "Overseen" is an authority question, so a tier with none oversees nothing -
+  // the branch test below includes the caller themselves, which would otherwise
+  // hand an agent their own team. Mirrors accessibleTeamIds returning [] for
+  // anyone who is neither company-wide nor a local leader.
+  if(!isLocalLeader(me.role)) return [];
   const under=new Set([me.id, ...teamSubtreeOf(me.id).map(u=>u.id)]);
-  return dbTeams.filter(t=>t.leader_id && under.has(t.leader_id));
+  // Teams led from inside the branch, plus the teams the branch's own people
+  // sit on - the second half mirrors accessibleTeamIds in db.js, and without it
+  // a report on a team led by somebody else would vanish from the widget
+  // entirely rather than move to another card.
+  return dbTeams.filter(t => (t.leader_id && under.has(t.leader_id))
+    || users.some(u => under.has(u.id) && String(u.team_id) === String(t.id)));
 }
 // Direct reports who are on no team at all.
 function looseIndividualsOf(uid){
   return users.filter(u=>u.id!==uid && String(u.reports_to)===String(uid) && u.team_id==null);
 }
+// Mirrors set_team_target in db.js: the company-wide authority tiers, the
+// team's own leader, or a local leader whose branch this team sits inside.
 function canSetTeamTarget(team){
-  return isUserAdmin() || canUpdatePerf() && String(team.leader_id)===String(currentUserId);
+  if(!team) return false;
+  // The company-wide AUTHORITY tiers only - deliberately not seesWholeCompany,
+  // which includes the read-only viewer.
+  if(rank(currentRole) >= ROLE_RANK.director) return true;
+  if(canUpdatePerf() && String(team.leader_id)===String(currentUserId)) return true;
+  const me=users.find(u=>u.id===currentUserId);
+  return isUserAdmin() && teamsOverseenBy(me).some(t=>String(t.id)===String(team.id));
 }
 
 async function loadPerformance(){
@@ -3084,9 +3169,8 @@ async function loadPerformance(){
 function canUpdateFor(target){
   const me = users.find(u=>u.id===currentUserId);
   if(!me || !target || !canUpdatePerf()) return false;
-  if(rank(me.role) >= ROLE_RANK.manager) return outranks(me.role, target.role);
-  if(me.role==='supervisor') return target.reports_to===me.id || target.id===me.id;
-  return false;
+  if(String(target.id)===String(me.id)) return true;
+  return canActOn(target);
 }
 
 // Avatar colours used to key off a numeric id; ids are UUIDs now.
@@ -3164,15 +3248,14 @@ function getTeamForUser(uid){
   // A pure viewer sees everyone, tiers above them included - the set carries
   // no authority, so outranks() does not apply.
   if(seesEverything(me.role)) return users.filter(u=>u.id!==uid);
-  if(rank(me.role) >= ROLE_RANK.manager)
+  if(seesWholeCompany(me.role))
     return users.filter(u=>u.id!==uid && outranks(me.role, u.role));
-  // Supervisor: their direct reports, none of whom may outrank them
-  if(me.role==='supervisor'){
-    return users.filter(u=>u.id!==uid && u.reports_to===uid && outranks(me.role, u.role));
-  }
-  // Leader: the people who report to them
-  if(me.role==='leader'){
-    return users.filter(u=>u.id!==uid && u.reports_to===uid);
+  // A local leader - manager, supervisor or leader - sees their own branch,
+  // transitively. It used to be direct reports only, which disagreed with the
+  // profile gates: you could edit a grandchild you could not see here.
+  if(isLocalLeader(me.role)){
+    const sub=new Set(teamSubtreeOf(uid).map(u=>u.id));
+    return users.filter(u=>u.id!==uid && sub.has(u.id));
   }
   return [];
 }
@@ -3846,17 +3929,12 @@ async function savePerformanceUpdate(){
 // ═══════════════════════════════════════
 function getInitials(u){return((u.first||'?')[0]+((u.last||'?')[0]||'')).toUpperCase()}
 
-// Mirrors canEditProfileOf in db.js; the server still decides.
-// Supervisors and leaders are limited to their own reports_to subtree - they
-// used to be able to edit any junior anywhere in the company.
+// Mirrors canEditProfileOf in db.js; the server still decides. Every local
+// leader - manager now included - is limited to their own reports_to subtree.
+// Self is the one case that is not about scope at all.
 function canEditProfile(targetId){
   if(targetId===currentUserId) return true;
-  const t=users.find(u=>u.id===targetId);
-  if(!t) return false;
-  if(rank(currentRole) >= ROLE_RANK.manager) return outranks(currentRole, t.role);
-  if(currentRole==='supervisor'||currentRole==='leader')
-    return teamSubtreeOf(currentUserId).some(x=>x.id===targetId);
-  return false;
+  return canActOn(users.find(u=>u.id===targetId));
 }
 function canViewProfile(targetId){ return canEditProfile(targetId); }
 
@@ -4768,9 +4846,13 @@ async function refreshAfterLocationChange(){
 // TEAMS - Manager / Director
 // ═══════════════════════════════════════
 function teamMembers(teamId){ return users.filter(u=>String(u.team_id)===String(teamId)); }
+// The company-wide tiers pick a team leader from everyone, exactly as before -
+// deliberately `users` and not scopedPopulation(), which rank-filters and would
+// hide an admin from a director. A local leader picks from inside their branch.
 function leaderCandidates(){
-  return users.filter(u=>rank(u.role) >= ROLE_RANK.leader)
-              .sort((a,b)=>(a.first+a.last).localeCompare(b.first+b.last));
+  const pop = seesWholeCompany(currentRole) ? users : scopedPopulation();
+  return pop.filter(u=>rank(u.role) >= ROLE_RANK.leader)
+            .sort((a,b)=>(a.first+a.last).localeCompare(b.first+b.last));
 }
 
 function renderTeams(){
@@ -5383,10 +5465,13 @@ function renderHomePerf(){
     // One card per team this person oversees, plus their loose individuals.
     const myTeams=teamsOverseenBy(me);
     const loose=looseIndividualsOf(me.id);
+    // The cards list PEOPLE, so they list the people this viewer may see; the
+    // team figures stay the server's whole-team ones, as they always were.
+    const pop=scopedPopulation();
     const cards=myTeams.map(t=>{
-      const members=teamMembersOf(t.id);
+      const members=teamMembersOf(t.id, pop);
       return { key:t.id, name:t.name, members,
-        actual:teamActualOf(t.id,p), target:teamTargetOf(t.id,p),
+        actual:teamActualOf(t.id,p,pop), target:teamTargetOf(t.id,p,pop),
         explicit:hasTeamTarget(t.id) };
     }).filter(c=>c.members.length||c.explicit);
     if(loose.length) cards.push({ key:null, name:'Individuals', members:loose,
@@ -6881,16 +6966,9 @@ document.querySelectorAll('.report-include-check').forEach(lbl=>{
 // ── WHO a report may cover ────────────────────────────────────────
 // Mirrors the gateway's accessibleIds. The server still decides what data
 // arrives; this decides who may appear, so a report never lists someone whose
-// figures we do not actually have.
-function reportPopulation(){
-  const me=users.find(u=>u.id===currentUserId);
-  if(!me) return [];
-  if(seesEverything(me.role)) return users.slice();
-  if(rank(me.role) >= ROLE_RANK.manager) return users.filter(u=>outranks(me.role, u.role));
-  if(me.role==='supervisor'||me.role==='leader')
-    return users.filter(u=>String(u.reports_to)===String(me.id)||u.id===me.id);
-  return [me];
-}
+// figures we do not actually have. One population, shared with every other
+// scoped screen, so the Reports page and the Team page can never disagree.
+function reportPopulation(){ return scopedPopulation(); }
 
 // ── PERIODS as explicit (year, month) cells ───────────────────────
 const RPT_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -7515,7 +7593,12 @@ function renderOrgChart(){
   }
 
   // ── Director → Managers ───────────────────────────────
-  const roots=users.filter(u=>!u.reports_to);
+  // A local leader's chart is rooted at themselves: everything reachable by
+  // walking DOWN from there is exactly their branch, so no further filtering is
+  // needed. Everyone else keeps the real roots of the tree.
+  const viewer=users.find(u=>u.id===currentUserId);
+  const roots=(viewer && isLocalLeader(viewer.role))
+    ? [viewer] : users.filter(u=>!u.reports_to);
   if(!roots.length){ container.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)">No one in the directory yet.</div>'; return; }
 
   const rootCols=roots.map(root=>{
