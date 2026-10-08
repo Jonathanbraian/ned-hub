@@ -793,34 +793,25 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .cal-sidebar{display:none}
   .outlook-banner{flex-wrap:wrap}
 }
-@media(max-width:640px){
+/* ── THE COMPACT BAND: EVERYTHING BELOW 819px ────────────────────
+   818 is not a round number, it is a measured one. Bisecting the viewport
+   width at which the FULL top bar stops overflowing gives 819px, so 818 is
+   the last width that needs the compact treatment. These rules used to stop
+   at 640, which is why iPad portrait (768px) still scrolled sideways: the
+   bar wanted 819px and had 768.
+   Only the NAV rules live at this breakpoint. The cards, modals and padding
+   that shared the old 640 block stayed there - a tablet is not a phone for
+   those, and widening them would have been a different change. */
+@media(max-width:818px){
   .nav-label{display:none}
   .nav-div{display:none}
-  .hero h1{font-size:28px}
-  .cards-grid{grid-template-columns:1fr}
-  .mgr-cards{grid-template-columns:repeat(2,1fr)}
-  .team-grid{grid-template-columns:repeat(2,1fr)}
-  .tgrid,.tgtools{grid-template-columns:1fr}
-  .bday-inner{padding:20px 16px}
-  .bday-today{grid-template-columns:1fr}
-  .kpi-row{grid-template-columns:1fr}
-  .sec{padding:24px 16px}
-  .hero-inner{padding:32px 16px}
-  .page-hero-inner{padding:28px 16px}
-  .um-wrap,.profile-wrap,.team-profiles-wrap,.perf-wrap,.cal-wrap,.comms-wrap{padding:16px}
-  .um-table-wrap{overflow-x:auto}
-  .um-table{min-width:600px}
-  .modal{border-radius:12px 12px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%;margin:0}
-  .modal-backdrop{align-items:flex-end;padding:0}
-  .nav-chat-btn{width:32px;height:32px}
   .role-pill{display:none}
-  .btn-logout{font-size:11px;padding:5px 10px}
 
-  /* ── TOP BAR ON PHONES ────────────────────────────────────────
-     The bar used to be 673px wide inside a 375px viewport, and .nav-right's
+  /* ── TOP BAR, COMPACT ─────────────────────────────────────────
+     The bar was 673px wide inside a 375px viewport, and .nav-right's
      flex-shrink:0 made that a hard overflow rather than a squeeze - the whole
-     page scrolled sideways. Navigation moves to the bottom bar (given real
-     height just below, and carrying the Handbook now), so the top bar keeps
+     page scrolled sideways. Navigation moves to the bottom bar (which is
+     given real height below, and carries the Handbook), so the top bar keeps
      only what the bottom bar does not: the brand, the icons that have no
      other home, the avatar, Install and Sign out. */
   .nav-links{display:none}
@@ -850,16 +841,48 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
      a touch screen anyway. */
   .nav-icon-btn::after{content:none}
 
-  /* Belt and braces: every width below measures clean, but a stray wide
-     element must never cost the whole page a sideways scroll again. Scoped to
-     phones so desktop layout is untouched, and `clip` not `hidden` so the
-     sticky top bar survives. Inner scrollers (.um-table-wrap and the other
-     overflow-x:auto wrappers) are unaffected - this clips the shell, not
-     their own overflow. */
+  /* Belt and braces: every width here measures clean, but a stray wide
+     element must never cost the whole page a sideways scroll again. `clip`
+     not `hidden` so the sticky top bar survives; inner scrollers
+     (.um-table-wrap and the other overflow-x:auto wrappers) are unaffected -
+     this clips the shell, not their own overflow. */
   #app{overflow-x:clip}
+}
 
-  /* The bottom bar is given its height further down, after the :root that
-     zeroes --bottom-nav-h - otherwise source order hands the 0 straight back. */
+/* ── THE ONE PIECE OF FREE TEXT IN THE BAR ───────────────────────
+   The breakpoint above is a measured constant, but the width it was measured
+   against is NOT: the role pill holds a cargo name somebody typed, and every
+   character of it widens the bar. Measured across the current cargos, the
+   full bar needs 798px for "Consultant" and 833px for "Senior Executive" -
+   so a pill-shaped hole sits just above any fixed breakpoint, and a longer
+   name ("Head of Student Recruitment") would reopen it.
+   Capping the pill in the tight band takes the variable out of the
+   arithmetic: above 818px the bar's width no longer depends on what anyone
+   typed. Over 1024px there is room for the longest name, so it is not capped
+   there. */
+@media(max-width:1024px){
+  .role-pill{max-width:100px;overflow:hidden;text-overflow:ellipsis}
+}
+
+@media(max-width:640px){
+  .hero h1{font-size:28px}
+  .cards-grid{grid-template-columns:1fr}
+  .mgr-cards{grid-template-columns:repeat(2,1fr)}
+  .team-grid{grid-template-columns:repeat(2,1fr)}
+  .tgrid,.tgtools{grid-template-columns:1fr}
+  .bday-inner{padding:20px 16px}
+  .bday-today{grid-template-columns:1fr}
+  .kpi-row{grid-template-columns:1fr}
+  .sec{padding:24px 16px}
+  .hero-inner{padding:32px 16px}
+  .page-hero-inner{padding:28px 16px}
+  .um-wrap,.profile-wrap,.team-profiles-wrap,.perf-wrap,.cal-wrap,.comms-wrap{padding:16px}
+  .um-table-wrap{overflow-x:auto}
+  .um-table{min-width:600px}
+  .modal{border-radius:12px 12px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%;margin:0}
+  .modal-backdrop{align-items:flex-end;padding:0}
+  .nav-chat-btn{width:32px;height:32px}
+  .btn-logout{font-size:11px;padding:5px 10px}
 
   /* ── FOOTER ───────────────────────────────────────────────────
      Not the nav, but the other half of the same bug: three columns held apart
@@ -922,8 +945,10 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    browser the bar rendered ONE PIXEL tall - present in the DOM, and useless.
    Giving it the height it already has as an installed app is what makes
    hiding the top bar's text links safe rather than a dead end.
-   This block must stay AFTER the :root above, which it overrides. */
-@media(max-width:640px){
+   This block must stay AFTER the :root above, which it overrides, and its
+   breakpoint must match the compact bar's: the bottom bar has to exist
+   wherever the text links do not, or a tablet is left with no navigation. */
+@media(max-width:818px){
   :root{ --bottom-nav-h: calc(56px + var(--safe-bottom)); }
   body{ padding-bottom: var(--bottom-nav-h); }
 }
@@ -3717,8 +3742,12 @@ function startApp(user){
     document.getElementById('btn-install-app')?.style.setProperty('display','none');
   }
 
-  // Show bottom nav if on mobile
-  const isMobile=window.innerWidth<768;
+  // Show the bottom nav wherever the top bar is compact. 819 is the measured
+  // width at which the full top bar stops overflowing, and the CSS hides the
+  // text nav-links below it - so this threshold and that one are the same
+  // decision and must not drift apart. They did: this said 768 while the CSS
+  // said 640, which left 641-767 with neither a bottom bar nor text links.
+  const isMobile=window.innerWidth<819;
   if(isMobile){
     document.getElementById('mobile-bottom-nav').style.display='flex';
   }
