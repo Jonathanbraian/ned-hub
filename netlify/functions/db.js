@@ -306,6 +306,22 @@ function meetingForCaller(m, attendees, me, locationsById){
   return out;
 }
 const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Other'];
+// ── CONTENT LIBRARY ──────────────────────────────────────────────
+// Four kinds of item share one table and one pair of gates: Manager and up
+// manage, anyone signed in reads. Two buckets, and the split matters:
+// content-covers is PUBLIC because a cover is decoration, content-files is
+// PRIVATE and only ever reaches a browser as a signed URL that expires.
+const CONTENT_TYPES = ['training','course','material','tool'];
+const CONTENT_BUCKETS = { cover:'content-covers', file:'content-files' };
+// A cover is stored as its public URL, because that is what a page needs. To
+// delete the object later the path has to be recovered from it; anything that
+// is not recognisably this bucket's public URL is left alone rather than
+// guessed at, so a hand-edited row can never make us remove the wrong object.
+function coverObjectPath(url){
+  const m = String(url||'').match(/\/storage\/v1\/object\/public\/content-covers\/([^?]+)/);
+  if(!m) return null;
+  try { return decodeURIComponent(m[1]); } catch(e){ return m[1]; }
+}
 function safeFileName(n){
   return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
 }
@@ -1335,6 +1351,152 @@ exports.handler = async (event) => {
         const { error } = await admin.from('user_documents').delete().eq('id',p.doc_id);
         if(error) return json(500,{error:'delete_failed', detail:error.message});
         return json(200,{ ok:true });
+      }
+      // ── CONTENT LIBRARY ──────────────────────────────────────
+      // Reading is everyone's; every write is isMgr. Nothing here consults
+      // the branch scope: a training is published to the company, not to a
+      // reporting line, so Manager = LOCAL deliberately does not apply.
+      case 'get_content': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        let q = admin.from('content_items')
+          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,sort_order,created_at')
+          .eq('active', true)
+          .order('sort_order',{ascending:true}).order('created_at',{ascending:true});
+        if(p.type !== undefined && p.type !== null && p.type !== ''){
+          if(!CONTENT_TYPES.includes(p.type)) return json(400,{error:'bad_type'});
+          q = q.eq('type', p.type);
+        }
+        const { data, error } = await q;
+        if(error) return json(500,{error:'content_failed', detail:error.message});
+        // Field by field. file_path is the key to a private bucket and must
+        // never reach a browser - and that must not depend on somebody
+        // remembering to prune the select above.
+        return json(200,{ items:(data||[]).map(r=>({
+          id: r.id, type: r.type, title: r.title,
+          description: r.description, category: r.category,
+          cover_url: r.cover_url, file_name: r.file_name, file_type: r.file_type,
+          has_file: !!r.file_path,
+          sort_order: r.sort_order, created_at: r.created_at
+        })) });
+      }
+      case 'content_upload_url': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const bucket = CONTENT_BUCKETS[p.bucket];
+        if(!bucket) return json(400,{error:'bad_bucket'});
+        // Random prefix, sanitised name: two uploads of "notes.pdf" cannot
+        // collide, and nothing in a filename can climb out of the bucket.
+        const path = require('crypto').randomUUID() + '_' + safeFileName(p.filename);
+        const { data, error } = await admin.storage.from(bucket).createSignedUploadUrl(path);
+        if(error || !data) return json(500,{error:'sign_failed', detail:error && error.message});
+        // The browser PUTs straight to Storage with this, so the bytes never
+        // pass through the function body - which is the whole point: Netlify
+        // caps a synchronous request around 6MB, as upload_document notes.
+        const out = { ok:true, bucket, path: data.path || path, token: data.token, signed_url: data.signedUrl };
+        // A cover is public by design, and its URL is what lands on the row.
+        if(p.bucket === 'cover'){
+          const { data: pub } = admin.storage.from(bucket).getPublicUrl(path);
+          out.public_url = (pub && pub.publicUrl) || '';
+        }
+        return json(200, out);
+      }
+      case 'create_content': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!CONTENT_TYPES.includes(p.type)) return json(400,{error:'bad_type'});
+        const title = (p.title||'').toString().trim();
+        if(!title) return json(400,{error:'missing_title'});
+        const { data, error } = await admin.from('content_items').insert({
+          type: p.type, title,
+          description: (p.description||'').toString(),
+          category: (p.category||'').toString().trim() || null,
+          cover_url: p.cover_url || null,
+          file_path: p.file_path || null,
+          file_name: p.file_name || null,
+          file_type: p.file_type || null,
+          sort_order: Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0,
+          active: true, created_by: me.id
+        }).select('id').single();
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, id: data.id });
+      }
+      case 'update_content': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('content_items')
+          .select('id,cover_url,file_path').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const patch = {};
+        if(p.type !== undefined){
+          if(!CONTENT_TYPES.includes(p.type)) return json(400,{error:'bad_type'});
+          patch.type = p.type;
+        }
+        if(p.title !== undefined){
+          const t = (p.title||'').toString().trim();
+          if(!t) return json(400,{error:'missing_title'});
+          patch.title = t;
+        }
+        if(p.description !== undefined) patch.description = (p.description||'').toString();
+        if(p.category !== undefined) patch.category = (p.category||'').toString().trim() || null;
+        if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order))) patch.sort_order = Number(p.sort_order);
+        if(p.active !== undefined) patch.active = !!p.active;
+        // A replaced cover or file leaves its predecessor in the bucket unless
+        // it is removed here, because nothing else ever will.
+        let staleCover = null, staleFile = null;
+        if(p.cover_url !== undefined){
+          patch.cover_url = p.cover_url || null;
+          if(row.cover_url && row.cover_url !== patch.cover_url) staleCover = row.cover_url;
+        }
+        if(p.file_path !== undefined){
+          patch.file_path = p.file_path || null;
+          patch.file_name = p.file_name || null;
+          patch.file_type = p.file_type || null;
+          if(row.file_path && row.file_path !== patch.file_path) staleFile = row.file_path;
+        }
+        if(!Object.keys(patch).length) return json(400,{error:'nothing_to_update'});
+        const { error } = await admin.from('content_items').update(patch).eq('id',p.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        // Only once the row is safely updated: an orphaned object is waste, a
+        // missing object under a live row is a broken item.
+        if(staleFile) await admin.storage.from(CONTENT_BUCKETS.file).remove([staleFile]);
+        if(staleCover){
+          const op = coverObjectPath(staleCover);
+          if(op) await admin.storage.from(CONTENT_BUCKETS.cover).remove([op]);
+        }
+        return json(200,{ ok:true });
+      }
+      case 'delete_content': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('content_items')
+          .select('id,cover_url,file_path').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        // Objects first: a row deleted while its objects survive leaves two
+        // files nothing can ever reach again.
+        if(row.file_path) await admin.storage.from(CONTENT_BUCKETS.file).remove([row.file_path]);
+        if(row.cover_url){
+          const op = coverObjectPath(row.cover_url);
+          if(op) await admin.storage.from(CONTENT_BUCKETS.cover).remove([op]);
+        }
+        const { error } = await admin.from('content_items').delete().eq('id',p.id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'get_content_file_url': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('content_items')
+          .select('id,file_path').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        if(!row.file_path) return json(404,{error:'no_file'});
+        // Opening is everyone's, per the library's rule - being signed in is
+        // the whole gate. The path still never leaves the server; only a URL
+        // that stops working in a minute does.
+        const { data, error } = await admin.storage.from(CONTENT_BUCKETS.file).createSignedUrl(row.file_path, 60);
+        if(error || !data) return json(500,{error:'sign_failed', detail:error && error.message});
+        return json(200,{ ok:true, url: data.signedUrl });
       }
       case 'list_meetings': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});

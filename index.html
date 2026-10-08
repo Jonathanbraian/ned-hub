@@ -793,34 +793,25 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .cal-sidebar{display:none}
   .outlook-banner{flex-wrap:wrap}
 }
-@media(max-width:640px){
+/* ── THE COMPACT BAND: EVERYTHING BELOW 819px ────────────────────
+   818 is not a round number, it is a measured one. Bisecting the viewport
+   width at which the FULL top bar stops overflowing gives 819px, so 818 is
+   the last width that needs the compact treatment. These rules used to stop
+   at 640, which is why iPad portrait (768px) still scrolled sideways: the
+   bar wanted 819px and had 768.
+   Only the NAV rules live at this breakpoint. The cards, modals and padding
+   that shared the old 640 block stayed there - a tablet is not a phone for
+   those, and widening them would have been a different change. */
+@media(max-width:818px){
   .nav-label{display:none}
   .nav-div{display:none}
-  .hero h1{font-size:28px}
-  .cards-grid{grid-template-columns:1fr}
-  .mgr-cards{grid-template-columns:repeat(2,1fr)}
-  .team-grid{grid-template-columns:repeat(2,1fr)}
-  .tgrid,.tgtools{grid-template-columns:1fr}
-  .bday-inner{padding:20px 16px}
-  .bday-today{grid-template-columns:1fr}
-  .kpi-row{grid-template-columns:1fr}
-  .sec{padding:24px 16px}
-  .hero-inner{padding:32px 16px}
-  .page-hero-inner{padding:28px 16px}
-  .um-wrap,.profile-wrap,.team-profiles-wrap,.perf-wrap,.cal-wrap,.comms-wrap{padding:16px}
-  .um-table-wrap{overflow-x:auto}
-  .um-table{min-width:600px}
-  .modal{border-radius:12px 12px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%;margin:0}
-  .modal-backdrop{align-items:flex-end;padding:0}
-  .nav-chat-btn{width:32px;height:32px}
   .role-pill{display:none}
-  .btn-logout{font-size:11px;padding:5px 10px}
 
-  /* ── TOP BAR ON PHONES ────────────────────────────────────────
-     The bar used to be 673px wide inside a 375px viewport, and .nav-right's
+  /* ── TOP BAR, COMPACT ─────────────────────────────────────────
+     The bar was 673px wide inside a 375px viewport, and .nav-right's
      flex-shrink:0 made that a hard overflow rather than a squeeze - the whole
-     page scrolled sideways. Navigation moves to the bottom bar (given real
-     height just below, and carrying the Handbook now), so the top bar keeps
+     page scrolled sideways. Navigation moves to the bottom bar (which is
+     given real height below, and carries the Handbook), so the top bar keeps
      only what the bottom bar does not: the brand, the icons that have no
      other home, the avatar, Install and Sign out. */
   .nav-links{display:none}
@@ -850,16 +841,48 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
      a touch screen anyway. */
   .nav-icon-btn::after{content:none}
 
-  /* Belt and braces: every width below measures clean, but a stray wide
-     element must never cost the whole page a sideways scroll again. Scoped to
-     phones so desktop layout is untouched, and `clip` not `hidden` so the
-     sticky top bar survives. Inner scrollers (.um-table-wrap and the other
-     overflow-x:auto wrappers) are unaffected - this clips the shell, not
-     their own overflow. */
+  /* Belt and braces: every width here measures clean, but a stray wide
+     element must never cost the whole page a sideways scroll again. `clip`
+     not `hidden` so the sticky top bar survives; inner scrollers
+     (.um-table-wrap and the other overflow-x:auto wrappers) are unaffected -
+     this clips the shell, not their own overflow. */
   #app{overflow-x:clip}
+}
 
-  /* The bottom bar is given its height further down, after the :root that
-     zeroes --bottom-nav-h - otherwise source order hands the 0 straight back. */
+/* ── THE ONE PIECE OF FREE TEXT IN THE BAR ───────────────────────
+   The breakpoint above is a measured constant, but the width it was measured
+   against is NOT: the role pill holds a cargo name somebody typed, and every
+   character of it widens the bar. Measured across the current cargos, the
+   full bar needs 798px for "Consultant" and 833px for "Senior Executive" -
+   so a pill-shaped hole sits just above any fixed breakpoint, and a longer
+   name ("Head of Student Recruitment") would reopen it.
+   Capping the pill in the tight band takes the variable out of the
+   arithmetic: above 818px the bar's width no longer depends on what anyone
+   typed. Over 1024px there is room for the longest name, so it is not capped
+   there. */
+@media(max-width:1024px){
+  .role-pill{max-width:100px;overflow:hidden;text-overflow:ellipsis}
+}
+
+@media(max-width:640px){
+  .hero h1{font-size:28px}
+  .cards-grid{grid-template-columns:1fr}
+  .mgr-cards{grid-template-columns:repeat(2,1fr)}
+  .team-grid{grid-template-columns:repeat(2,1fr)}
+  .tgrid,.tgtools{grid-template-columns:1fr}
+  .bday-inner{padding:20px 16px}
+  .bday-today{grid-template-columns:1fr}
+  .kpi-row{grid-template-columns:1fr}
+  .sec{padding:24px 16px}
+  .hero-inner{padding:32px 16px}
+  .page-hero-inner{padding:28px 16px}
+  .um-wrap,.profile-wrap,.team-profiles-wrap,.perf-wrap,.cal-wrap,.comms-wrap{padding:16px}
+  .um-table-wrap{overflow-x:auto}
+  .um-table{min-width:600px}
+  .modal{border-radius:12px 12px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%;margin:0}
+  .modal-backdrop{align-items:flex-end;padding:0}
+  .nav-chat-btn{width:32px;height:32px}
+  .btn-logout{font-size:11px;padding:5px 10px}
 
   /* ── FOOTER ───────────────────────────────────────────────────
      Not the nav, but the other half of the same bug: three columns held apart
@@ -922,8 +945,10 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    browser the bar rendered ONE PIXEL tall - present in the DOM, and useless.
    Giving it the height it already has as an installed app is what makes
    hiding the top bar's text links safe rather than a dead end.
-   This block must stay AFTER the :root above, which it overrides. */
-@media(max-width:640px){
+   This block must stay AFTER the :root above, which it overrides, and its
+   breakpoint must match the compact bar's: the bottom bar has to exist
+   wherever the text links do not, or a tablet is left with no navigation. */
+@media(max-width:818px){
   :root{ --bottom-nav-h: calc(56px + var(--safe-bottom)); }
   body{ padding-bottom: var(--bottom-nav-h); }
 }
@@ -1215,6 +1240,44 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 @media(max-width:380px){
   .home-kpi-grid.individual,.home-kpi-grid.team{grid-template-columns:1fr}
 }
+/* ── CONTENT LIBRARY ────────────────────────────────────────────
+   One card for all four kinds. The pages it replaces each had their own
+   (.tcard, .mcard, .toolcard) because each was hand-written markup; these are
+   rows from one table, so they get one treatment. Overrides sit immediately
+   after the rule they override - same specificity, so source order is all
+   that decides, and that has bitten this sheet twice already. */
+.clib-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:22px;flex-wrap:wrap}
+.clib-add{font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:9px;padding:9px 16px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s;flex-shrink:0}
+.clib-add:hover{background:var(--blue-dark)}
+.clib-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.clib-grid + .clib-sec-gap{height:44px}
+.clib-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow-card);transition:border-color .15s}
+.clib-card:hover{border-color:var(--border2)}
+.clib-cover{position:relative;aspect-ratio:16/9;background:var(--bg);overflow:hidden;flex-shrink:0}
+/* The placeholder sits BEHIND the image rather than being swapped in by an
+   onerror handler: an item with no cover shows it, and a cover whose file has
+   gone missing falls back to it with no script at all. */
+.clib-cover-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--grad-bt);color:var(--on-brand);opacity:.92}
+.clib-cover img{position:relative;width:100%;height:100%;object-fit:cover;display:block}
+.clib-body{padding:14px 16px 10px;flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.clib-chip{align-self:flex-start;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--light-blue);color:var(--blue);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clib-title{font-size:14.5px;font-weight:700;letter-spacing:-.2px;line-height:1.35}
+.clib-desc{font-size:12.5px;color:var(--muted);line-height:1.5;flex:1}
+.clib-foot{display:flex;align-items:center;gap:8px;padding:0 16px 14px}
+.clib-open{flex:1;font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);border-radius:9px;padding:9px 12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
+.clib-open:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.clib-nofile{flex:1;font-size:11.5px;color:var(--muted);font-style:italic}
+.clib-icon-btn{width:34px;height:34px;flex-shrink:0;border-radius:9px;background:var(--bg);border:1px solid var(--border);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.clib-icon-btn:hover{background:var(--surface);color:var(--text);border-color:var(--border2)}
+.clib-icon-btn.danger:hover{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.clib-empty{grid-column:1/-1;background:var(--surface);border:1px dashed var(--border2);border-radius:14px;padding:34px 20px;text-align:center;font-size:13px;color:var(--muted)}
+.clib-filename{font-size:11.5px;color:var(--muted);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clib-busy{font-size:12px;color:var(--muted);margin-right:auto;display:none;align-items:center;gap:7px}
+.clib-busy.on{display:flex}
+.clib-spin{width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:boot-spin .7s linear infinite}
+@media(prefers-reduced-motion:reduce){ .clib-spin{animation:none} }
+@media(max-width:900px){ .clib-grid{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:560px){ .clib-grid{grid-template-columns:1fr} }
 .hkpi{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:16px 18px;position:relative;overflow:hidden}
 .hkpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .hkpi.hk-blue::before{background:var(--grad-bt)}
@@ -1973,21 +2036,24 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
     <div class="grad-bar"></div>
     <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Trainings</div><h1>Sales Training Hub</h1><p class="ph-desc">Structured training with assessments and official NED College certificates.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=680&q=80" alt=""></div></div></div>
     <div class="sec">
-      <div class="sec-head"><div class="sec-label">All Trainings</div><div class="sec-title">Available Courses</div></div>
-      <div class="tgrid">
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Foundation</div><div class="ttitle">NED College - Organisational Overview</div><div class="tdesc">History, values, accreditations and certifications.</div></div><a class="bsingle" href="https://drive.google.com/file/d/1oLIwNLgcX0VFtReHV2coLnGDtobGwpQt/view?usp=sharing" target="_blank">Access Training →</a></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Campus - Limerick</div><div class="ttitle">Sales Process - NED Limerick</div><div class="tdesc">Full sales process at NED Limerick from motivations to post-arrival support.</div></div><div class="tactions"><a class="bp" href="https://drive.google.com/file/d/1YEu2mD2ELOwIchb2YqZlekMjjq1zezHP/view?usp=sharing" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1543373014-cfe4f4bc1cdf?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Campus - Dublin</div><div class="ttitle">Sales Process - NED Dublin</div><div class="tdesc">Full Dublin sales process from first contact through to enrolment.</div></div><div class="tactions"><a class="bp" href="https://drive.google.com/file/d/16zHNKn98cdWSMpoKrdnLvoed0Hrkm6VP/view?usp=sharing" target="_blank">Access Training</a><a class="bs" href="https://docs.google.com/forms/d/1eJBriO1kL5TQtbZQeX0AM7hdvtfIHcUzTE-ZdDjJGUc/preview" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Core Skills</div><div class="ttitle">Understanding the Sales Funnel</div><div class="tdesc">Manage leads at each stage and improve conversion rates.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Core Skills</div><div class="ttitle">Sales Communication Skills</div><div class="tdesc">Engage, understand, and persuade prospective students with empathy.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">B2B</div><div class="ttitle">Agency Management and B2B Partnerships</div><div class="tdesc">Qualification, onboarding and relationship building with agency partners.</div></div><div class="tactions"><a class="bp" href="https://drive.google.com/file/d/1Epskyi4oUsmjm7pwHLzeVrbO4HnLRmGL/view?usp=sharing" target="_blank">Access Training</a><a class="bs" href="https://docs.google.com/forms/d/e/1FAIpQLSf3ghzhk36EWnsTC333DFuz31DAHpMmr8b-mNBpZj1S7TyEmw/viewform" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1531482615713-2afd69097998?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Student Experience</div><div class="ttitle">Customer Service and Student Experience</div><div class="tdesc">Deliver excellent service from first contact to post-arrival support.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1553877522-43269d4ea984?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Advanced Sales</div><div class="ttitle">Consultative Selling Techniques</div><div class="tdesc">From needs analysis to decision support - guide students professionally.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Digital Sales</div><div class="ttitle">WhatsApp-First Sales Strategy</div><div class="tdesc">Text, voice notes, video messages and calls to improve conversion.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1521791136064-7986c2920216?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Student Retention</div><div class="ttitle">Post-Sales Support and Retention</div><div class="tdesc">Onboarding, relationship management and referral generation.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Advanced Sales</div><div class="ttitle">Handling Objections and Closing</div><div class="tdesc">Handle price, competition, timing objections and reposition NED as the best option.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
-        <div class="tcard"><div class="tthumb"><img src="https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=600&q=80" alt=""><div class="toverlay"></div></div><div class="tbody"><div class="ttag">Market Intelligence</div><div class="ttitle">Irish Education Market and NED Products</div><div class="tdesc">Deep understanding of the Irish market and NED product portfolio.</div></div><div class="tactions"><a class="bp" href="#" target="_blank">Access Training</a><a class="bs" href="#" target="_blank">Take the Exam</a></div></div>
+      <div class="clib-head">
+        <div><div class="sec-label">All Trainings</div><div class="sec-title">Available Trainings</div></div>
+        <button class="clib-add" id="clib-add-training" style="display:none" onclick="openContentModal('training')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add training
+        </button>
       </div>
+      <div class="clib-grid" id="clib-grid-training"></div>
+    </div>
+    <div class="sec">
+      <div class="clib-head">
+        <div><div class="sec-label">Courses</div><div class="sec-title">Course Library</div></div>
+        <button class="clib-add" id="clib-add-course" style="display:none" onclick="openContentModal('course')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add course
+        </button>
+      </div>
+      <div class="clib-grid" id="clib-grid-course"></div>
     </div>
   </div>
 
@@ -1996,14 +2062,14 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
     <div class="grad-bar"></div>
     <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Materials</div><h1>Sales Materials</h1><p class="ph-desc">Presentations, decks and collateral to support sales activity worldwide.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=680&q=80" alt=""></div></div></div>
     <div class="sec">
-      <div class="sec-head"><div class="sec-label">All Materials</div><div class="sec-title">Ready-to-Use Resources</div></div>
-      <div class="mgrid">
-        <a class="mcard" href="https://docs.google.com/presentation/d/1oJsJJuYwNcMmljHxAJmEOapFiRl_nnNGKBKuyjB07WY/edit?usp=sharing" target="_blank"><div class="mthumb"><img src="https://images.unsplash.com/photo-1516321165247-4aa89a48be55?w=800&q=80" alt=""><div class="moverlay"><span class="mtag">Presentation</span></div></div><div class="mbody"><div class="mtitle">Study & Work Programme - Student Presentation</div><div class="mdesc">For direct meetings, webinars, and group sessions.</div><span class="mcta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Google Slides</span></div></a>
-        <a class="mcard" href="https://docs.google.com/presentation/d/16EY2NOh_mDlCUO3gsz9nYOY4rIXKEjcq03Af50zhktQ/edit?usp=sharing" target="_blank"><div class="mthumb"><img src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&q=80" alt=""><div class="moverlay"><span class="mtag">Presentation</span></div></div><div class="mbody"><div class="mtitle">Short-Term Programmes - Student Presentation</div><div class="mdesc">For direct student meetings and webinars.</div><span class="mcta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Google Slides</span></div></a>
-        <a class="mcard" href="https://docs.google.com/presentation/d/1oJsJJuYwNcMmljHxAJmEOapFiRl_nnNGKBKuyjB07WY/edit?usp=sharing" target="_blank"><div class="mthumb"><img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&q=80" alt=""><div class="moverlay"><span class="mtag">Agency</span></div></div><div class="mbody"><div class="mtitle">Agency & Partner Presentation</div><div class="mdesc">Overview and training for agencies and partners worldwide.</div><span class="mcta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Google Slides</span></div></a>
-        <a class="mcard" href="https://drive.google.com/drive/folders/1Gq42qAdIQnhJl-r5y4F1fC8xBAOEnbrB?usp=sharing" target="_blank"><div class="mthumb"><img src="https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80" alt=""><div class="moverlay"><span class="mtag">Agency</span></div></div><div class="mbody"><div class="mtitle">Agency Resource Folder</div><div class="mdesc">Centralised Drive folder with brochures, assets and pricing.</div><span class="mcta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Open Drive Folder</span></div></a>
-        <a class="mcard" href="#" target="_blank"><div class="mthumb"><img src="https://images.unsplash.com/photo-1434626881859-194d67b2b86f?w=800&q=80" alt=""><div class="moverlay"><span class="mtag">Manual</span></div></div><div class="mbody"><div class="mtitle">Sales Manual - Student Registration</div><div class="mdesc">Comprehensive manual by the Administration team.</div><span class="mcta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in OneNote</span></div></a>
+      <div class="clib-head">
+        <div><div class="sec-label">All Materials</div><div class="sec-title">Ready-to-Use Resources</div></div>
+        <button class="clib-add" id="clib-add-material" style="display:none" onclick="openContentModal('material')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add material
+        </button>
       </div>
+      <div class="clib-grid" id="clib-grid-material"></div>
     </div>
   </div>
 
@@ -2012,14 +2078,14 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
     <div class="grad-bar"></div>
     <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Tools</div><h1>Our Tools</h1><p class="ph-desc">The platforms and software used daily by the NED College sales team.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=680&q=80" alt=""></div></div></div>
     <div class="sec">
-      <div class="tgtools">
-        <div class="toolcard"><div class="tlogo" style="color:var(--blue);background:var(--light-blue)">CRM</div><div class="tname">CRM System</div><div class="tdescr">Track leads, manage student interactions, and monitor the sales pipeline across both campuses.</div><div class="tlink">Access tool →</div></div>
-        <div class="toolcard"><div class="tlogo"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Google_Workspace_Logo.svg/200px-Google_Workspace_Logo.svg.png" alt="" onerror="this.parentElement.textContent='GW'"></div><div class="tname">Google Workspace</div><div class="tdescr">Gmail, Drive, Docs, Sheets and Slides - core collaboration tools used across NED College.</div><div class="tlink">Access tool →</div></div>
-        <div class="toolcard"><div class="tlogo"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Microsoft_icon.svg/120px-Microsoft_icon.svg.png" alt="" onerror="this.parentElement.textContent='M365'"></div><div class="tname">Microsoft 365 / SharePoint</div><div class="tdescr">SharePoint, OneDrive, Teams and OneNote for document management and communication.</div><div class="tlink">Access tool →</div></div>
-        <div class="toolcard"><div class="tlogo"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/120px-WhatsApp.svg.png" alt="" onerror="this.parentElement.textContent='WA'"></div><div class="tname">WhatsApp Business</div><div class="tdescr">Primary communication channel for prospective students - contact, follow-up and lead conversion.</div><div class="tlink">Access tool →</div></div>
-        <div class="toolcard"><div class="tlogo" style="font-size:18px">K</div><div class="tname">KMPUS</div><div class="tdescr">Student management system for registering, updating and tracking student records and enrolment.</div><div class="tlink">Access tool →</div></div>
-        <div class="toolcard"><div class="tlogo" style="color:var(--teal);background:rgba(0,167,181,.08);font-size:12px">DASH</div><div class="tname">Sales Dashboards</div><div class="tdescr">Performance dashboards for Dublin and Limerick - KPIs, conversion rates and targets in real time.</div><div class="tlink">Access tool →</div></div>
+      <div class="clib-head">
+        <div><div class="sec-label">All Tools</div><div class="sec-title">Platforms and Software</div></div>
+        <button class="clib-add" id="clib-add-tool" style="display:none" onclick="openContentModal('tool')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add tool
+        </button>
       </div>
+      <div class="clib-grid" id="clib-grid-tool"></div>
     </div>
   </div>
 
@@ -2382,6 +2448,35 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
     <button class="btn-save danger-save" id="btn-leave-call" onclick="leaveVideoCall()">Leave call</button>
   </div>
   <div id="video-overlay-stage"></div>
+</div>
+
+<div class="modal-backdrop" id="modal-content">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-content-title">New item</div><button class="modal-close" onclick="closeModal('modal-content')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="clib-id">
+      <input type="hidden" id="clib-type">
+      <div class="form-group"><label class="form-label">Title</label><input class="form-input" type="text" id="clib-title" placeholder="e.g. Sales Process - NED Dublin"></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="clib-desc" rows="3" placeholder="What is it, and who is it for?"></textarea></div>
+      <div class="form-group"><label class="form-label">Category <span class="form-hint" style="display:inline">(optional)</span></label><input class="form-input" type="text" id="clib-cat" placeholder="e.g. Core Skills"></div>
+      <div class="form-group">
+        <label class="form-label">Cover image <span class="form-hint" style="display:inline">(optional)</span></label>
+        <input class="form-input" type="file" id="clib-cover-input" accept="image/*">
+        <div class="clib-filename" id="clib-cover-current"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">File</label>
+        <input class="form-input" type="file" id="clib-file-input">
+        <div class="clib-filename" id="clib-file-current"></div>
+      </div>
+      <div class="login-error" id="clib-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer">
+      <span class="clib-busy" id="clib-busy"><span class="clib-spin"></span><span id="clib-busy-text">Saving...</span></span>
+      <button class="btn-cancel" id="clib-cancel" onclick="closeModal('modal-content')">Cancel</button>
+      <button class="btn-save mgr-save" id="btn-save-content" onclick="saveContent()">Save</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="modal-location">
@@ -3647,8 +3742,12 @@ function startApp(user){
     document.getElementById('btn-install-app')?.style.setProperty('display','none');
   }
 
-  // Show bottom nav if on mobile
-  const isMobile=window.innerWidth<768;
+  // Show the bottom nav wherever the top bar is compact. 819 is the measured
+  // width at which the full top bar stops overflowing, and the CSS hides the
+  // text nav-links below it - so this threshold and that one are the same
+  // decision and must not drift apart. They did: this said 768 while the CSS
+  // said 640, which left 641-767 with neither a bottom bar nor text links.
+  const isMobile=window.innerWidth<819;
   if(isMobile){
     document.getElementById('mobile-bottom-nav').style.display='flex';
   }
@@ -3726,6 +3825,10 @@ function showPage(name){
     if(isUserAdmin()) (async()=>{ await softLoad('users', loadDbUsers); renderUsers(); updateStats(); })();
     else { renderUsers(); updateStats(); }
   }
+  // The library pages draw from cache at once, then refresh behind it.
+  if(name==='trainings') showContentPage(['training','course']);
+  if(name==='materials') showContentPage(['material']);
+  if(name==='tools')     showContentPage(['tool']);
   if(name==='my-profile') renderMyProfile();
   if(name==='performance') (async()=>{ await softLoad('performance', loadPerformance); renderPerformancePage(); })();
   if(name==='team-profiles') renderTeamProfiles();
@@ -5579,6 +5682,245 @@ function togglePwEl(id,btn){
 }
 
 let toastTimer;
+// ═══════════════════════════════════════
+// CONTENT LIBRARY - trainings, courses, materials, tools
+// ═══════════════════════════════════════
+// Four kinds of item from one table. Reading is everyone's; the Add/Edit/
+// Delete controls are isUserAdmin() only, and the server re-checks every one
+// of them - this mirror decides what is worth showing, never what is allowed.
+// Company-wide on purpose, like the birthdays card: a training is published
+// to the company, not to a reporting line, so Manager = LOCAL does not apply.
+const CONTENT_LABEL = { training:'training', course:'course', material:'material', tool:'tool' };
+const CONTENT_PLURAL = { training:'trainings', course:'courses', material:'materials', tool:'tools' };
+// Covers are decoration, so they are downscaled in the browser; files go up
+// untouched, which is the whole reason they bypass the function body.
+const COVER_MAX_PX = 1280, COVER_QUALITY = 0.82, CONTENT_MAX_MB = 50;
+const CONTENT_ERRORS = {
+  forbidden:'Only managers and above can change the library',
+  bad_type:'That item type is not valid',
+  missing_title:'Give the item a title',
+  bad_bucket:'That upload target is not valid',
+  sign_failed:'Storage would not accept the upload - try again',
+  upload_failed:'The upload did not finish - check the connection and retry',
+  too_large:'That file is over ' + CONTENT_MAX_MB + 'MB - please upload a smaller one',
+  read_failed:'That image could not be read',
+  decode_failed:'That file is not an image we can read',
+  encode_failed:'That image could not be processed',
+  not_found:'That item no longer exists',
+  no_file:'This item has no file attached',
+  nothing_to_update:'Nothing was changed'
+};
+const CONTENT_PLACEHOLDER_SVG = '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+
+// Filled on first open of each page; replaced wholesale after any change, so
+// a stale card can never survive a save.
+let contentCache = {};
+
+// The avatar path downscales to base64 because it posts through the function
+// body. A cover goes straight to Storage, so it wants a Blob instead - same
+// canvas, same white matte behind transparency, different exit.
+function downscaleToJpegBlob(file, maxPx, quality){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('read_failed'));
+    reader.onload=e=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error('decode_failed'));
+      img.onload=()=>{
+        const scale=Math.min(1, maxPx/Math.max(img.width,img.height));
+        const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        const ctx=c.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        c.toBlob(b=> b ? resolve(b) : reject(new Error('encode_failed')), 'image/jpeg', quality);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Ask the gateway for a one-shot signed upload URL, then PUT the bytes
+// STRAIGHT to Storage. Nothing of the file passes through /api/db, which is
+// what lifts the ~6MB Netlify request-body ceiling that upload_document still
+// lives under. Returns the fields the row needs, nothing more.
+async function uploadToStorage(kind, file){
+  if(!file) throw new Error('read_failed');
+  if(file.size > CONTENT_MAX_MB*1024*1024) throw new Error('too_large');
+  let body = file, filename = file.name || 'file';
+  if(kind === 'cover'){
+    body = await downscaleToJpegBlob(file, COVER_MAX_PX, COVER_QUALITY);
+    filename = filename.replace(/\.[^.]+$/,'') + '.jpg';
+  }
+  const r = await callDb('content_upload_url', { bucket:kind, filename });
+  if(!r || !r.ok) throw new Error((r && r.error) || 'sign_failed');
+  // uploadToSignedUrl builds its own URL from the path and token, so the
+  // signed_url the server also returns is not needed here.
+  const { error } = await sb.storage.from(r.bucket).uploadToSignedUrl(r.path, r.token, body, {
+    contentType: (kind==='cover') ? 'image/jpeg' : (file.type || 'application/octet-stream')
+  });
+  if(error) throw new Error('upload_failed');
+  return (kind === 'cover')
+    ? { cover_url: r.public_url || '' }
+    : { file_path: r.path, file_name: file.name || 'file', file_type: file.type || '' };
+}
+
+async function loadContent(type){
+  const r = await callDb('get_content', { type });
+  contentCache[type] = (r && r.items) || [];
+  return contentCache[type];
+}
+
+function contentCardHtml(it){
+  const manage = isUserAdmin();
+  // Quoted, always: these ids are UUIDs and an unquoted one in an inline
+  // handler is a syntax error the moment it starts with a digit.
+  const id = esc(it.id);
+  const cover = `<div class="clib-cover"><span class="clib-cover-ph">${CONTENT_PLACEHOLDER_SVG}</span>` +
+    (it.cover_url ? `<img src="${esc(it.cover_url)}" alt="" loading="lazy">` : '') + `</div>`;
+  const open = it.has_file
+    ? `<button class="clib-open" onclick="openContentFile('${id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open</button>`
+    : `<span class="clib-nofile">No file attached</span>`;
+  const tools = manage
+    ? `<button class="clib-icon-btn" title="Edit" aria-label="Edit" onclick="openContentModal('${esc(it.type)}','${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>` +
+      `<button class="clib-icon-btn danger" title="Delete" aria-label="Delete" onclick="deleteContent('${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
+    : '';
+  return `<div class="clib-card">
+    ${cover}
+    <div class="clib-body">
+      ${it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:''}
+      <div class="clib-title">${esc(dashFix(it.title))}</div>
+      ${it.description?`<div class="clib-desc">${esc(dashFix(it.description))}</div>`:''}
+    </div>
+    <div class="clib-foot">${open}${tools}</div>
+  </div>`;
+}
+
+function renderContentSection(type){
+  const host = document.getElementById('clib-grid-'+type);
+  if(!host) return;
+  const add = document.getElementById('clib-add-'+type);
+  if(add) add.style.display = isUserAdmin() ? '' : 'none';
+  const items = contentCache[type];
+  if(items === undefined){ host.innerHTML = `<div class="clib-empty">Loading...</div>`; return; }
+  if(!items.length){
+    host.innerHTML = `<div class="clib-empty">No ${CONTENT_PLURAL[type]} yet.` +
+      (isUserAdmin() ? ` Use <strong>Add ${CONTENT_LABEL[type]}</strong> above to publish the first one.` : '') +
+      `</div>`;
+    return;
+  }
+  host.innerHTML = items.map(contentCardHtml).join('');
+}
+
+// Draw at once from whatever is cached - so the Add button and any existing
+// cards are there immediately - then refresh from the gateway behind it.
+function showContentPage(types){
+  types.forEach(renderContentSection);
+  (async()=>{
+    for(const t of types) await softLoad('content:'+t, ()=>loadContent(t));
+    types.forEach(renderContentSection);
+  })();
+}
+
+async function refreshContent(type){
+  await loadContent(type);
+  renderContentSection(type);
+}
+
+async function openContentFile(id){
+  const r = await callDb('get_content_file_url', { id });
+  if(!r || !r.ok || !r.url){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this file','error'); return; }
+  window.open(r.url, '_blank', 'noopener');
+}
+
+function contentError(msg){
+  const e=document.getElementById('clib-error');
+  if(!e) return;
+  if(msg){ e.textContent=msg; e.style.display='block'; } else { e.textContent=''; e.style.display='none'; }
+}
+function setContentBusy(on, text){
+  const b=document.getElementById('clib-busy');
+  if(b) b.classList.toggle('on', !!on);
+  if(on && text) document.getElementById('clib-busy-text').textContent = text;
+  ['btn-save-content','clib-cancel'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.disabled = !!on;
+  });
+}
+
+function openContentModal(type, id){
+  if(!isUserAdmin()) return;
+  const it = id ? (contentCache[type]||[]).find(x=>String(x.id)===String(id)) : null;
+  document.getElementById('clib-id').value = it ? it.id : '';
+  document.getElementById('clib-type').value = type;
+  document.getElementById('modal-content-title').textContent =
+    (it ? 'Edit ' : 'New ') + CONTENT_LABEL[type];
+  document.getElementById('clib-title').value = it ? (it.title||'') : '';
+  document.getElementById('clib-desc').value = it ? (it.description||'') : '';
+  document.getElementById('clib-cat').value = it ? (it.category||'') : '';
+  document.getElementById('clib-cover-input').value = '';
+  document.getElementById('clib-file-input').value = '';
+  // Say what is already attached, so "leave it alone" is an obvious option
+  // rather than something the person has to guess at.
+  document.getElementById('clib-cover-current').textContent =
+    it && it.cover_url ? 'A cover is set - choose a file only to replace it' : '';
+  document.getElementById('clib-file-current').textContent =
+    it && it.has_file ? ('Current file: ' + (it.file_name || 'attached') + ' - choose a file only to replace it') : '';
+  document.getElementById('btn-save-content').textContent = it ? 'Save changes' : 'Add to library';
+  contentError('');
+  setContentBusy(false);
+  openBackdrop('modal-content');
+}
+
+async function saveContent(){
+  if(!isUserAdmin()) return;
+  const id = document.getElementById('clib-id').value;
+  const type = document.getElementById('clib-type').value;
+  const title = document.getElementById('clib-title').value.trim();
+  if(!title){ contentError('Give the item a title'); return; }
+  const coverFile = (document.getElementById('clib-cover-input').files||[])[0];
+  const file = (document.getElementById('clib-file-input').files||[])[0];
+  if(!id && !file){ contentError('Pick the file people will open'); return; }
+  contentError('');
+  setContentBusy(true, 'Saving...');
+  try {
+    const payload = {
+      title,
+      description: document.getElementById('clib-desc').value.trim(),
+      category: document.getElementById('clib-cat').value.trim()
+    };
+    if(coverFile){ setContentBusy(true,'Uploading cover...'); Object.assign(payload, await uploadToStorage('cover', coverFile)); }
+    if(file){ setContentBusy(true,'Uploading file...'); Object.assign(payload, await uploadToStorage('file', file)); }
+    setContentBusy(true,'Saving...');
+    const r = id
+      ? await callDb('update_content', Object.assign({ id }, payload))
+      : await callDb('create_content', Object.assign({ type }, payload));
+    if(!r || !r.ok) throw new Error((r && r.error) || 'save_failed');
+    closeModal('modal-content');
+    showToast(id ? 'Item updated' : 'Added to the library');
+    await refreshContent(type);
+  } catch(e){
+    contentError(CONTENT_ERRORS[e && e.message] || 'Could not save this item');
+  } finally {
+    setContentBusy(false);
+  }
+}
+
+async function deleteContent(id){
+  if(!isUserAdmin()) return;
+  let type=null, item=null;
+  Object.keys(contentCache).forEach(t=>{
+    const hit=(contentCache[t]||[]).find(x=>String(x.id)===String(id));
+    if(hit){ type=t; item=hit; }
+  });
+  if(!item) return;
+  if(!confirm('Delete "'+item.title+'"? The cover and the file are removed as well.')) return;
+  const r = await callDb('delete_content', { id });
+  if(!r || !r.ok){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not delete this item','error'); return; }
+  showToast('Item deleted','warning');
+  await refreshContent(type);
+}
+
 function showToast(msg,type='success'){
   const t=document.getElementById('toast');
   t.className='toast';
