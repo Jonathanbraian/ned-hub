@@ -771,7 +771,6 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .cards-grid{grid-template-columns:repeat(2,1fr)}
   .team-grid{grid-template-columns:repeat(4,1fr)}
   .kpi-row{grid-template-columns:repeat(2,1fr)}
-  .home-kpi-grid.individual,.home-kpi-grid.team{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:900px){
   .login-right,.hero-img,.ph-img{display:none}
@@ -792,7 +791,6 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .chat-panel-contacts{width:160px}
   .cal-layout{grid-template-columns:1fr}
   .cal-sidebar{display:none}
-  .home-kpi-grid.individual,.home-kpi-grid.team{grid-template-columns:repeat(2,1fr)}
   .outlook-banner{flex-wrap:wrap}
 }
 @media(max-width:640px){
@@ -803,7 +801,6 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .mgr-cards{grid-template-columns:repeat(2,1fr)}
   .team-grid{grid-template-columns:repeat(2,1fr)}
   .tgrid,.tgtools{grid-template-columns:1fr}
-  .home-kpi-grid.individual,.home-kpi-grid.team{grid-template-columns:1fr}
   .bday-inner{padding:20px 16px}
   .bday-today{grid-template-columns:1fr}
   .kpi-row{grid-template-columns:1fr}
@@ -1201,6 +1198,23 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .home-kpi-grid{display:grid;gap:12px}
 .home-kpi-grid.individual{grid-template-columns:repeat(4,1fr)}
 .home-kpi-grid.team{grid-template-columns:repeat(4,1fr)}
+/* These overrides belong HERE, immediately after the two rules they override,
+   and not up in the shared breakpoint blocks 400 lines above where they used
+   to live. `.home-kpi-grid.individual` and `.home-kpi-grid.team` are both
+   (0,2,0), exactly the same specificity as the base pair - so nothing but
+   source order decided it, and from up there the base won every time. The
+   cards sat 4-up on a phone at 67px each, labels clipped by .hkpi's
+   overflow:hidden. Adjacency is the fix: the next person cannot reintroduce
+   this by adding a rule in the wrong place.
+   The ladder is 4 columns on desktop, 2 from tablet down, 1 when half a phone
+   is narrower than a card's own label. 1024 rather than 1100 so that desktop
+   from 1025px up is four columns exactly. */
+@media(max-width:1024px){
+  .home-kpi-grid.individual,.home-kpi-grid.team{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:380px){
+  .home-kpi-grid.individual,.home-kpi-grid.team{grid-template-columns:1fr}
+}
 .hkpi{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:16px 18px;position:relative;overflow:hidden}
 .hkpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .hkpi.hk-blue::before{background:var(--grad-bt)}
