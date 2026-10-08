@@ -127,6 +127,14 @@ html[data-theme="dark"]{
   color-scheme: dark;
 }
 body{font-family:'Rubik',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+/* The belt-and-braces guard against sideways scroll lives on the app shell,
+   in the phone media query further down - NOT here on html or body, and that
+   is measured rather than assumed. overflow-x on <html> does not stop the
+   viewport scrolling at all (it propagates to the viewport, leaving the root
+   itself visible); overflow-x:hidden on <body> does stop it, but turns body
+   into the scroll container and kills position:sticky on the top bar - the
+   nav scrolled clean off the screen. Clipping #app does both: no scroll, and
+   `clip` creates no scroll container, so the bar stays stuck. */
 a{text-decoration:none;color:inherit}
 
 /* ════════ LOGIN ════════ */
@@ -216,6 +224,8 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
    No attribute (JS off entirely) falls back to the light-background art. */
 .brand-logo{display:inline-block}
 .brand-logo.brand-dark{display:none}
+/* Shown only inside the phone media query below. */
+.brand-logo.brand-symbol{display:none;height:30px;width:auto}
 html[data-theme="dark"] .brand-logo.brand-light{display:none}
 html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .nav-div{width:1px;height:26px;background:var(--border)}
@@ -808,6 +818,60 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .nav-chat-btn{width:32px;height:32px}
   .role-pill{display:none}
   .btn-logout{font-size:11px;padding:5px 10px}
+
+  /* ── TOP BAR ON PHONES ────────────────────────────────────────
+     The bar used to be 673px wide inside a 375px viewport, and .nav-right's
+     flex-shrink:0 made that a hard overflow rather than a squeeze - the whole
+     page scrolled sideways. Navigation moves to the bottom bar (given real
+     height just below, and carrying the Handbook now), so the top bar keeps
+     only what the bottom bar does not: the brand, the icons that have no
+     other home, the avatar, Install and Sign out. */
+  .nav-links{display:none}
+  /* Performance is the one icon the bottom bar already carries. */
+  #nav-icon-performance{display:none}
+  .nav{padding:0 12px;gap:8px}
+  /* The theme swap above is `html[data-theme="dark"] .brand-logo.brand-dark`,
+     so these have to match its specificity to beat it - a plain
+     `.nav-logo .brand-dark` loses and the wordmark reappears in dark mode.
+     Equal specificity, and this block is later in the sheet, so it wins. */
+  html .nav-logo .brand-logo.brand-light,
+  html .nav-logo .brand-logo.brand-dark{display:none}
+  html .nav-logo .brand-logo.brand-symbol{display:inline-block}
+  .nav-right{gap:5px}
+  .nav-icon-group{gap:2px;padding:2px}
+  /* 40px of vertical tap target on every control; the width is what the
+     viewport can actually pay for. */
+  .nav-icon-btn{width:36px;height:40px;border-radius:9px}
+  .nav-avatar-btn{width:36px;height:36px}
+  /* Icon-only: the button stays, its word does not. */
+  #btn-install-app{width:36px;height:40px;padding:0;gap:0;border-radius:9px;justify-content:center}
+  #btn-install-app .install-text{display:none}
+  /* The hover tooltip is opacity:0, NOT display:none, so it still takes part
+     in layout - and on the rightmost icon it hangs 28px past the bar. That
+     pseudo-element, not any control, was the last of the page's sideways
+     scroll: 351 + 28 = the 379 measured in a 375 viewport. Nothing hovers on
+     a touch screen anyway. */
+  .nav-icon-btn::after{content:none}
+
+  /* Belt and braces: every width below measures clean, but a stray wide
+     element must never cost the whole page a sideways scroll again. Scoped to
+     phones so desktop layout is untouched, and `clip` not `hidden` so the
+     sticky top bar survives. Inner scrollers (.um-table-wrap and the other
+     overflow-x:auto wrappers) are unaffected - this clips the shell, not
+     their own overflow. */
+  #app{overflow-x:clip}
+
+  /* The bottom bar is given its height further down, after the :root that
+     zeroes --bottom-nav-h - otherwise source order hands the 0 straight back. */
+
+  /* ── FOOTER ───────────────────────────────────────────────────
+     Not the nav, but the other half of the same bug: three columns held apart
+     by space-between with no wrap, ~499px wide whatever the viewport. With the
+     top bar fixed this became the ONLY thing still scrolling the page
+     sideways. It is hidden in standalone mode, which is why it went unnoticed.
+     Stacking it also leaves Materials and Tools a second route on mobile. */
+  .footer{flex-direction:column;gap:12px;padding:18px 16px;text-align:center}
+  .footer-links{flex-wrap:wrap;justify-content:center;gap:10px 16px}
   .chat-panel{width:100%}
   .chat-panel-contacts{display:none}
   .cal-grid .cal-cell{min-height:52px;padding:4px}
@@ -816,7 +880,19 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 @media(max-width:380px){
   .cards-grid,.mgr-cards{grid-template-columns:1fr}
   .team-grid{grid-template-columns:repeat(2,1fr)}
-  .nav{padding:0 12px;gap:8px}
+  .nav{padding:0 8px;gap:6px}
+  /* Down here the width has to come off the controls themselves. The 40px of
+     vertical tap target stays; only the horizontal goes to 32. */
+  .nav-right{gap:4px}
+  .nav-icon-btn{width:32px}
+  .nav-avatar-btn{width:32px;height:32px}
+  #btn-install-app{width:32px}
+  .nav-logo .brand-symbol{height:26px}
+  /* width:100% already, but the cells' intrinsic content came to 291px in a
+     288px box. Fixed layout makes the table exactly its container and lets the
+     long cell - the person's name - ellipsis instead of pushing the page. */
+  .home-team-table{table-layout:fixed}
+  .home-team-table td{padding:7px 2px;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 /* ════════ PWA APP MODE ════════ */
 /* Safe area insets (notch, home indicator) */
@@ -843,6 +919,18 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 @media all and (display-mode: standalone){
   .nav{ background: var(--nav-bg); }
 }
+/* ── BOTTOM BAR ON PHONES, NOT ONLY AS AN INSTALLED APP ──────────
+   startApp already sets display:flex on #mobile-bottom-nav under 768px, but
+   --bottom-nav-h above is 0 outside standalone, so in an ordinary mobile
+   browser the bar rendered ONE PIXEL tall - present in the DOM, and useless.
+   Giving it the height it already has as an installed app is what makes
+   hiding the top bar's text links safe rather than a dead end.
+   This block must stay AFTER the :root above, which it overrides. */
+@media(max-width:640px){
+  :root{ --bottom-nav-h: calc(56px + var(--safe-bottom)); }
+  body{ padding-bottom: var(--bottom-nav-h); }
+}
+
 
 /* ── Mobile Bottom Navigation ── */
 #mobile-bottom-nav{
@@ -882,6 +970,27 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .mob-nav-item.leaders-item.active{ color: var(--manager); }
 .mob-nav-icon{ width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 .mob-nav-label{ font-size: 10px; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
+/* Six items share the bar's width evenly only if they are allowed to: a flex
+   item defaults to min-width:auto, so a nowrap label wider than its share
+   pushes the whole bar past the viewport instead of shrinking. These sit AFTER
+   .mob-nav-label above on purpose - the same specificity, so source order is
+   what decides, and the font sizes below were silently losing to it.
+   The ellipsis is the backstop: it should not be reached at the sizes here,
+   but it means the bar cannot overflow at any width or font. */
+.mob-nav-item{min-width:0}
+.mob-nav-label{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:440px){
+  .mob-nav-label{font-size:9px;letter-spacing:0}
+  .mob-nav-item{padding:6px 2px;gap:2px}
+  .mob-nav-icon{width:21px;height:21px}
+  .mob-nav-icon svg{width:21px;height:21px}
+}
+@media(max-width:400px){
+  .mob-nav-label{font-size:8.5px}
+}
+@media(max-width:345px){
+  .mob-nav-label{font-size:8px}
+}
 .mob-nav-badge{
   position: absolute; top: 6px; right: calc(50% - 14px);
   background: var(--solid-danger); color: var(--on-brand);
@@ -1301,6 +1410,11 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
     <div class="nav-logo" onclick="showPage('home')">
       <img class="brand-logo brand-light" src="assets/logo-light.png" alt="SalesHub" style="height:34px" onerror="this.style.display='none'">
       <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="SalesHub" style="height:34px" onerror="this.style.display='none'">
+      <!-- Phones only. The wordmark is a 4.5:1 lockup, 152px wide beside a
+           361px control cluster - it simply cannot fit. The symbol is one file
+           for both themes because it is a mid-tone mint mark that reads on the
+           light and the dark surface alike, so no themed pair is needed. -->
+      <img class="brand-logo brand-symbol" src="assets/saleshub-symbol.png" alt="SalesHub" onerror="this.style.display='none'">
     </div>
     <ul class="nav-links" id="nav-links"></ul>
     <div class="nav-right">
@@ -1327,7 +1441,7 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
       <div class="nav-avatar-btn" id="nav-avatar-btn" onclick="showPage('my-profile')" title="My Profile"></div>
       <button class="btn-logout" id="btn-install-app" onclick="openInstallGuide()" title="Install App" style="display:flex;align-items:center;gap:5px;background:var(--light-blue);color:var(--blue);border-color:var(--border2)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Install
+        <span class="install-text">Install</span>
       </button>
       <button class="nav-icon-btn nav-icon-solo" id="btn-signout" data-tip="Sign out" title="Sign out" aria-label="Sign out" onclick="doLogout()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -2051,6 +2165,15 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   <button class="mob-nav-item" id="mobnav-performance" onclick="mobNavIcon('performance')">
     <div class="mob-nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
     <span class="mob-nav-label">Performance</span>
+  </button>
+  <!-- The top bar's text links are hidden on phones, and the Sales Handbook
+       is the only one of them with no other mobile route for a non-leader:
+       Materials and Tools sit on Home's Quick Access cards, and the leader
+       pages have the Leaders sheet, but the Handbook link was it. Reuses the
+       generic mobNav(), so the id has to match the page id. -->
+  <button class="mob-nav-item" id="mobnav-mgr-handbook" onclick="mobNav('mgr-handbook')">
+    <div class="mob-nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+    <span class="mob-nav-label">Handbook</span>
   </button>
   <button class="mob-nav-item leaders-item" id="mobnav-leaders" onclick="toggleMobLeaders()">
     <div class="mob-nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
