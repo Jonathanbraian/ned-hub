@@ -1295,6 +1295,105 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 @media(prefers-reduced-motion:reduce){ .clib-spin{animation:none} }
 @media(max-width:900px){ .clib-grid{grid-template-columns:repeat(2,1fr)} }
 @media(max-width:560px){ .clib-grid{grid-template-columns:1fr} }
+/* ── TRAINING TESTS: status on a card ───────────────────────── */
+.clib-test-chip{align-self:flex-start;display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid transparent}
+.clib-test-chip.todo{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
+.clib-test-chip.tried{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.clib-test-chip.done{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.clib-test-btn{font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:1px solid var(--blue);border-radius:9px;padding:9px 12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;flex-shrink:0}
+.clib-test-btn:hover{background:var(--blue-dark)}
+.clib-test-btn.done{background:transparent;color:var(--blue)}
+.clib-test-btn.done:hover{background:var(--light-blue)}
+.clib-foot{flex-wrap:wrap}
+/* ── TRAINING TESTS: the authoring editor ───────────────────── */
+.tq-wrap{border-top:1px solid var(--border);margin-top:4px;padding-top:18px}
+.tq-toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.tq-toggle-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.tq-toggle-row label{font-size:13px;font-weight:600;color:var(--text);cursor:pointer}
+.tq-body{display:none}
+.tq-body.on{display:block}
+.tq-threshold{max-width:140px}
+.tq-card{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:12px}
+.tq-card-head{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.tq-num{font-size:10.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);margin-right:auto}
+.tq-opt{display:flex;align-items:center;gap:9px;margin-top:7px}
+.tq-opt input[type=radio]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.tq-opt .form-input{padding:8px 11px;font-size:13px}
+.tq-mini{width:28px;height:28px;flex-shrink:0;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;transition:all .15s}
+.tq-mini:hover{color:var(--text);border-color:var(--border2)}
+.tq-mini.danger:hover{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.tq-mini:disabled{opacity:.35;cursor:not-allowed}
+.tq-add{font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;cursor:pointer;transition:all .15s}
+.tq-add:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.tq-correct-hint{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+/* ── TRAINING TESTS: taking one ─────────────────────────────── */
+.quiz-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.quiz-meta strong{color:var(--text)}
+.quiz-q{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.quiz-q-text{font-size:13.5px;font-weight:600;line-height:1.5;margin-bottom:12px}
+.quiz-q-num{font-size:10.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
+.quiz-opt{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);margin-top:7px;cursor:pointer;transition:all .15s}
+.quiz-opt:hover{border-color:var(--border2)}
+.quiz-opt.sel{border-color:var(--blue);background:var(--light-blue)}
+.quiz-opt input[type=radio]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;margin-top:1px}
+.quiz-opt span{font-size:13px;line-height:1.45}
+.quiz-unanswered{font-size:12px;color:var(--muted)}
+.quiz-result{text-align:center;padding:14px 0 6px}
+.quiz-score{font-size:46px;font-weight:700;letter-spacing:-1.5px;line-height:1}
+.quiz-score.pass{color:var(--success)}
+.quiz-score.fail{color:var(--danger)}
+.quiz-verdict{font-size:17px;font-weight:700;margin-top:10px}
+.quiz-sub{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.6}
+.quiz-cert-no{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;display:inline-block;margin-top:14px}
+/* ── THE CERTIFICATE ────────────────────────────────────────────
+   Deliberately NOT themed. A certificate is a document, not a piece of
+   interface: it is white with dark ink in light mode, in dark mode and on
+   paper, so what you see on screen is what comes out of the printer. Every
+   colour here is a literal for that reason - a var() would let the theme
+   repaint a document, which is the brand-logo trap all over again. */
+#modal-cert .modal{max-width:860px}
+.tcert-sheet{color:#0f172a;padding:42px 46px;border:1px solid #dfe3ea;border-radius:10px;position:relative;overflow:hidden;
+  background:linear-gradient(rgba(255,255,255,.94),rgba(255,255,255,.94)),
+             url('assets/saleshub-symbol.png') right -60px bottom -70px/260px no-repeat, #fff}
+.tcert-rule{height:5px;background:linear-gradient(90deg,#1b9c85 0%,#2563eb 100%);border-radius:4px;margin-bottom:30px}
+.tcert-logo{height:40px;width:auto;display:block;margin-bottom:26px}
+.tcert-kicker{font-size:11px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#1b9c85;margin-bottom:8px}
+.tcert-head{font-size:30px;font-weight:700;letter-spacing:-.8px;line-height:1.15;margin-bottom:24px;color:#0f172a}
+.tcert-lead{font-size:12.5px;color:#5a6474;margin-bottom:5px}
+.tcert-name{font-size:33px;font-weight:700;letter-spacing:-1px;line-height:1.2;color:#0f172a;margin-bottom:4px}
+.tcert-role{font-size:12.5px;color:#5a6474;margin-bottom:22px}
+.tcert-title{font-size:19px;font-weight:600;line-height:1.4;color:#1d4ed8;margin-bottom:26px}
+.tcert-facts{display:flex;gap:40px;flex-wrap:wrap;border-top:1px solid #e6e9ef;padding-top:20px}
+.tcert-fact-k{font-size:9.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#8a93a3;margin-bottom:4px}
+.tcert-fact-v{font-size:14.5px;font-weight:700;color:#0f172a}
+.tcert-fact-v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.3px}
+.tcert-foot{font-size:10.5px;color:#8a93a3;margin-top:24px;line-height:1.6}
+@media(max-width:620px){
+  .tcert-sheet{padding:26px 22px}
+  .tcert-head{font-size:23px}
+  .tcert-name{font-size:25px}
+  .tcert-title{font-size:16px}
+  .tcert-facts{gap:22px}
+}
+/* Printing. visibility (not display) is what makes this safe: it is
+   inherited but overridable, so hiding the whole body and un-hiding the
+   sheet needs no knowledge of how deeply the modal is nested. The class is
+   added only for the moment window.print() runs. */
+@media print{
+  @page{ size:A4 landscape; margin:12mm }
+  body.printing-cert *{ visibility:hidden !important }
+  body.printing-cert #tcert-sheet, body.printing-cert #tcert-sheet *{ visibility:visible !important }
+  body.printing-cert #modal-cert{ position:static !important; display:block !important; padding:0 !important;
+    background:none !important; backdrop-filter:none !important; inset:auto !important; overflow:visible !important }
+  body.printing-cert #modal-cert .modal{ max-width:none !important; box-shadow:none !important; max-height:none !important;
+    border-radius:0 !important; overflow:visible !important; display:block !important }
+  body.printing-cert #modal-cert .modal-header,
+  body.printing-cert #modal-cert .modal-footer{ display:none !important }
+  body.printing-cert #modal-cert .modal-body{ padding:0 !important; overflow:visible !important }
+  body.printing-cert #tcert-sheet{ position:absolute; left:0; top:0; width:100%;
+    border:none !important; border-radius:0 !important; padding:0 !important;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact }
+}
 .hkpi{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:16px 18px;position:relative;overflow:hidden}
 .hkpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .hkpi.hk-blue::before{background:var(--grad-bt)}
@@ -2486,12 +2585,56 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
         <input class="form-input" type="file" id="clib-file-input">
         <div class="clib-filename" id="clib-file-current"></div>
       </div>
+      <!-- Trainings only. Hidden for course/material/tool, and saveContent
+           sends has_test:false and no questions for those types. -->
+      <div class="tq-wrap" id="clib-test-wrap" style="display:none">
+        <div class="tq-toggle-row">
+          <input type="checkbox" id="clib-has-test" onchange="syncTestBody()">
+          <label for="clib-has-test">This training has a test</label>
+        </div>
+        <div class="tq-body" id="clib-test-body">
+          <div class="form-group">
+            <label class="form-label">Pass mark</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input class="form-input tq-threshold" type="number" id="clib-threshold" min="1" max="100" step="1" value="70">
+              <span style="font-size:13px;color:var(--muted)">% of questions correct</span>
+            </div>
+            <div class="form-hint">Retries are unlimited - the pass mark only decides when a certificate is issued.</div>
+          </div>
+          <label class="form-label" style="margin-bottom:6px;display:block">Questions</label>
+          <div class="tq-correct-hint">Mark the correct option with the radio button on its left. Correct answers are stored on the server and are never sent to the person taking the test.</div>
+          <div id="clib-q-list"></div>
+          <button type="button" class="tq-add" id="clib-q-add" onclick="addTestQuestion()">+ Add question</button>
+        </div>
+      </div>
       <div class="login-error" id="clib-error" style="margin-top:10px;margin-bottom:0"></div>
     </div>
     <div class="modal-footer">
       <span class="clib-busy" id="clib-busy"><span class="clib-spin"></span><span id="clib-busy-text">Saving...</span></span>
       <button class="btn-cancel" id="clib-cancel" onclick="closeModal('modal-content')">Cancel</button>
       <button class="btn-save mgr-save" id="btn-save-content" onclick="saveContent()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Taking a test. The questions arrive from get_test, which never carries
+     correct_index; nothing here could reveal an answer because nothing here
+     has ever been told one. Grading happens in submit_test. -->
+<div class="modal-backdrop" id="modal-test">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modal-test-title">Test</div><button class="modal-close" onclick="closeTest()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="quiz-body"></div>
+    <div class="modal-footer" id="quiz-footer"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-cert">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Certificate</div><button class="modal-close" onclick="closeModal('modal-cert')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body"><div class="tcert-sheet" id="tcert-sheet"></div></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal('modal-cert')">Close</button>
+      <button class="btn-save" id="btn-print-cert" onclick="printCertificate()">Save as PDF / Print</button>
     </div>
   </div>
 </div>
@@ -4324,6 +4467,9 @@ function buildProfileHTML(u,isMyProfile){
 
   const detail=detailOf(u.id)||{};
   const dCerts=detail.certs||[], dAppraisals=detail.appraisals||[], dDocs=detail.documents||[];
+  // Completed trainings arrive with get_profile_detail under the same gate as
+  // the certificate catalogue above, so there is nothing to check here.
+  const dTrain=detail.training_completions||[];
   // The server decides what this viewer may see; these only shape the UI.
   const canManageCerts=!!detail.can_manage_certs;
   const showAppraisals=!!detail.can_see_appraisals;
@@ -4355,6 +4501,10 @@ function buildProfileHTML(u,isMyProfile){
   const appraisalHTML=dAppraisals.length===0
     ?`<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No appraisals recorded yet.</div>`
     :dAppraisals.map(a=>`<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${esc(dashFix(a.period||''))}</div><div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=(a.rating||0)?'':'empty'}">★</span>`).join('')}</div></div><div class="appraisal-body">${esc(dashFix(a.notes||'No notes.'))}</div>${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(t=>`<span class="appraisal-tag">${esc(dashFix(t))}</span>`).join('')}</div>`:''}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:8px"><span>${a.created_by_name?'By '+esc(a.created_by_name):''}${a.created_at?' · '+esc(fmtDate(a.created_at)):''}</span><button class="doc-btn" style="margin-left:auto" onclick="openAppraisal('${esc(u.id)}','${esc(a.id)}')">Edit</button><button class="doc-btn danger" onclick="deleteAppraisal('${esc(u.id)}','${esc(a.id)}')">Delete</button></div></div>`).join('');
+
+  const trainHTML=dTrain.length===0
+    ?`<div style="padding:16px 0;text-align:center;color:var(--muted);font-size:13px">No training tests completed yet.</div>`
+    :dTrain.map(t=>`<div class="doc-item"><div class="doc-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg></div><div class="doc-name">${esc(dashFix(t.title||'Training'))}</div><div class="doc-meta">${esc(t.cert_number||'')}${t.score!=null?' · '+esc(t.score)+'%':''}${t.completed_at?' · '+esc(fmtDate(t.completed_at)):''}</div><div class="doc-actions"><button class="doc-btn" onclick="openCertificate('${esc(t.id)}')">Certificate</button></div></div>`).join('');
 
   const docHTML=dDocs.length===0
     ?`<div style="padding:16px 0;text-align:center;color:var(--muted);font-size:13px">No documents added yet.</div>`
@@ -4445,6 +4595,11 @@ function buildProfileHTML(u,isMyProfile){
       </div>
     </div>
     <div class="profile-tab-content" id="tab-${u.id}-certificates">
+      <div class="profile-section-card" style="margin-bottom:16px">
+        <div class="ps-title">Completed Trainings - ${dTrain.length} certificate${dTrain.length===1?'':'s'}</div>
+        <div class="doc-list">${trainHTML}</div>
+        <div class="form-hint" style="margin-top:12px">Earned by passing a training's test. The certificate number is minted on the server when the test is passed.</div>
+      </div>
       <div class="profile-section-card">
         <div class="ps-title">NED College Training Certificates - ${certDone} / ${certTotal} completed</div>
         <div style="height:7px;background:var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px"><div style="height:100%;width:${certTotal>0?Math.round(certDone/certTotal*100):0}%;background:var(--grad-bt);border-radius:10px"></div></div>
@@ -5720,6 +5875,16 @@ const CONTENT_ERRORS = {
   sign_failed:'Storage would not accept the upload - try again',
   upload_failed:'The upload did not finish - check the connection and retry',
   too_large:'That file is over ' + CONTENT_MAX_MB + 'MB - please upload a smaller one',
+  not_a_training:'Only trainings can have a test',
+  no_test:'This training has no test',
+  no_questions:'This test has no questions yet',
+  bad_threshold:'The pass mark must be a whole number between 1 and 100',
+  bad_options:'Every question needs between 2 and 6 options, all filled in',
+  bad_correct_index:'Mark the correct option for every question',
+  missing_question:'Every question needs its text',
+  too_many_questions:'That is more questions than a test can hold',
+  bad_answers:'Those answers could not be read',
+  cert_mint_failed:'The certificate number could not be issued - please try again',
   read_failed:'That image could not be read',
   decode_failed:'That file is not an image we can read',
   encode_failed:'That image could not be processed',
@@ -5789,6 +5954,18 @@ async function loadContent(type){
   return contentCache[type];
 }
 
+// content_id -> this person's own standing. Never anybody else's: the gateway
+// only ever answers for the caller.
+let trainingStatus = {};
+async function loadTrainingStatus(){
+  const r = await callDb('get_my_training_status');
+  const next = {};
+  ((r && r.items) || []).forEach(i=>{ next[String(i.content_id)] = i; });
+  trainingStatus = next;
+  return trainingStatus;
+}
+function statusOf(id){ return trainingStatus[String(id)] || null; }
+
 function contentCardHtml(it){
   const manage = isUserAdmin();
   // Quoted, always: these ids are UUIDs and an unquoted one in an inline
@@ -5799,6 +5976,27 @@ function contentCardHtml(it){
   const open = it.has_file
     ? `<button class="clib-open" onclick="openContentFile('${id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open</button>`
     : `<span class="clib-nofile">No file attached</span>`;
+  // Study first, then test: the Open button keeps its place and the test sits
+  // beside it. Only a training can get here - has_test is pinned false for
+  // every other type, by the gateway and not by this check.
+  const hasTest = it.type === 'training' && !!it.has_test;
+  const stt = hasTest ? statusOf(it.id) : null;
+  const mark = it.pass_threshold ? it.pass_threshold + '%' : '';
+  let chip = '', testBtn = '';
+  if(hasTest){
+    if(stt && stt.passed){
+      chip = `<span class="clib-test-chip done"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Passed${stt.best_score!=null?' '+stt.best_score+'%':''}</span>`;
+      testBtn = stt.completion_id
+        ? `<button class="clib-test-btn done" onclick="openCertificate('${esc(stt.completion_id)}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>Certificate</button>`
+        : '';
+    } else if(stt && stt.attempts > 0){
+      chip = `<span class="clib-test-chip tried">Best ${stt.best_score==null?0:stt.best_score}%${mark?' of '+mark:''}</span>`;
+      testBtn = `<button class="clib-test-btn" onclick="openTest('${id}')">Try again</button>`;
+    } else {
+      chip = `<span class="clib-test-chip todo">Test${mark?' · '+mark+' to pass':''}</span>`;
+      testBtn = `<button class="clib-test-btn" onclick="openTest('${id}')">Take test</button>`;
+    }
+  }
   const tools = manage
     ? `<button class="clib-icon-btn" title="Edit" aria-label="Edit" onclick="openContentModal('${esc(it.type)}','${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>` +
       `<button class="clib-icon-btn danger" title="Delete" aria-label="Delete" onclick="deleteContent('${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
@@ -5809,8 +6007,9 @@ function contentCardHtml(it){
       ${it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:''}
       <div class="clib-title">${esc(dashFix(it.title))}</div>
       ${it.description?`<div class="clib-desc">${esc(dashFix(it.description))}</div>`:''}
+      ${chip}
     </div>
-    <div class="clib-foot">${open}${tools}</div>
+    <div class="clib-foot">${open}${testBtn}${tools}</div>
   </div>`;
 }
 
@@ -5836,6 +6035,9 @@ function showContentPage(types){
   types.forEach(renderContentSection);
   (async()=>{
     for(const t of types) await softLoad('content:'+t, ()=>loadContent(t));
+    // Every visit, not softLoad'ed: a score earned a moment ago has to show
+    // up on the card the moment the page is opened again.
+    if(types.indexOf('training') !== -1) await loadTrainingStatus();
     types.forEach(renderContentSection);
   })();
 }
@@ -5851,6 +6053,146 @@ async function openContentFile(id){
   window.open(r.url, '_blank', 'noopener');
 }
 
+// ── TAKING A TEST ──────────────────────────────────────────────
+// quizState holds the questions as the server sent them - id, text, options -
+// and the indices this person picked. There is nothing here to compare them
+// against, by design: only submit_test knows the answers.
+let quizState = null;
+
+async function openTest(id){
+  const item = (contentCache['training']||[]).find(x=>String(x.id)===String(id));
+  const r = await callDb('get_test', { content_id: id });
+  if(!r || !r.ok){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this test','error'); return; }
+  quizState = { content_id:id, title:r.title || (item && item.title) || 'Test',
+    pass_threshold:r.pass_threshold, questions:r.questions||[], answers:{},
+    attempts:r.attempts||0, best_score:r.best_score };
+  renderQuiz();
+  openBackdrop('modal-test');
+}
+
+function renderQuiz(){
+  const q = quizState; if(!q) return;
+  document.getElementById('modal-test-title').textContent = q.title;
+  const prev = (q.attempts > 0)
+    ? `<span>Attempt ${q.attempts+1}, best so far <strong>${q.best_score==null?0:q.best_score}%</strong></span>`
+    : '';
+  document.getElementById('quiz-body').innerHTML =
+    `<div class="quiz-meta"><span><strong>${q.questions.length}</strong> question${q.questions.length===1?'':'s'}</span>` +
+    `<span>·</span><span><strong>${q.pass_threshold}%</strong> to pass</span>` +
+    `<span>·</span><span>Unlimited retries</span>${prev}</div>` +
+    q.questions.map((qq,i)=>{
+      const qid = esc(qq.id);
+      return `<div class="quiz-q">
+        <div class="quiz-q-text"><span class="quiz-q-num">Question ${i+1}</span>${esc(dashFix(qq.question))}</div>
+        ${(qq.options||[]).map((o,j)=>`
+          <label class="quiz-opt" id="qopt-${qid}-${j}">
+            <input type="radio" name="quiz-${qid}" onchange="setQuizAnswer('${qid}',${j})">
+            <span>${esc(dashFix(o))}</span>
+          </label>`).join('')}
+      </div>`;
+    }).join('');
+  renderQuizFooter();
+}
+
+function renderQuizFooter(){
+  const q = quizState; if(!q) return;
+  const answered = Object.keys(q.answers).length, total = q.questions.length;
+  document.getElementById('quiz-footer').innerHTML =
+    `<span class="quiz-unanswered" style="margin-right:auto">${answered} of ${total} answered</span>` +
+    `<button class="btn-cancel" onclick="closeTest()">Cancel</button>` +
+    `<button class="btn-save" id="btn-submit-quiz" onclick="submitQuiz()" ${answered<total?'disabled style="opacity:.5;cursor:not-allowed"':''}>Submit answers</button>`;
+}
+
+function setQuizAnswer(qid, idx){
+  if(!quizState) return;
+  quizState.answers[qid] = idx;
+  (quizState.questions.find(x=>String(x.id)===String(qid))||{options:[]}).options
+    .forEach((o,j)=>{
+      const el = document.getElementById('qopt-'+qid+'-'+j);
+      if(el) el.classList.toggle('sel', j===idx);
+    });
+  renderQuizFooter();
+}
+
+async function submitQuiz(){
+  const q = quizState; if(!q) return;
+  if(Object.keys(q.answers).length < q.questions.length) return;
+  const btn = document.getElementById('btn-submit-quiz');
+  if(btn){ btn.disabled = true; btn.textContent = 'Grading...'; }
+  const r = await callDb('submit_test', { content_id:q.content_id, answers:q.answers });
+  if(!r || !r.ok){
+    showToast(CONTENT_ERRORS[r && r.error] || 'Could not submit this test','error');
+    if(btn){ btn.disabled = false; btn.textContent = 'Submit answers'; }
+    return;
+  }
+  renderQuizResult(r);
+  // The card behind the modal has to agree with what just happened.
+  await loadTrainingStatus();
+  renderContentSection('training');
+}
+
+function renderQuizResult(r){
+  const passed = !!r.passed;
+  document.getElementById('quiz-body').innerHTML = `
+    <div class="quiz-result">
+      <div class="quiz-score ${passed?'pass':'fail'}">${r.score}%</div>
+      <div class="quiz-verdict">${passed?'Passed':'Not passed yet'}</div>
+      <div class="quiz-sub">${r.correct} of ${r.total} correct · ${r.pass_threshold}% needed to pass.<br>
+        ${passed
+          ? (r.already_completed
+              ? 'You had already completed this training - your original certificate still stands.'
+              : 'Your certificate has been issued.')
+          : 'Review the material and try again - there is no limit on attempts.'}</div>
+      ${passed && r.cert_number ? `<div class="quiz-cert-no">${esc(r.cert_number)}</div>` : ''}
+    </div>`;
+  document.getElementById('quiz-footer').innerHTML =
+    `<button class="btn-cancel" onclick="closeTest()">Close</button>` +
+    (passed
+      ? (r.completion_id ? `<button class="btn-save" onclick="closeTest();openCertificate('${esc(r.completion_id)}')">View certificate</button>` : '')
+      : `<button class="btn-save" onclick="retryTest()">Try again</button>`);
+}
+
+function retryTest(){
+  const id = quizState && quizState.content_id;
+  closeTest();
+  if(id) openTest(id);
+}
+function closeTest(){ quizState = null; closeModal('modal-test'); }
+
+// ── THE CERTIFICATE ────────────────────────────────────────────
+async function openCertificate(completionId){
+  const r = await callDb('get_certificate', { completion_id: completionId });
+  if(!r || !r.ok){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this certificate','error'); return; }
+  const who = [r.person && r.person.first, r.person && r.person.last].filter(Boolean).join(' ') || 'NED Sales Hub';
+  const role = (r.person && r.person.job_title) || '';
+  document.getElementById('tcert-sheet').innerHTML = `
+    <div class="tcert-rule"></div>
+    <img class="tcert-logo" src="assets/logo-light.png" alt="NED College">
+    <div class="tcert-kicker">NED Sales Hub</div>
+    <div class="tcert-head">Certificate of Completion</div>
+    <div class="tcert-lead">This certifies that</div>
+    <div class="tcert-name">${esc(dashFix(who))}</div>
+    ${role?`<div class="tcert-role">${esc(dashFix(role))}</div>`:'<div class="tcert-role"></div>'}
+    <div class="tcert-lead">has successfully completed the training</div>
+    <div class="tcert-title">${esc(dashFix((r.training&&r.training.title)||'Training'))}</div>
+    <div class="tcert-facts">
+      <div><div class="tcert-fact-k">Score</div><div class="tcert-fact-v">${esc(r.score)}%</div></div>
+      <div><div class="tcert-fact-k">Completed</div><div class="tcert-fact-v">${esc(fmtDate(r.completed_at))}</div></div>
+      <div><div class="tcert-fact-k">Certificate no.</div><div class="tcert-fact-v mono">${esc(r.cert_number)}</div></div>
+    </div>
+    <div class="tcert-foot">Issued by NED Sales Hub. The certificate number above is minted on the server and is unique to this completion.</div>`;
+  openBackdrop('modal-cert');
+}
+
+// Browser print for now - a one-click PDF library is a later phase. The class
+// is what the @media print block hangs off, and it comes straight back off so
+// an ordinary Ctrl+P elsewhere in the app is unaffected.
+function printCertificate(){
+  document.body.classList.add('printing-cert');
+  try { window.print(); }
+  finally { document.body.classList.remove('printing-cert'); }
+}
+
 function contentError(msg){
   const e=document.getElementById('clib-error');
   if(!e) return;
@@ -5863,6 +6205,87 @@ function setContentBusy(on, text){
   ['btn-save-content','clib-cancel'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.disabled = !!on;
   });
+}
+
+// ── AUTHORING A TEST ───────────────────────────────────────────
+// The draft lives here while the modal is open. Text fields write into it
+// WITHOUT re-rendering - re-rendering on every keystroke would throw focus
+// out of the input the person is typing in. Only structural changes (adding
+// or removing a question or an option) redraw the list.
+let testDraft = [];
+const TQ_MIN_OPTIONS = 2, TQ_MAX_OPTIONS = 6;
+
+function blankQuestion(){ return { question:'', options:['',''], correct_index:0 }; }
+
+function renderTestEditor(){
+  const host = document.getElementById('clib-q-list');
+  if(!host) return;
+  if(!testDraft.length){
+    host.innerHTML = `<div class="clib-empty" style="padding:22px 16px;margin-bottom:12px">No questions yet.</div>`;
+    return;
+  }
+  host.innerHTML = testDraft.map((q,i)=>`
+    <div class="tq-card">
+      <div class="tq-card-head">
+        <span class="tq-num">Question ${i+1}</span>
+        <button type="button" class="tq-mini danger" title="Remove question" aria-label="Remove question" onclick="removeTestQuestion(${i})">&times;</button>
+      </div>
+      <input class="form-input" type="text" placeholder="What are you asking?"
+             value="${esc(q.question)}" oninput="setQText(${i}, this.value)">
+      ${q.options.map((o,j)=>`
+        <div class="tq-opt">
+          <input type="radio" name="tq-correct-${i}" ${j===q.correct_index?'checked':''}
+                 title="Correct answer" aria-label="Option ${j+1} is correct"
+                 onchange="setQCorrect(${i},${j})">
+          <input class="form-input" type="text" placeholder="Option ${j+1}"
+                 value="${esc(o)}" oninput="setQOption(${i},${j}, this.value)">
+          <button type="button" class="tq-mini danger" title="Remove option" aria-label="Remove option"
+                  onclick="removeTestOption(${i},${j})" ${q.options.length<=TQ_MIN_OPTIONS?'disabled':''}>&times;</button>
+        </div>`).join('')}
+      <button type="button" class="tq-add" style="margin-top:10px;font-size:11.5px;padding:6px 11px"
+              onclick="addTestOption(${i})" ${q.options.length>=TQ_MAX_OPTIONS?'disabled':''}>+ Add option</button>
+    </div>`).join('');
+}
+function setQText(i,v){ if(testDraft[i]) testDraft[i].question = v; }
+function setQOption(i,j,v){ if(testDraft[i] && testDraft[i].options[j]!==undefined) testDraft[i].options[j] = v; }
+function setQCorrect(i,j){ if(testDraft[i]) testDraft[i].correct_index = j; }
+function addTestQuestion(){ testDraft.push(blankQuestion()); renderTestEditor(); }
+function removeTestQuestion(i){ testDraft.splice(i,1); renderTestEditor(); }
+function addTestOption(i){
+  const q = testDraft[i]; if(!q || q.options.length >= TQ_MAX_OPTIONS) return;
+  q.options.push(''); renderTestEditor();
+}
+function removeTestOption(i,j){
+  const q = testDraft[i]; if(!q || q.options.length <= TQ_MIN_OPTIONS) return;
+  q.options.splice(j,1);
+  // The marked answer has to follow the list it points into, or the person
+  // ends up having silently marked a different option than they chose.
+  if(q.correct_index === j) q.correct_index = 0;
+  else if(q.correct_index > j) q.correct_index--;
+  renderTestEditor();
+}
+function syncTestBody(){
+  const on = !!(document.getElementById('clib-has-test')||{}).checked;
+  const body = document.getElementById('clib-test-body');
+  if(body) body.classList.toggle('on', on);
+  if(on && !testDraft.length){ testDraft = [blankQuestion()]; renderTestEditor(); }
+}
+// Say exactly what is wrong rather than letting the gateway's error code be
+// the whole message - the gateway still validates all of it, independently.
+function validateTestDraft(threshold){
+  if(!Number.isInteger(threshold) || threshold < 1 || threshold > 100)
+    return 'The pass mark must be a whole number between 1 and 100';
+  if(!testDraft.length) return 'Add at least one question, or switch the test off';
+  for(let i=0;i<testDraft.length;i++){
+    const q = testDraft[i], n = i+1;
+    if(!String(q.question||'').trim()) return 'Question ' + n + ' needs its text';
+    const opts = q.options.map(o=>String(o||'').trim());
+    if(opts.length < TQ_MIN_OPTIONS) return 'Question ' + n + ' needs at least two options';
+    if(opts.some(o=>!o)) return 'Question ' + n + ' has an empty option';
+    if(!Number.isInteger(q.correct_index) || q.correct_index < 0 || q.correct_index >= opts.length)
+      return 'Mark the correct option for question ' + n;
+  }
+  return null;
 }
 
 function openContentModal(type, id){
@@ -5884,9 +6307,39 @@ function openContentModal(type, id){
   document.getElementById('clib-file-current').textContent =
     it && it.has_file ? ('Current file: ' + (it.file_name || 'attached') + ' - choose a file only to replace it') : '';
   document.getElementById('btn-save-content').textContent = it ? 'Save changes' : 'Add to library';
+  // The test section exists for trainings and nothing else.
+  const wrap = document.getElementById('clib-test-wrap');
+  if(wrap) wrap.style.display = (type === 'training') ? '' : 'none';
+  document.getElementById('clib-has-test').checked = false;
+  document.getElementById('clib-threshold').value = 70;
+  testDraft = [];
+  renderTestEditor();
+  syncTestBody();
   contentError('');
   setContentBusy(false);
   openBackdrop('modal-content');
+  // Only an existing training can have a key to load, and get_training_admin
+  // is the one action allowed to hand over correct_index - behind isMgr, which
+  // openContentModal has already required.
+  if(type === 'training' && it && id){
+    (async()=>{
+      try {
+        const a = await callDb('get_training_admin', { content_id: id });
+        if(!a || !a.ok) return;
+        // Guard against a stale response landing after the modal moved on.
+        if(document.getElementById('clib-id').value !== String(id)) return;
+        document.getElementById('clib-has-test').checked = !!a.has_test;
+        if(a.pass_threshold) document.getElementById('clib-threshold').value = a.pass_threshold;
+        testDraft = (a.questions||[]).map(q=>({
+          question: q.question||'',
+          options: Array.isArray(q.options) && q.options.length ? q.options.slice() : ['',''],
+          correct_index: Number.isInteger(q.correct_index) ? q.correct_index : 0
+        }));
+        renderTestEditor();
+        syncTestBody();
+      } catch(e){ /* the item still saves; the test section just stays empty */ }
+    })();
+  }
 }
 
 async function saveContent(){
@@ -5901,10 +6354,21 @@ async function saveContent(){
   contentError('');
   setContentBusy(true, 'Saving...');
   try {
+    const isTraining = (type === 'training');
+    const wantsTest = isTraining && !!document.getElementById('clib-has-test').checked;
+    const threshold = Number(document.getElementById('clib-threshold').value);
+    if(wantsTest){
+      const bad = validateTestDraft(threshold);
+      if(bad){ contentError(bad); setContentBusy(false); return; }
+    }
     const payload = {
       title,
       description: document.getElementById('clib-desc').value.trim(),
-      category: document.getElementById('clib-cat').value.trim()
+      category: document.getElementById('clib-cat').value.trim(),
+      // A course, material or tool says so outright. The gateway pins these
+      // columns regardless of what any client sends, so this is a statement
+      // of intent rather than the thing being relied on.
+      has_test: wantsTest
     };
     if(coverFile){ setContentBusy(true,'Uploading cover...'); Object.assign(payload, await uploadToStorage('cover', coverFile)); }
     if(file){ setContentBusy(true,'Uploading file...'); Object.assign(payload, await uploadToStorage('file', file)); }
@@ -5913,9 +6377,34 @@ async function saveContent(){
       ? await callDb('update_content', Object.assign({ id }, payload))
       : await callDb('create_content', Object.assign({ type }, payload));
     if(!r || !r.ok) throw new Error((r && r.error) || 'save_failed');
+    // Trainings only, and only after the item itself exists - a create has to
+    // come back with an id before there is anything to attach a test to.
+    if(isTraining){
+      const cid = id || r.id;
+      if(cid){
+        setContentBusy(true,'Saving the test...');
+        const body = { content_id: cid, has_test: wantsTest };
+        if(wantsTest){
+          body.pass_threshold = threshold;
+          body.questions = testDraft.map(q=>({
+            question: String(q.question||'').trim(),
+            options: q.options.map(o=>String(o||'').trim()),
+            correct_index: q.correct_index
+          }));
+        } else {
+          // Switching the test off clears the questions with it, so a
+          // re-enabled test never comes back with somebody's old draft.
+          body.questions = [];
+        }
+        const tr = await callDb('save_training_test', body);
+        if(!tr || !tr.ok) throw new Error((tr && tr.error) || 'save_failed');
+      }
+    }
     closeModal('modal-content');
     showToast(id ? 'Item updated' : 'Added to the library');
     await refreshContent(type);
+    if(isTraining) await loadTrainingStatus();
+    if(isTraining) renderContentSection('training');
   } catch(e){
     contentError(CONTENT_ERRORS[e && e.message] || 'Could not save this item');
   } finally {

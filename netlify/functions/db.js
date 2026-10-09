@@ -325,6 +325,93 @@ function coverObjectPath(url){
 function safeFileName(n){
   return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
 }
+// ── TRAINING TESTS ───────────────────────────────────────────────
+// Only type='training' carries a test. has_test and pass_threshold are owned
+// EXCLUSIVELY by save_training_test, which refuses every other type, so a
+// course, material or tool cannot acquire a test through any client or any
+// other action - create_content writes them false/null and update_content
+// never touches them.
+//
+// THE RULE THAT MATTERS: correct_index appears in exactly one response on this
+// whole gateway - get_training_admin, behind isMgr. Every test-taker payload
+// is built field by field and never selects the column at all, so there is no
+// projection to forget to prune and nothing to delete after the fact. Exactly
+// the discipline file_path lives under in get_content.
+const TEST_MIN_OPTIONS = 2, TEST_MAX_OPTIONS = 6, TEST_MAX_QUESTIONS = 100;
+const CERT_MINT_TRIES = 6;
+// Validate the whole set before writing anything: a half-replaced question
+// list is worse than a rejected save.
+function validateQuestions(list){
+  if(!Array.isArray(list) || !list.length) return { ok:false, error:'no_questions' };
+  if(list.length > TEST_MAX_QUESTIONS) return { ok:false, error:'too_many_questions' };
+  const out = [];
+  for(let i=0;i<list.length;i++){
+    const q = list[i] || {};
+    const text = (q.question===undefined||q.question===null) ? '' : String(q.question).trim();
+    if(!text) return { ok:false, error:'missing_question' };
+    if(!Array.isArray(q.options)) return { ok:false, error:'bad_options' };
+    const options = q.options.map(o => (o===undefined||o===null) ? '' : String(o).trim());
+    if(options.length < TEST_MIN_OPTIONS || options.length > TEST_MAX_OPTIONS) return { ok:false, error:'bad_options' };
+    if(options.some(o => !o)) return { ok:false, error:'bad_options' };
+    const ci = Number(q.correct_index);
+    if(!Number.isInteger(ci) || ci < 0 || ci >= options.length) return { ok:false, error:'bad_correct_index' };
+    out.push({ question:text, options, correct_index:ci, sort_order:i });
+  }
+  return { ok:true, value:out };
+}
+// 'TRN-<year>-0001', counting only this year's certificates so the series
+// restarts each January. Not atomic, which is why the caller retries on the
+// unique violation rather than trusting the count it just read.
+function certNumberFor(year, taken){
+  const prefix = 'TRN-' + year + '-';
+  let n = 0;
+  taken.forEach(c => { if(String(c||'').indexOf(prefix) === 0) n++; });
+  let candidate = prefix + String(n+1).padStart(4,'0');
+  const set = new Set(taken.map(String));
+  // A gap in the series (a deleted completion) must not re-issue a live
+  // number, so walk forward past anything already taken.
+  let guard = 0;
+  while(set.has(candidate) && guard++ < 10000){
+    n++;
+    candidate = prefix + String(n+1).padStart(4,'0');
+  }
+  return candidate;
+}
+// One person's standing on one training: how many attempts, their best score,
+// and the completion if they ever passed. Built field by field - the attempt
+// rows hold the answers they gave and none of that is anybody's business but
+// the grader's.
+async function myTrainingStatus(userId, contentId){
+  const { data: att } = await admin.from('training_attempts')
+    .select('id,score,passed,created_at').eq('user_id',userId).eq('content_id',contentId);
+  let best = null, everPassed = false, last = null;
+  (att||[]).forEach(a => {
+    const sc = Number(a.score);
+    if(Number.isFinite(sc) && (best === null || sc > best)) best = sc;
+    if(a.passed) everPassed = true;
+    if(!last || String(a.created_at||'') > String(last)) last = a.created_at || null;
+  });
+  const { data: done } = await admin.from('training_completions')
+    .select('id,cert_number,score,completed_at').eq('user_id',userId).eq('content_id',contentId).single();
+  return {
+    attempts: (att||[]).length,
+    best_score: best,
+    last_attempt_at: last,
+    passed: everPassed || !!done,
+    completion_id: done ? done.id : null,
+    cert_number: done ? done.cert_number : null,
+    completed_at: done ? done.completed_at : null
+  };
+}
+// A training row, confirmed to be a training. Used by every action below so
+// the type gate is written once.
+async function trainingRow(id){
+  const { data: row } = await admin.from('content_items')
+    .select('id,type,title,has_test,pass_threshold').eq('id',id).single();
+  if(!row) return { ok:false, status:404, error:'not_found' };
+  if(row.type !== 'training') return { ok:false, status:400, error:'not_a_training' };
+  return { ok:true, row };
+}
 // job_title stays here so an old client cannot be broken by its removal, but
 // nothing sends it any more: the profile derives the job title from the cargo.
 const PROFILE_EDITABLE = ['first','last','nickname','job_title','phone','instagram','linkedin','nationality','language','bio'];
@@ -1118,7 +1205,27 @@ exports.handler = async (event) => {
           notes:d.notes, created_at:d.created_at, has_file: !!d.file_url
         }));
 
-        return json(200,{ profile: tgt, certs, appraisals, documents,
+        // Completed trainings follow certView, the same gate the certificate
+        // catalogue above uses - it is the same kind of fact about a person.
+        const { data: comps } = gates.certView
+          ? await admin.from('training_completions')
+              .select('id,content_id,cert_number,score,completed_at')
+              .eq('user_id',uid).order('completed_at',{ascending:false})
+          : { data: [] };
+        const compIds = [...new Set((comps||[]).map(c=>c.content_id).filter(Boolean))];
+        const titleById = {};
+        if(compIds.length){
+          const { data: items } = await admin.from('content_items').select('id,title').in('id',compIds);
+          (items||[]).forEach(i=>{ titleById[i.id] = i.title; });
+        }
+        // Field by field, so a join can never drag a question row along.
+        const training_completions = (comps||[]).map(c=>({
+          id: c.id, content_id: c.content_id,
+          title: titleById[c.content_id] || 'Training',
+          cert_number: c.cert_number, score: c.score, completed_at: c.completed_at
+        }));
+
+        return json(200,{ profile: tgt, certs, appraisals, documents, training_completions,
           can_edit: gates.canEdit,
           can_manage_certs: gates.certManage,
           can_see_appraisals: gates.appraisal,
@@ -1359,7 +1466,7 @@ exports.handler = async (event) => {
       case 'get_content': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         let q = admin.from('content_items')
-          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,sort_order,created_at')
+          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,has_test,pass_threshold,sort_order,created_at')
           .eq('active', true)
           .order('sort_order',{ascending:true}).order('created_at',{ascending:true});
         if(p.type !== undefined && p.type !== null && p.type !== ''){
@@ -1376,6 +1483,10 @@ exports.handler = async (event) => {
           description: r.description, category: r.category,
           cover_url: r.cover_url, file_name: r.file_name, file_type: r.file_type,
           has_file: !!r.file_path,
+          // Both are public by nature: a card has to be able to say "test
+          // required, 70% to pass". Neither says anything about the answers.
+          has_test: !!r.has_test,
+          pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold),
           sort_order: r.sort_order, created_at: r.created_at
         })) });
       }
@@ -1415,6 +1526,10 @@ exports.handler = async (event) => {
           file_name: p.file_name || null,
           file_type: p.file_type || null,
           sort_order: Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0,
+          // Never from the request. A test is attached afterwards, by
+          // save_training_test, which is the only action that may set these -
+          // so no payload can publish an item that claims to have a test.
+          has_test: false, pass_threshold: null,
           active: true, created_by: me.id
         }).select('id').single();
         if(error) return json(500,{error:'save_failed', detail:error.message});
@@ -1497,6 +1612,210 @@ exports.handler = async (event) => {
         const { data, error } = await admin.storage.from(CONTENT_BUCKETS.file).createSignedUrl(row.file_path, 60);
         if(error || !data) return json(500,{error:'sign_failed', detail:error && error.message});
         return json(200,{ ok:true, url: data.signedUrl });
+      }
+      // ── TRAINING TESTS: authoring (isMgr) ────────────────────
+      case 'save_training_test': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.content_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.content_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const hasTest = !!p.has_test;
+        let threshold = null, questions = null;
+        if(hasTest){
+          threshold = Number(p.pass_threshold);
+          if(!Number.isInteger(threshold) || threshold < 1 || threshold > 100)
+            return json(400,{error:'bad_threshold'});
+          const v = validateQuestions(p.questions);
+          if(!v.ok) return json(400,{error:v.error});
+          questions = v.value;
+        } else if(Array.isArray(p.questions)){
+          // Turning the test off while sending a list means "clear it".
+          questions = [];
+        }
+        const { error: upErr } = await admin.from('content_items')
+          .update({ has_test: hasTest, pass_threshold: hasTest ? threshold : null })
+          .eq('id', p.content_id);
+        if(upErr) return json(500,{error:'save_failed', detail:upErr.message});
+        // Replace wholesale. Editing in place would have to match rows up by
+        // identity, and a question whose text changed is a different question.
+        if(questions !== null){
+          const { error: delErr } = await admin.from('training_questions').delete().eq('content_id', p.content_id);
+          if(delErr) return json(500,{error:'save_failed', detail:delErr.message});
+          if(questions.length){
+            const { error: insErr } = await admin.from('training_questions')
+              .insert(questions.map(q => ({ content_id: p.content_id, question: q.question,
+                options: q.options, correct_index: q.correct_index, sort_order: q.sort_order })));
+            if(insErr) return json(500,{error:'save_failed', detail:insErr.message});
+          }
+        }
+        return json(200,{ ok:true, has_test: hasTest, pass_threshold: hasTest ? threshold : null,
+          question_count: questions === null ? null : questions.length });
+      }
+      case 'get_training_admin': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.content_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.content_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const { data: qs, error } = await admin.from('training_questions')
+          .select('id,question,options,correct_index,sort_order')
+          .eq('content_id', p.content_id)
+          .order('sort_order',{ascending:true}).order('id',{ascending:true});
+        if(error) return json(500,{error:'load_failed', detail:error.message});
+        // The ONE response on this gateway that carries correct_index, and it
+        // is behind isMgr. Authoring needs it; nothing else may have it.
+        return json(200,{ ok:true, content_id: t.row.id, title: t.row.title,
+          has_test: !!t.row.has_test,
+          pass_threshold: (t.row.pass_threshold===null||t.row.pass_threshold===undefined) ? null : Number(t.row.pass_threshold),
+          questions: (qs||[]).map(q=>({ id:q.id, question:q.question,
+            options: Array.isArray(q.options) ? q.options : [],
+            correct_index: q.correct_index, sort_order: q.sort_order })) });
+      }
+      // ── TRAINING TESTS: taking (any signed-in caller) ────────
+      case 'get_test': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.content_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.content_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        if(!t.row.has_test) return json(404,{error:'no_test'});
+        // correct_index is NOT in this select. Not fetched, so not forgotten.
+        const { data: qs, error } = await admin.from('training_questions')
+          .select('id,question,options,sort_order')
+          .eq('content_id', p.content_id)
+          .order('sort_order',{ascending:true}).order('id',{ascending:true});
+        if(error) return json(500,{error:'load_failed', detail:error.message});
+        if(!(qs||[]).length) return json(404,{error:'no_questions'});
+        const mine = await myTrainingStatus(me.id, p.content_id);
+        return json(200,{ ok:true, content_id: t.row.id, title: t.row.title,
+          pass_threshold: Number(t.row.pass_threshold),
+          question_count: qs.length,
+          questions: qs.map(q=>({ id:q.id, question:q.question,
+            options: Array.isArray(q.options) ? q.options : [] })),
+          best_score: mine.best_score, attempts: mine.attempts,
+          passed: mine.passed, cert_number: mine.cert_number,
+          completion_id: mine.completion_id, completed_at: mine.completed_at });
+      }
+      case 'submit_test': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.content_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.content_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        if(!t.row.has_test) return json(404,{error:'no_test'});
+        const answers = (p.answers && typeof p.answers === 'object' && !Array.isArray(p.answers)) ? p.answers : null;
+        if(!answers) return json(400,{error:'bad_answers'});
+        // Grading happens here and only here. The client sent indices; it has
+        // never been told which index is right.
+        const { data: qs, error } = await admin.from('training_questions')
+          .select('id,correct_index').eq('content_id', p.content_id);
+        if(error) return json(500,{error:'load_failed', detail:error.message});
+        const total = (qs||[]).length;
+        if(!total) return json(404,{error:'no_questions'});
+        let correct = 0;
+        (qs||[]).forEach(q => {
+          const given = answers[String(q.id)];
+          if(given === undefined || given === null) return;
+          if(Number(given) === Number(q.correct_index)) correct++;
+        });
+        const threshold = Number(t.row.pass_threshold);
+        const score = Math.round(correct / total * 100);
+        const passed = score >= threshold;
+        // Every attempt is recorded, pass or fail - unlimited retries are the
+        // decision, an unlogged attempt is not.
+        const { error: aErr } = await admin.from('training_attempts').insert({
+          user_id: me.id, content_id: p.content_id, score, passed, answers });
+        if(aErr) return json(500,{error:'save_failed', detail:aErr.message});
+        // Score and totals only. No per-question result: with unlimited
+        // retries, telling someone WHICH ones they missed hands over the
+        // answer key in a single attempt.
+        const out = { ok:true, score, passed, correct, total, pass_threshold: threshold };
+        if(!passed) return json(200, out);
+
+        const existing = await myTrainingStatus(me.id, p.content_id);
+        if(existing.completion_id){
+          // unique(user_id,content_id): the first pass is the one that counts,
+          // and a later better score does not re-mint a certificate.
+          out.cert_number = existing.cert_number;
+          out.completion_id = existing.completion_id;
+          out.completed_at = existing.completed_at;
+          out.already_completed = true;
+          return json(200, out);
+        }
+        const year = new Date().getFullYear();
+        for(let i=0;i<CERT_MINT_TRIES;i++){
+          const { data: taken } = await admin.from('training_completions').select('cert_number');
+          const cert = certNumberFor(year, (taken||[]).map(r=>r.cert_number));
+          const { data: made, error: cErr } = await admin.from('training_completions')
+            .insert({ user_id: me.id, content_id: p.content_id, cert_number: cert, score })
+            .select('id,cert_number,completed_at').single();
+          if(!cErr && made){
+            out.cert_number = made.cert_number || cert;
+            out.completion_id = made.id;
+            out.completed_at = made.completed_at || null;
+            return json(200, out);
+          }
+          const code = cErr && (cErr.code || '');
+          if(code !== '23505') return json(500,{error:'save_failed', detail:cErr && cErr.message});
+          // Either somebody took this cert_number between the count and the
+          // insert - retry - or this person already has a completion for this
+          // training, in which case theirs is the answer.
+          const again = await myTrainingStatus(me.id, p.content_id);
+          if(again.completion_id){
+            out.cert_number = again.cert_number;
+            out.completion_id = again.completion_id;
+            out.completed_at = again.completed_at;
+            out.already_completed = true;
+            return json(200, out);
+          }
+        }
+        return json(500,{error:'cert_mint_failed'});
+      }
+      case 'get_my_training_status': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(p.content_id){
+          const t = await trainingRow(p.content_id);
+          if(!t.ok) return json(t.status,{error:t.error});
+          const mine = await myTrainingStatus(me.id, p.content_id);
+          return json(200,{ ok:true, items:[ Object.assign({ content_id: t.row.id,
+            has_test: !!t.row.has_test,
+            pass_threshold: (t.row.pass_threshold===null||t.row.pass_threshold===undefined) ? null : Number(t.row.pass_threshold)
+          }, mine) ] });
+        }
+        const { data: rows } = await admin.from('content_items')
+          .select('id,has_test,pass_threshold').eq('type','training').eq('has_test', true);
+        const items = [];
+        for(const r of (rows||[])){
+          const mine = await myTrainingStatus(me.id, r.id);
+          items.push(Object.assign({ content_id: r.id, has_test: true,
+            pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold)
+          }, mine));
+        }
+        return json(200,{ ok:true, items });
+      }
+      case 'get_certificate': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.completion_id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('training_completions')
+          .select('id,user_id,content_id,cert_number,score,completed_at').eq('id',p.completion_id).single();
+        if(!row) return json(404,{error:'not_found'});
+        // Yours, or a profile you are allowed to look at. certView is the same
+        // predicate as canView, so the read-only company-wide tier can see a
+        // certificate exactly where it can already see the profile.
+        if(String(row.user_id) !== String(me.id)){
+          const { data: owner } = await admin.from('profiles').select('id,role,reports_to').eq('id',row.user_id).single();
+          if(!owner) return json(404,{error:'not_found'});
+          if(!(await gatesFor(me, owner)).certView) return json(403,{error:'out_of_scope'});
+        }
+        const { data: who } = await admin.from('profiles').select('id,first,last,job_title').eq('id',row.user_id).single();
+        const { data: item } = await admin.from('content_items').select('id,title').eq('id',row.content_id).single();
+        return json(200,{ ok:true,
+          completion_id: row.id,
+          cert_number: row.cert_number,
+          score: row.score,
+          completed_at: row.completed_at,
+          training: { id: row.content_id, title: (item && item.title) || 'Training' },
+          person: { id: row.user_id, first: (who && who.first) || '',
+            last: (who && who.last) || '', job_title: (who && who.job_title) || '' } });
       }
       case 'list_meetings': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
