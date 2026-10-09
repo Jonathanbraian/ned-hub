@@ -793,16 +793,21 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   .cal-sidebar{display:none}
   .outlook-banner{flex-wrap:wrap}
 }
-/* ── THE COMPACT BAND: EVERYTHING BELOW 819px ────────────────────
-   818 is not a round number, it is a measured one. Bisecting the viewport
-   width at which the FULL top bar stops overflowing gives 819px, so 818 is
-   the last width that needs the compact treatment. These rules used to stop
-   at 640, which is why iPad portrait (768px) still scrolled sideways: the
-   bar wanted 819px and had 768.
+/* ── THE COMPACT BAND: EVERYTHING BELOW 1280px ───────────────────
+   This breakpoint has moved twice, each time because the previous one
+   answered the wrong question. 640 was a guess. 818 was the width at which
+   the bar stops overflowing SIDEWAYS - but .nav-links is a wrapping flex row,
+   so above it the links did not overflow, they STACKED: seven rows deep at
+   819, spilling out of the bar over the hero, and only one clean row from
+   about 1264. scrollWidth cannot see that, which is why it was missed twice.
+   So the question is no longer "when does the bar stop overflowing" but
+   "when do the links fit on ONE row". Measured by bisection on the <ul>'s
+   height, that is 1264px for the widest role with the pill capped. 1280 is
+   that plus breathing room, and the commonest laptop width.
    Only the NAV rules live at this breakpoint. The cards, modals and padding
-   that shared the old 640 block stayed there - a tablet is not a phone for
-   those, and widening them would have been a different change. */
-@media(max-width:818px){
+   that shared the old 640 block stayed there - a laptop is not a phone for
+   those, and widening them would be a different change entirely. */
+@media(max-width:1279px){
   .nav-label{display:none}
   .nav-div{display:none}
   .role-pill{display:none}
@@ -849,19 +854,31 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
   #app{overflow-x:clip}
 }
 
-/* ── THE ONE PIECE OF FREE TEXT IN THE BAR ───────────────────────
-   The breakpoint above is a measured constant, but the width it was measured
-   against is NOT: the role pill holds a cargo name somebody typed, and every
-   character of it widens the bar. Measured across the current cargos, the
-   full bar needs 798px for "Consultant" and 833px for "Senior Executive" -
-   so a pill-shaped hole sits just above any fixed breakpoint, and a longer
-   name ("Head of Student Recruitment") would reopen it.
-   Capping the pill in the tight band takes the variable out of the
-   arithmetic: above 818px the bar's width no longer depends on what anyone
-   typed. Over 1024px there is room for the longest name, so it is not capped
-   there. */
-@media(max-width:1024px){
+/* ── THE ONE UNBOUNDED THING IN THE BAR ──────────────────────────
+   The breakpoint above is a measured constant; the width it was measured
+   against is not. The role pill holds a cargo name somebody typed, and every
+   character widens the bar: one row needs 1264px with the pill capped at
+   100px and 1287px with "Senior Executive" at its full 123px - and a longer
+   name has no ceiling at all. So the cap is not a tablet workaround, it is
+   what makes a fixed breakpoint possible: with it, the one-row width is a
+   constant instead of a function of what anyone types.
+   It therefore has to stay in force AT the breakpoint, not stop below it.
+   Past 1400px there is room to spare, so the pill gets a generous ceiling
+   rather than none - 200px still bounds the bar, and no cargo name anyone
+   would actually write reaches it. */
+@media(max-width:1399px){
   .role-pill{max-width:100px;overflow:hidden;text-overflow:ellipsis}
+}
+@media(min-width:1400px){
+  .role-pill{max-width:200px;overflow:hidden;text-overflow:ellipsis}
+}
+
+/* At and above the breakpoint the links genuinely fit on one row, so wrapping
+   can only ever be a symptom of something having gone wrong. Forbidding it
+   turns a future regression into a visible overflow instead of a silent
+   second row sitting on top of the page. */
+@media(min-width:1280px){
+  .nav-links{flex-wrap:nowrap}
 }
 
 @media(max-width:640px){
@@ -948,7 +965,7 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    This block must stay AFTER the :root above, which it overrides, and its
    breakpoint must match the compact bar's: the bottom bar has to exist
    wherever the text links do not, or a tablet is left with no navigation. */
-@media(max-width:818px){
+@media(max-width:1279px){
   :root{ --bottom-nav-h: calc(56px + var(--safe-bottom)); }
   body{ padding-bottom: var(--bottom-nav-h); }
 }
@@ -3742,12 +3759,12 @@ function startApp(user){
     document.getElementById('btn-install-app')?.style.setProperty('display','none');
   }
 
-  // Show the bottom nav wherever the top bar is compact. 819 is the measured
-  // width at which the full top bar stops overflowing, and the CSS hides the
-  // text nav-links below it - so this threshold and that one are the same
-  // decision and must not drift apart. They did: this said 768 while the CSS
-  // said 640, which left 641-767 with neither a bottom bar nor text links.
-  const isMobile=window.innerWidth<819;
+  // Show the bottom nav wherever the top bar is compact. 1280 is where the
+  // text links fit on one row, and the CSS hides them below it - so this
+  // threshold and that one are the same decision and must not drift apart.
+  // They have twice: 768 here against 640 in the CSS, then 819 against a
+  // breakpoint that measured the wrong thing. One number, both places.
+  const isMobile=window.innerWidth<1280;
   if(isMobile){
     document.getElementById('mobile-bottom-nav').style.display='flex';
   }
