@@ -159,6 +159,18 @@ async function currentCycle(){
   if(again) return { ok:true, cycle:{ id:again.id, week_start:again.week_start } };
   return { ok:false, error:'cycle_failed', detail: error && error.message };
 }
+// Who a weekly write is for. Absent or self means the caller, exactly as in
+// part 1. A different person has to pass canActOn - the same predicate every
+// other write gate uses, which is subtree AND outranks for a local leader and
+// is false outright for the read-only company-wide tier.
+async function weekTargetFor(me, raw){
+  if(raw === undefined || raw === null || raw === '' || String(raw) === String(me.id))
+    return { ok:true, user_id: me.id, self:true };
+  const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id', raw).single();
+  if(!tgt) return { ok:false, status:404, error:'not_found' };
+  if(!(await canActOn(me, tgt))) return { ok:false, status:403, error:'out_of_scope' };
+  return { ok:true, user_id: tgt.id, self:false };
+}
 // Money: a finite number at or above zero. Blank counts as zero, because an
 // untouched field on the form is not an error.
 function weekAmount(v){
@@ -1105,9 +1117,12 @@ exports.handler = async (event) => {
       }
       case 'save_week_entry': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
-        // Self only in this part. A target_user_id in the body is not an
-        // error to report back, it is simply not read - there is no path
-        // here that writes anybody else's row.
+        // A boss may fill a member's line for them. Whose row this writes is
+        // decided here and nowhere else, before a single value is read.
+        const who = await weekTargetFor(me, p.target_user_id);
+        if(!who.ok) return json(who.status,{error:who.error});
+        // Only ever the CURRENT cycle: there is no parameter that names a
+        // past week, so history cannot be rewritten by any caller.
         const c = await currentCycle();
         if(!c.ok) return json(500,{error:c.error, detail:c.detail});
         const nums = {
@@ -1136,7 +1151,9 @@ exports.handler = async (event) => {
         const keep = cleaned.filter(r => allowed.has(String(r.source_id)));
 
         const { data: existing } = await admin.from('weekly_entries')
-          .select('id').eq('cycle_id', c.cycle.id).eq('user_id', me.id).single();
+          .select('id').eq('cycle_id', c.cycle.id).eq('user_id', who.user_id).single();
+        // last_edited_by is the CALLER, not the owner - that is the whole
+        // point of recording it, so a filled-in row says who filled it.
         const patch = Object.assign({}, nums, {
           last_edited_by: me.id, updated_at: new Date().toISOString() });
         let entryId = existing && existing.id;
@@ -1147,7 +1164,7 @@ exports.handler = async (event) => {
           if(error) return json(500,{error:'save_failed', detail:error.message});
         } else {
           const { data: made, error } = await admin.from('weekly_entries')
-            .insert(Object.assign({ cycle_id:c.cycle.id, user_id:me.id, submitted:false }, patch))
+            .insert(Object.assign({ cycle_id:c.cycle.id, user_id:who.user_id, submitted:false }, patch))
             .select('id').single();
           if(error) return json(500,{error:'save_failed', detail:error.message});
           entryId = made && made.id;
@@ -1163,14 +1180,18 @@ exports.handler = async (event) => {
               received:r.received, sold:r.sold })));
           if(iErr) return json(500,{error:'save_failed', detail:iErr.message});
         }
-        return json(200,{ ok:true, entry_id:entryId, week:c.cycle, saved_leads:keep.length });
+        return json(200,{ ok:true, entry_id:entryId, week:c.cycle,
+          user_id: who.user_id, saved_leads:keep.length });
       }
       case 'submit_week_entry': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Same gate as the save: a boss may finalise a line they filled in.
+        const who = await weekTargetFor(me, p.target_user_id);
+        if(!who.ok) return json(who.status,{error:who.error});
         const c = await currentCycle();
         if(!c.ok) return json(500,{error:c.error, detail:c.detail});
         const { data: existing } = await admin.from('weekly_entries')
-          .select('id').eq('cycle_id', c.cycle.id).eq('user_id', me.id).single();
+          .select('id').eq('cycle_id', c.cycle.id).eq('user_id', who.user_id).single();
         // Nothing to submit is a 404, not a silent success: the client has to
         // be able to tell "save first" from "done".
         if(!existing) return json(404,{error:'no_entry'});
@@ -1180,7 +1201,142 @@ exports.handler = async (event) => {
           .eq('id', existing.id);
         if(error) return json(500,{error:'submit_failed', detail:error.message});
         // No time lock in this part: re-saving and re-submitting stay open.
-        return json(200,{ ok:true, submitted:true, submitted_at, week:c.cycle });
+        return json(200,{ ok:true, submitted:true, submitted_at, week:c.cycle,
+          user_id: who.user_id });
+      }
+      case 'get_week_board': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // A named cycle is history: it is read-only, whoever is asking.
+        let cycle = null, isCurrent = true;
+        if(p.cycle_id !== undefined && p.cycle_id !== null && p.cycle_id !== ''){
+          const { data: row } = await admin.from('weekly_cycles')
+            .select('id,week_start').eq('id', p.cycle_id).single();
+          if(!row) return json(404,{error:'not_found'});
+          const cur = await currentCycle();
+          if(!cur.ok) return json(500,{error:cur.error, detail:cur.detail});
+          cycle = { id: row.id, week_start: row.week_start };
+          isCurrent = String(row.id) === String(cur.cycle.id);
+        } else {
+          const cur = await currentCycle();
+          if(!cur.ok) return json(500,{error:cur.error, detail:cur.detail});
+          cycle = cur.cycle; isCurrent = true;
+        }
+        // Exactly the Manager = LOCAL scope every other screen uses: null is
+        // the whole company, otherwise the caller's subtree plus themselves.
+        const ids = await scopeIdsFor(me);
+        const { data: profs } = await admin.from('profiles')
+          .select('id,first,last,nickname,role,role_id,campus,status');
+        const inScope = (profs||[])
+          .filter(u => u.status !== 'inactive')
+          .filter(u => ids === null || ids.has(u.id));
+        const { data: roleRows } = await admin.from('roles').select('id,name');
+        const roleName = {}; (roleRows||[]).forEach(r=>{ roleName[String(r.id)] = r.name; });
+
+        // canActOn asks the database for the whole profile list every time it
+        // is called, so calling it once per member would scan the directory N
+        // times. The subtree is read ONCE here and the same three branches
+        // are applied; testweek2 asserts this agrees with canActOn for every
+        // member of every role, so the shortcut cannot drift from the gate.
+        const sub = isLocalLeader(me.role) ? await subtreeIds(me) : null;
+        const mayEdit = (m) => {
+          if(!isCurrent) return false;              // history is read-only
+          // These are the member objects built below: the id field is
+          // user_id, not id.
+          if(String(m.user_id) === String(me.id)) return false;  // own line lives on the My results tab
+          if(seesEverything(me.role)) return false;
+          if(rank(me.role) >= ROLE_RANK.director) return outranks(me.role, m.role);
+          if(isLocalLeader(me.role)) return sub.has(m.user_id) && outranks(me.role, m.role);
+          return false;
+        };
+
+        const { data: sources } = await admin.from('lead_sources')
+          .select('id,name,active,sort_order').eq('active', true)
+          .order('sort_order',{ascending:true}).order('name',{ascending:true});
+        const srcList = sources || [];
+
+        const memberIds = inScope.map(u=>u.id);
+        const { data: entries } = memberIds.length
+          ? await admin.from('weekly_entries')
+              .select('id,user_id,sales_dub_received,sales_dub_expected,sales_lim_received,sales_lim_expected,submitted,submitted_at,last_edited_by')
+              .eq('cycle_id', cycle.id).in('user_id', memberIds)
+          : { data: [] };
+        const byUser = {}; (entries||[]).forEach(e=>{ byUser[String(e.user_id)] = e; });
+        const entryIds = (entries||[]).map(e=>e.id);
+        const { data: rows } = entryIds.length
+          ? await admin.from('weekly_lead_rows').select('entry_id,source_id,received,sold').in('entry_id', entryIds)
+          : { data: [] };
+        const byEntry = {};
+        (rows||[]).forEach(r=>{ (byEntry[String(r.entry_id)] = byEntry[String(r.entry_id)] || {})[String(r.source_id)] = r; });
+
+        const totals = { dub_received:0, dub_expected:0, lim_received:0, lim_expected:0 };
+        const leadTotals = {}; srcList.forEach(s=>{ leadTotals[String(s.id)] = { received:0, sold:0 }; });
+
+        // Field by field, never a spread: a profile row carries e-mail, phone
+        // and a reporting line, none of which this board is asking for.
+        const members = inScope.map(u => {
+          const e = byUser[String(u.id)] || null;
+          const saved = e ? (byEntry[String(e.id)] || {}) : {};
+          const sales = {
+            dub_received: e ? Number(e.sales_dub_received||0) : 0,
+            dub_expected: e ? Number(e.sales_dub_expected||0) : 0,
+            lim_received: e ? Number(e.sales_lim_received||0) : 0,
+            lim_expected: e ? Number(e.sales_lim_expected||0) : 0
+          };
+          totals.dub_received += sales.dub_received;
+          totals.dub_expected += sales.dub_expected;
+          totals.lim_received += sales.lim_received;
+          totals.lim_expected += sales.lim_expected;
+          const leads = srcList.map(sx => {
+            const r = saved[String(sx.id)];
+            const received = r ? Number(r.received||0) : 0;
+            const sold = r ? Number(r.sold||0) : 0;
+            leadTotals[String(sx.id)].received += received;
+            leadTotals[String(sx.id)].sold += sold;
+            return { source_id: sx.id, name: sx.name, received, sold };
+          });
+          const name = [u.first, u.last].filter(Boolean).join(' ').trim() || (u.nickname||'');
+          return {
+            user_id: u.id,
+            name,
+            cargo: roleName[String(u.role_id)] || null,
+            role: u.role,
+            campus: u.campus || null,
+            exists: !!e,
+            submitted: e ? !!e.submitted : false,
+            submitted_at: e ? (e.submitted_at||null) : null,
+            // Who last touched it, and whether that was somebody else. The
+            // id itself is a profile id the viewer can already see on this
+            // board, so there is nothing new disclosed by it.
+            last_edited_by: e ? (e.last_edited_by||null) : null,
+            filled_by_other: !!(e && e.last_edited_by && String(e.last_edited_by) !== String(u.id)),
+            sales, leads
+          };
+        });
+        members.sort((a,b)=> String(a.name||'').localeCompare(String(b.name||'')));
+
+        return json(200,{
+          cycle, is_current: isCurrent,
+          members,
+          totals: Object.assign({}, totals, {
+            leads: srcList.map(sx => ({ source_id: sx.id, name: sx.name,
+              received: leadTotals[String(sx.id)].received,
+              sold: leadTotals[String(sx.id)].sold }))
+          }),
+          can_edit: members.filter(m => mayEdit(m)).map(m => m.user_id)
+        });
+      }
+      case 'list_week_cycles': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Make sure this week exists before listing, so the picker is never
+        // missing the week the board is showing.
+        const cur = await currentCycle();
+        if(!cur.ok) return json(500,{error:cur.error, detail:cur.detail});
+        const { data, error } = await admin.from('weekly_cycles')
+          .select('id,week_start').order('week_start',{ascending:false});
+        if(error) return json(500,{error:'cycles_failed', detail:error.message});
+        return json(200,{ cycles: (data||[]).slice(0,26)
+          .map(c=>({ id:c.id, week_start:c.week_start })),
+          current_id: cur.cycle.id });
       }
       case 'set_team_target': {
         const me = await callerProfile(caller);
