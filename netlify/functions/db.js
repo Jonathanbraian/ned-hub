@@ -325,6 +325,17 @@ function coverObjectPath(url){
 function safeFileName(n){
   return String(n||'file').replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80) || 'file';
 }
+// A link that is safe to hand back to a browser as an href: http(s) only,
+// so a stored 'javascript:'/'data:' URL can never become an XSS when the
+// card is clicked. Returns a trimmed URL or null.
+function safeHttpUrl(v){
+  if(typeof v !== 'string') return null;
+  const s = v.trim();
+  if(!s) return null;
+  if(s.length > 2000) return null;
+  if(!/^https?:\/\//i.test(s)) return null;
+  return s;
+}
 // ── TRAINING TESTS ───────────────────────────────────────────────
 // Only type='training' carries a test. has_test and pass_threshold are owned
 // EXCLUSIVELY by save_training_test, which refuses every other type, so a
@@ -1466,7 +1477,7 @@ exports.handler = async (event) => {
       case 'get_content': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         let q = admin.from('content_items')
-          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,has_test,pass_threshold,sort_order,created_at')
+          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,has_test,pass_threshold,sort_order,created_at')
           .eq('active', true)
           .order('sort_order',{ascending:true}).order('created_at',{ascending:true});
         if(p.type !== undefined && p.type !== null && p.type !== ''){
@@ -1483,6 +1494,11 @@ exports.handler = async (event) => {
           description: r.description, category: r.category,
           cover_url: r.cover_url, file_name: r.file_name, file_type: r.file_type,
           has_file: !!r.file_path,
+          // Unlike file_path, this one IS the destination: a public address
+          // the card turns into an href, so it goes out in full. It was
+          // sanitised on the way in, and is re-checked on the way out
+          // because a row can also be edited outside this gateway.
+          link_url: safeHttpUrl(r.link_url),
           // Both are public by nature: a card has to be able to say "test
           // required, 70% to pass". Neither says anything about the answers.
           has_test: !!r.has_test,
@@ -1525,6 +1541,9 @@ exports.handler = async (event) => {
           file_path: p.file_path || null,
           file_name: p.file_name || null,
           file_type: p.file_type || null,
+          // Sanitised here rather than trusted: whatever the client sends,
+          // what lands on the row is an http(s) URL or nothing at all.
+          link_url: safeHttpUrl(p.link_url),
           sort_order: Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0,
           // Never from the request. A test is attached afterwards, by
           // save_training_test, which is the only action that may set these -
@@ -1554,6 +1573,8 @@ exports.handler = async (event) => {
         }
         if(p.description !== undefined) patch.description = (p.description||'').toString();
         if(p.category !== undefined) patch.category = (p.category||'').toString().trim() || null;
+        // safeHttpUrl('') is null, so clearing the field clears the column.
+        if(p.link_url !== undefined) patch.link_url = safeHttpUrl(p.link_url);
         if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order))) patch.sort_order = Number(p.sort_order);
         if(p.active !== undefined) patch.active = !!p.active;
         // A replaced cover or file leaves its predecessor in the bucket unless

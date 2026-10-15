@@ -1284,6 +1284,9 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .clib-open{flex:1;font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);border-radius:9px;padding:9px 12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s}
 .clib-open:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
 .clib-nofile{flex:1;font-size:11.5px;color:var(--muted);font-style:italic}
+/* .clib-open already carries the flex layout, the colours and the gap; an
+   anchor only needs its underline taken off to match the button exactly. */
+a.clib-open{text-decoration:none}
 .clib-icon-btn{width:34px;height:34px;flex-shrink:0;border-radius:9px;background:var(--bg);border:1px solid var(--border);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .clib-icon-btn:hover{background:var(--surface);color:var(--text);border-color:var(--border2)}
 .clib-icon-btn.danger:hover{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
@@ -2584,6 +2587,13 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
         <label class="form-label">File</label>
         <input class="form-input" type="file" id="clib-file-input">
         <div class="clib-filename" id="clib-file-current"></div>
+      </div>
+      <!-- Every type, not just materials and tools: anything in the library
+           can be a destination as easily as a document. -->
+      <div class="form-group">
+        <label class="form-label">Link <span class="form-hint" style="display:inline">(optional)</span></label>
+        <input class="form-input" type="url" id="clib-link-input" placeholder="https://... (optional)">
+        <div class="form-hint">Optional - a website this item opens, e.g. immigration or QQI updates. Leave blank for a file-only item.</div>
       </div>
       <!-- Trainings only. Hidden for course/material/tool, and saveContent
            sends has_test:false and no questions for those types. -->
@@ -5973,9 +5983,18 @@ function contentCardHtml(it){
   const id = esc(it.id);
   const cover = `<div class="clib-cover"><span class="clib-cover-ph">${CONTENT_PLACEHOLDER_SVG}</span>` +
     (it.cover_url ? `<img src="${esc(it.cover_url)}" alt="" loading="lazy">` : '') + `</div>`;
+  // Checked again here, on the value that actually becomes the href. The
+  // gateway already refuses anything but http(s), so this is the second of
+  // two locks rather than the only one.
+  const isHttp = it.link_url && /^https?:\/\//i.test(it.link_url);
+  const linkBtn = isHttp
+    ? `<a class="clib-open" href="${esc(it.link_url)}" target="_blank" rel="noopener noreferrer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Visit</a>`
+    : '';
+  // "No file attached" is only true when there is nowhere to go at all - a
+  // link-only item is not a card with something missing.
   const open = it.has_file
     ? `<button class="clib-open" onclick="openContentFile('${id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open</button>`
-    : `<span class="clib-nofile">No file attached</span>`;
+    : (isHttp ? '' : `<span class="clib-nofile">No file attached</span>`);
   // Study first, then test: the Open button keeps its place and the test sits
   // beside it. Only a training can get here - has_test is pinned false for
   // every other type, by the gateway and not by this check.
@@ -6009,7 +6028,7 @@ function contentCardHtml(it){
       ${it.description?`<div class="clib-desc">${esc(dashFix(it.description))}</div>`:''}
       ${chip}
     </div>
-    <div class="clib-foot">${open}${testBtn}${tools}</div>
+    <div class="clib-foot">${open}${linkBtn}${testBtn}${tools}</div>
   </div>`;
 }
 
@@ -6300,6 +6319,7 @@ function openContentModal(type, id){
   document.getElementById('clib-cat').value = it ? (it.category||'') : '';
   document.getElementById('clib-cover-input').value = '';
   document.getElementById('clib-file-input').value = '';
+  document.getElementById('clib-link-input').value = it ? (it.link_url||'') : '';
   // Say what is already attached, so "leave it alone" is an obvious option
   // rather than something the person has to guess at.
   document.getElementById('clib-cover-current').textContent =
@@ -6350,7 +6370,13 @@ async function saveContent(){
   if(!title){ contentError('Give the item a title'); return; }
   const coverFile = (document.getElementById('clib-cover-input').files||[])[0];
   const file = (document.getElementById('clib-file-input').files||[])[0];
-  if(!id && !file){ contentError('Pick the file people will open'); return; }
+  const link = document.getElementById('clib-link-input').value.trim();
+  // A new item needs somewhere to go: a file, a link, or both. It used to
+  // need a file, which is what made a link-only item impossible.
+  if(!id && !file && !link){ contentError('Add a file or a link'); return; }
+  if(link && !/^https?:\/\//i.test(link)){
+    contentError('Links must start with http:// or https://'); return;
+  }
   contentError('');
   setContentBusy(true, 'Saving...');
   try {
@@ -6365,6 +6391,8 @@ async function saveContent(){
       title,
       description: document.getElementById('clib-desc').value.trim(),
       category: document.getElementById('clib-cat').value.trim(),
+      // Always sent, so emptying the field clears the column on an edit.
+      link_url: link,
       // A course, material or tool says so outright. The gateway pins these
       // columns regardless of what any client sends, so this is a statement
       // of intent rather than the thing being relied on.
