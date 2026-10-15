@@ -231,7 +231,13 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .nav-div{width:1px;height:26px;background:var(--border)}
 .nav-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
 .nav-links{display:flex;gap:2px;list-style:none;flex:1;flex-wrap:wrap;align-items:center}
-.nav-links a{display:block;color:var(--muted);font-size:13px;font-weight:400;padding:7px 13px;border-radius:8px;transition:all .15s;cursor:pointer;white-space:nowrap}
+/* PR #34 measured 1280 as the width where the full bar fits on ONE row - with
+   SIX links, and with no margin at all: the bar came to exactly 1280. A
+   seventh link ("Updates", 74px) took it to 1315 and brought back the 35px
+   overflow that PR removed. Trimming 3px a side off each link returns 42px,
+   which keeps the 1280 breakpoint - and every 1280-wide laptop's full nav -
+   instead of raising the threshold to the new 1316px fit width. */
+.nav-links a{display:block;color:var(--muted);font-size:13px;font-weight:400;padding:7px 10px;border-radius:8px;transition:all .15s;cursor:pointer;white-space:nowrap}
 .nav-links a:hover{background:var(--light-blue);color:var(--blue)}
 .nav-links a.active{background:var(--light-blue);color:var(--blue);font-weight:500}
 .nav-links a.mgr-nav{color:var(--manager)}
@@ -341,6 +347,10 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .acard:hover{border-color:var(--border2);box-shadow:0 8px 28px rgba(0,50,255,.08);transform:translateY(-2px)}
 .acard:hover::before{opacity:1}
 .ac1::before{background:var(--grad-bt)}.ac2::before{background:linear-gradient(-155deg,#00A7B5,#9CFFAC)}.ac3::before{background:var(--grad-full)}.ac4::before{background:linear-gradient(-25deg,#0032FF,#4060FF)}
+/* A fifth accent for the Updates quick-access tile. The grid itself is
+   deliberately untouched - still repeat(4,1fr), dropping to 2 then 1 - so
+   the fifth tile wraps instead of squeezing the other four to 20%. */
+.ac5::before{background:linear-gradient(-155deg,#7C3AED,#22D3EE)}
 .ci{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center}
 .ci1{background:rgba(0,50,255,.08);color:var(--blue)}.ci2{background:rgba(0,167,181,.08);color:var(--teal)}.ci3{background:rgba(0,167,181,.1);color:var(--teal-text)}.ci4{background:rgba(0,50,255,.06);color:var(--blue-deep)}
 .ctag{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
@@ -1009,7 +1019,7 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .mob-nav-item.leaders-item.active{ color: var(--manager); }
 .mob-nav-icon{ width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 .mob-nav-label{ font-size: 10px; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
-/* Six items share the bar's width evenly only if they are allowed to: a flex
+/* Seven items share the bar's width evenly only if they are allowed to: a flex
    item defaults to min-width:auto, so a nowrap label wider than its share
    pushes the whole bar past the viewport instead of shrinking. These sit AFTER
    .mob-nav-label above on purpose - the same specificity, so source order is
@@ -1018,17 +1028,24 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    but it means the bar cannot overflow at any width or font. */
 .mob-nav-item{min-width:0}
 .mob-nav-label{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* Adding Updates made this a SEVEN-item bar, which cut each item from 53.3px
+   to 45.7px at 320px and started clipping "Procedures" and "Performance"
+   against the ellipsis backstop above. Measured, not guessed: with the
+   horizontal padding dropped, the largest font that fits every label whole is
+   7.75px at 320, 8.25px at 346 and 9px at 375 and up - so the two steps below
+   sit just under those, and the labels end up only a notch smaller than they
+   were with six. */
 @media(max-width:440px){
   .mob-nav-label{font-size:9px;letter-spacing:0}
-  .mob-nav-item{padding:6px 2px;gap:2px}
+  .mob-nav-item{padding:6px 0;gap:2px}
   .mob-nav-icon{width:21px;height:21px}
   .mob-nav-icon svg{width:21px;height:21px}
 }
 @media(max-width:400px){
-  .mob-nav-label{font-size:8.5px}
+  .mob-nav-label{font-size:8px}
 }
 @media(max-width:345px){
-  .mob-nav-label{font-size:8px}
+  .mob-nav-label{font-size:7.25px}
 }
 .mob-nav-badge{
   position: absolute; top: 6px; right: calc(50% - 14px);
@@ -1413,6 +1430,35 @@ a.clib-open{text-decoration:none}
    The band itself carries no surface - just padding and a rule - so it does
    not read as a second slab of the performance band directly above it. Every
    colour is a token, so the card inverts with the theme on its own. */
+/* ── LATEST UPDATES (home band + the Updates page cards) ───────
+   The band borrows the birthday band's shell so the two read as one
+   column, but its rows are a feed: chip, title, date, action. */
+.upd-band{background:var(--surface);border-bottom:1px solid var(--border)}
+.upd-inner{max-width:1200px;margin:0 auto;padding:24px 36px}
+.upd-head{display:flex;align-items:center;gap:11px;margin-bottom:15px}
+.upd-icon{width:32px;height:32px;border-radius:9px;background:linear-gradient(-155deg,#7C3AED,#22D3EE);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.upd-title{font-size:18px;font-weight:700;letter-spacing:-.2px}
+.upd-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.upd-viewall{margin-left:auto;font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:transparent;color:var(--blue);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;cursor:pointer;transition:all .15s;flex-shrink:0}
+.upd-viewall:hover{background:var(--light-blue);border-color:var(--blue)}
+.upd-list{display:flex;flex-direction:column;gap:9px}
+.upd-row{display:flex;align-items:center;gap:12px;background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 14px;transition:border-color .15s}
+.upd-row:hover{border-color:var(--border2)}
+.upd-row-main{flex:1;min-width:0}
+.upd-row-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
+.upd-row-title{font-size:13.5px;font-weight:600;letter-spacing:-.1px;line-height:1.4}
+.upd-row-date{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.upd-act{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px;flex-shrink:0;transition:all .15s}
+.upd-act:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+/* The pin badge, on a home row and on a card alike. */
+.upd-pin{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);flex-shrink:0}
+.clib-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.clib-date{font-size:11.5px;color:var(--muted);white-space:nowrap}
+@media(max-width:768px){
+  .upd-inner{padding:20px 18px}
+  .upd-row{align-items:flex-start;flex-direction:column;gap:9px}
+  .upd-act{align-self:stretch;justify-content:center}
+}
 .bday-band{background:var(--bg);border-bottom:1px solid var(--border)}
 .bday-inner{max-width:1200px;margin:0 auto;padding:24px 36px}
 .bday-head{display:flex;align-items:center;gap:11px;margin-bottom:16px}
@@ -1670,6 +1716,23 @@ a.clib-open{text-decoration:none}
     <div class="bday-band" id="bday-band" style="display:none">
       <div class="bday-inner" id="bday-content"></div>
     </div>
+
+    <!-- LATEST UPDATES — rendered by JS from the 'update' content cache.
+         Hidden until there is something to show, exactly like the band
+         above: an empty feed is not news, it is noise. -->
+    <div class="upd-band" id="upd-band" style="display:none">
+      <div class="upd-inner">
+        <div class="upd-head">
+          <div class="upd-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+          <div>
+            <div class="upd-title">Latest Updates</div>
+            <div class="upd-sub">Company news and official updates.</div>
+          </div>
+          <button class="upd-viewall" onclick="showPage('updates')">View all</button>
+        </div>
+        <div class="upd-list" id="upd-content"></div>
+      </div>
+    </div>
     <div class="sec">
       <div class="sec-head"><div class="sec-label">Quick Access</div><div class="sec-title">What are you looking for?</div></div>
       <div class="cards-grid">
@@ -1677,6 +1740,7 @@ a.clib-open{text-decoration:none}
         <div class="acard ac2" onclick="showPage('tools')"><div class="ci ci2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div><div class="ctag ct2">Tools</div><h3>Our Tools</h3><p>Platforms and software to support your daily workflow.</p><span class="arrow">↗</span></div>
         <div class="acard ac3" onclick="showPage('trainings')"><div class="ci ci3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div><div class="ctag ct3">Trainings</div><h3>Our Trainings</h3><p>Learning paths, onboarding and skill development.</p><span class="arrow">↗</span></div>
         <div class="acard ac4" onclick="showPage('materials')"><div class="ci ci4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="ctag ct4">Materials</div><h3>Sales Materials</h3><p>Decks, one-pagers and collateral ready to use.</p><span class="arrow">↗</span></div>
+        <div class="acard ac5" onclick="showPage('updates')"><div class="ci ci1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div><div class="ctag ct1">Updates</div><h3>News and Updates</h3><p>Immigration, QQI and company announcements.</p><span class="arrow">↗</span></div>
       </div>
     </div>
     <div id="home-mgr-band" style="display:none">
@@ -2192,6 +2256,22 @@ a.clib-open{text-decoration:none}
     </div>
   </div>
 
+  <!-- UPDATES -->
+  <div id="page-updates" class="page">
+    <div class="grad-bar"></div>
+    <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Updates</div><h1>Updates</h1><p class="ph-desc">Company news and official updates - immigration, QQI and more.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=680&q=80" alt=""></div></div></div>
+    <div class="sec">
+      <div class="clib-head">
+        <div><div class="sec-label">All Updates</div><div class="sec-title">News and Announcements</div></div>
+        <button class="clib-add" id="clib-add-update" style="display:none" onclick="openContentModal('update')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add update
+        </button>
+      </div>
+      <div class="clib-grid" id="clib-grid-update"></div>
+    </div>
+  </div>
+
   <!-- TOOLS -->
   <div id="page-tools" class="page">
     <div class="grad-bar"></div>
@@ -2342,7 +2422,7 @@ a.clib-open{text-decoration:none}
       <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="" style="height:20px" onerror="this.style.display='none'">
       <span class="footer-copy">Internal use only</span>
     </div>
-    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a></div>
+    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a></div>
     <span class="footer-copy">© 2026 NED College</span>
   </footer>
 </div>
@@ -2360,6 +2440,10 @@ a.clib-open{text-decoration:none}
   <button class="mob-nav-item" id="mobnav-trainings" onclick="mobNav('trainings')">
     <div class="mob-nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
     <span class="mob-nav-label">Trainings</span>
+  </button>
+  <button class="mob-nav-item" id="mobnav-updates" onclick="mobNav('updates')">
+    <div class="mob-nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+    <span class="mob-nav-label">Updates</span>
   </button>
   <button class="mob-nav-item" id="mobnav-performance" onclick="mobNavIcon('performance')">
     <div class="mob-nav-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
@@ -2577,7 +2661,27 @@ a.clib-open{text-decoration:none}
       <input type="hidden" id="clib-type">
       <div class="form-group"><label class="form-label">Title</label><input class="form-input" type="text" id="clib-title" placeholder="e.g. Sales Process - NED Dublin"></div>
       <div class="form-group"><label class="form-label">Description</label><textarea class="form-input" id="clib-desc" rows="3" placeholder="What is it, and who is it for?"></textarea></div>
-      <div class="form-group"><label class="form-label">Category <span class="form-hint" style="display:inline">(optional)</span></label><input class="form-input" type="text" id="clib-cat" placeholder="e.g. Core Skills"></div>
+      <div class="form-group" id="clib-cat-row"><label class="form-label">Category <span class="form-hint" style="display:inline">(optional)</span></label><input class="form-input" type="text" id="clib-cat" placeholder="e.g. Core Skills"></div>
+      <!-- Updates only. The free-text category row above is hidden for them,
+           so exactly one category control is ever in play. -->
+      <div id="clib-update-wrap" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-input" id="clib-update-cat">
+            <option value="Immigration">Immigration</option>
+            <option value="QQI">QQI</option>
+            <option value="Company">Company</option>
+            <option value="General">General</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <div class="tq-toggle-row" style="margin-bottom:0">
+            <input type="checkbox" id="clib-update-pin">
+            <label for="clib-update-pin">Pin to top</label>
+          </div>
+          <div class="form-hint">Pinned updates stay at the top of the list and of the Home band.</div>
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-label">Cover image <span class="form-hint" style="display:inline">(optional)</span></label>
         <input class="form-input" type="file" id="clib-cover-input" accept="image/*">
@@ -3817,6 +3921,7 @@ function startApp(user){
     {id:'trainings',  label:'Trainings'},
     {id:'materials',  label:'Materials'},
     {id:'tools',      label:'Tools'},
+    {id:'updates',    label:'Updates'},
     {id:'mgr-handbook', label:'Sales Handbook'},
   ];
 
@@ -3999,10 +4104,14 @@ function showPage(name){
   if(name==='trainings') showContentPage(['training','course']);
   if(name==='materials') showContentPage(['material']);
   if(name==='tools')     showContentPage(['tool']);
+  if(name==='updates')   showContentPage(['update']);
   if(name==='my-profile') renderMyProfile();
   if(name==='performance') (async()=>{ await softLoad('performance', loadPerformance); renderPerformancePage(); })();
   if(name==='team-profiles') renderTeamProfiles();
   if(name==='home') (async()=>{ await softLoad('performance', loadPerformance); renderHomePerf(); })();
+  // Fire-and-forget beside the other home loaders: the band draws itself when
+  // the updates land and stays hidden until then.
+  if(name==='home') (async()=>{ await softLoad('content:update', ()=>loadContent('update')); renderHomeUpdates(); })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
   if(name==='orgchart'){ fillOrgTeamFilter(); renderOrgChart(); }
@@ -5872,8 +5981,14 @@ let toastTimer;
 // of them - this mirror decides what is worth showing, never what is allowed.
 // Company-wide on purpose, like the birthdays card: a training is published
 // to the company, not to a reporting line, so Manager = LOCAL does not apply.
-const CONTENT_LABEL = { training:'training', course:'course', material:'material', tool:'tool' };
-const CONTENT_PLURAL = { training:'trainings', course:'courses', material:'materials', tool:'tools' };
+const CONTENT_LABEL = { training:'training', course:'course', material:'material', tool:'tool', update:'update' };
+const CONTENT_PLURAL = { training:'trainings', course:'courses', material:'materials', tool:'tools', update:'updates' };
+// Updates pick from a fixed list rather than typing a category, so the feed
+// can be scanned. The value IS the stored category, so these strings are the
+// contract with any row already in the table.
+const UPDATE_CATEGORIES = ['Immigration','QQI','Company','General'];
+// How many rows the Home band shows before "View all" takes over.
+const HOME_UPDATES_MAX = 3;
 // Covers are decoration, so they are downscaled in the browser; files go up
 // untouched, which is the whole reason they bypass the function body.
 const COVER_MAX_PX = 1280, COVER_QUALITY = 0.82, CONTENT_MAX_MB = 50;
@@ -5981,6 +6096,9 @@ function contentCardHtml(it){
   // Quoted, always: these ids are UUIDs and an unquoted one in an inline
   // handler is a syntax error the moment it starts with a digit.
   const id = esc(it.id);
+  // Declared up here because the file/link slot below already needs it, and a
+  // const used before its declaration is a ReferenceError at runtime.
+  const isUpdate = it.type === 'update';
   const cover = `<div class="clib-cover"><span class="clib-cover-ph">${CONTENT_PLACEHOLDER_SVG}</span>` +
     (it.cover_url ? `<img src="${esc(it.cover_url)}" alt="" loading="lazy">` : '') + `</div>`;
   // Checked again here, on the value that actually becomes the href. The
@@ -5994,7 +6112,7 @@ function contentCardHtml(it){
   // link-only item is not a card with something missing.
   const open = it.has_file
     ? `<button class="clib-open" onclick="openContentFile('${id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open</button>`
-    : (isHttp ? '' : `<span class="clib-nofile">No file attached</span>`);
+    : ((isHttp || isUpdate) ? '' : `<span class="clib-nofile">No file attached</span>`);
   // Study first, then test: the Open button keeps its place and the test sits
   // beside it. Only a training can get here - has_test is pinned false for
   // every other type, by the gateway and not by this check.
@@ -6020,10 +6138,19 @@ function contentCardHtml(it){
     ? `<button class="clib-icon-btn" title="Edit" aria-label="Edit" onclick="openContentModal('${esc(it.type)}','${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>` +
       `<button class="clib-icon-btn danger" title="Delete" aria-label="Delete" onclick="deleteContent('${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
     : '';
+  // An update is a dated thing, so the card says when - and whether it is
+  // pinned. Every other type keeps the chip row it has always had.
+  const meta = isUpdate
+    ? `<div class="clib-meta">` +
+        (it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:'') +
+        (it.pinned?`<span class="upd-pin"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.8-3.3V7a2 2 0 0 0-2-2h-4.4a2 2 0 0 0-2 2v6.7z"/></svg>Pinned</span>`:'') +
+        (it.created_at?`<span class="clib-date">${esc(fmtDate(it.created_at))}</span>`:'') +
+      `</div>`
+    : (it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:'');
   return `<div class="clib-card">
     ${cover}
     <div class="clib-body">
-      ${it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:''}
+      ${meta}
       <div class="clib-title">${esc(dashFix(it.title))}</div>
       ${it.description?`<div class="clib-desc">${esc(dashFix(it.description))}</div>`:''}
       ${chip}
@@ -6330,6 +6457,18 @@ function openContentModal(type, id){
   // The test section exists for trainings and nothing else.
   const wrap = document.getElementById('clib-test-wrap');
   if(wrap) wrap.style.display = (type === 'training') ? '' : 'none';
+  // Updates swap the free-text category for a fixed list, and gain a pin.
+  // Exactly one of the two category rows is ever visible.
+  const isUpdateType = (type === 'update');
+  const uWrap = document.getElementById('clib-update-wrap');
+  const catRow = document.getElementById('clib-cat-row');
+  if(uWrap) uWrap.style.display = isUpdateType ? '' : 'none';
+  if(catRow) catRow.style.display = isUpdateType ? 'none' : '';
+  const uCat = document.getElementById('clib-update-cat');
+  if(uCat) uCat.value = (it && UPDATE_CATEGORIES.indexOf(it.category) !== -1)
+    ? it.category : UPDATE_CATEGORIES[UPDATE_CATEGORIES.length-1];
+  const uPin = document.getElementById('clib-update-pin');
+  if(uPin) uPin.checked = !!(it && it.pinned);
   document.getElementById('clib-has-test').checked = false;
   document.getElementById('clib-threshold').value = 70;
   testDraft = [];
@@ -6371,9 +6510,12 @@ async function saveContent(){
   const coverFile = (document.getElementById('clib-cover-input').files||[])[0];
   const file = (document.getElementById('clib-file-input').files||[])[0];
   const link = document.getElementById('clib-link-input').value.trim();
+  const isUpdate = (type === 'update');
   // A new item needs somewhere to go: a file, a link, or both. It used to
-  // need a file, which is what made a link-only item impossible.
-  if(!id && !file && !link){ contentError('Add a file or a link'); return; }
+  // need a file, which is what made a link-only item impossible. An update
+  // is the exception - a text-only announcement is the whole point of one,
+  // so a title is all it needs.
+  if(!id && !file && !link && !isUpdate){ contentError('Add a file or a link'); return; }
   if(link && !/^https?:\/\//i.test(link)){
     contentError('Links must start with http:// or https://'); return;
   }
@@ -6390,7 +6532,11 @@ async function saveContent(){
     const payload = {
       title,
       description: document.getElementById('clib-desc').value.trim(),
-      category: document.getElementById('clib-cat').value.trim(),
+      // An update's category comes from its fixed list; everything else
+      // keeps the free-text field.
+      category: isUpdate
+        ? document.getElementById('clib-update-cat').value
+        : document.getElementById('clib-cat').value.trim(),
       // Always sent, so emptying the field clears the column on an edit.
       link_url: link,
       // A course, material or tool says so outright. The gateway pins these
@@ -6398,6 +6544,7 @@ async function saveContent(){
       // of intent rather than the thing being relied on.
       has_test: wantsTest
     };
+    if(isUpdate) payload.pinned = document.getElementById('clib-update-pin').checked;
     if(coverFile){ setContentBusy(true,'Uploading cover...'); Object.assign(payload, await uploadToStorage('cover', coverFile)); }
     if(file){ setContentBusy(true,'Uploading file...'); Object.assign(payload, await uploadToStorage('file', file)); }
     setContentBusy(true,'Saving...');
@@ -6431,6 +6578,9 @@ async function saveContent(){
     closeModal('modal-content');
     showToast(id ? 'Item updated' : 'Added to the library');
     await refreshContent(type);
+    // The Home band reads the same cache, so it has to agree with what just
+    // changed - including a pin that reorders the feed.
+    if(isUpdate) renderHomeUpdates();
     if(isTraining) await loadTrainingStatus();
     if(isTraining) renderContentSection('training');
   } catch(e){
@@ -6490,6 +6640,54 @@ function birthdayAvatar(u, extra){
 }
 function birthdayName(u){ return dashFix((u.first||'')+' '+(u.last||'')).trim(); }
 const CAKE_ICON = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 1 4 1 2.5-1 4-1 2.5 1 4 1 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3"/><path d="M7 4.5c0 .8-.7 1.5-1 1.5"/><path d="M12 4.5c0 .8-.7 1.5-1 1.5"/><path d="M17 4.5c0 .8-.7 1.5-1 1.5"/></svg>`;
+
+// Up to three, pinned first then newest. The gateway already returns them in
+// that order for a type='update' call, but the band sorts again rather than
+// trusting it: the same cache is also what refreshContent() rewrites after a
+// save, and a freshly pinned item must rise without a round trip.
+function latestUpdates(limit){
+  const rows = (contentCache['update'] || []).slice();
+  rows.sort((a,b)=>{
+    const pa = a.pinned?1:0, pb = b.pinned?1:0;
+    if(pa !== pb) return pb - pa;
+    return String(b.created_at||'').localeCompare(String(a.created_at||''));
+  });
+  return rows.slice(0, limit);
+}
+
+function renderHomeUpdates(){
+  const host = document.getElementById('upd-content');
+  const band = document.getElementById('upd-band');
+  if(!host) return;
+  const rows = latestUpdates(HOME_UPDATES_MAX);
+  // Nothing to show is not an empty state worth a heading: the whole band
+  // goes away, exactly as the birthdays band does before the directory lands.
+  if(!rows.length){
+    host.innerHTML = '';
+    if(band) band.style.display = 'none';
+    return;
+  }
+  if(band) band.style.display = '';
+  host.innerHTML = rows.map(u=>{
+    const id = esc(u.id);
+    const isHttp = u.link_url && /^https?:\/\//i.test(u.link_url);
+    // Same two destinations a card offers, and the same order of preference.
+    const act = u.has_file
+      ? `<button class="upd-act" onclick="openContentFile('${id}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open</button>`
+      : (isHttp ? `<a class="upd-act" href="${esc(u.link_url)}" target="_blank" rel="noopener noreferrer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Visit</a>` : '');
+    return `<div class="upd-row">
+      <div class="upd-row-main">
+        <div class="upd-row-top">
+          ${u.category?`<span class="clib-chip">${esc(dashFix(u.category))}</span>`:''}
+          ${u.pinned?`<span class="upd-pin"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.8-3.3V7a2 2 0 0 0-2-2h-4.4a2 2 0 0 0-2 2v6.7z"/></svg>Pinned</span>`:''}
+          ${u.created_at?`<span class="upd-row-date">${esc(fmtDate(u.created_at))}</span>`:''}
+        </div>
+        <div class="upd-row-title">${esc(dashFix(u.title))}</div>
+      </div>
+      ${act}
+    </div>`;
+  }).join('');
+}
 
 function renderBirthdays(){
   const host = document.getElementById('bday-content');
@@ -6568,6 +6766,7 @@ function renderHomePerf(){
   // `me` guard below, which has nothing to do with them) and in a try, so
   // neither widget can take the other down with it.
   try { renderBirthdays(); } catch(e){ console.error('birthdays widget:', e); }
+  try { renderHomeUpdates(); } catch(e){ console.error('updates widget:', e); }
   const me=users.find(u=>u.id===currentUserId);
   if(!me) return;
   const p='monthly';
