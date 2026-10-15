@@ -109,6 +109,74 @@ async function inScope(me, tgt){
 // can see. Nothing holds either until someone is given it.
 const ROLE_LEVELS = ['agent','specialist','executive','senior_exec','leader','supervisor','manager','director','admin'];
 // null / '' clears the value; a bad number returns false so callers can 400.
+// ── WEEKLY RESULTS ───────────────────────────────────────────────
+// Everyone files their own line each week: sales per campus, leads per
+// source. Consolidation and the submission clock are later parts; nothing
+// here gates on time, and nobody can write anybody else's row.
+//
+// The week runs Monday to Sunday in Europe/Dublin, which is NOT the server's
+// clock - a Netlify function runs in UTC, and from late March to late October
+// Dublin is an hour ahead. Formatting the instant in that zone and reading
+// the date parts back is what makes "Monday" mean Monday in Dublin at 00:30
+// on a summer Monday, where a UTC read still says Sunday.
+function dublinYMD(d){
+  const f = new Intl.DateTimeFormat('en-CA', { timeZone:'Europe/Dublin',
+    year:'numeric', month:'2-digit', day:'2-digit' });
+  return f.format(d);            // 'YYYY-MM-DD'
+}
+function dublinWeekday(d){
+  // 1 = Monday ... 7 = Sunday, read in Dublin rather than UTC.
+  const name = new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Dublin', weekday:'short' }).format(d);
+  const idx = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].indexOf(name);
+  return idx < 0 ? 1 : idx + 1;
+}
+// The Monday of the week containing `now`, as a plain YYYY-MM-DD date string.
+// Subtracting whole days from the Dublin date (not from the instant) keeps a
+// DST changeover from landing the answer on Sunday or Tuesday.
+function mondayOfWeek(now){
+  const ymd = dublinYMD(now);
+  const back = dublinWeekday(now) - 1;
+  const [y,m,d] = ymd.split('-').map(Number);
+  const noon = Date.UTC(y, m-1, d, 12, 0, 0) - back*86400000;
+  const dt = new Date(noon);
+  return [dt.getUTCFullYear(),
+          String(dt.getUTCMonth()+1).padStart(2,'0'),
+          String(dt.getUTCDate()).padStart(2,'0')].join('-');
+}
+// Find or open this week's cycle. Two people loading the page at once can
+// both miss the row and both insert it, so a unique violation on week_start
+// means somebody won the race - re-read rather than fail.
+async function currentCycle(){
+  const week_start = mondayOfWeek(new Date());
+  const { data: found } = await admin.from('weekly_cycles')
+    .select('id,week_start').eq('week_start', week_start).single();
+  if(found) return { ok:true, cycle:{ id:found.id, week_start:found.week_start } };
+  const { data: made, error } = await admin.from('weekly_cycles')
+    .insert({ week_start, status:'open' }).select('id,week_start').single();
+  if(!error && made) return { ok:true, cycle:{ id:made.id, week_start:made.week_start } };
+  const { data: again } = await admin.from('weekly_cycles')
+    .select('id,week_start').eq('week_start', week_start).single();
+  if(again) return { ok:true, cycle:{ id:again.id, week_start:again.week_start } };
+  return { ok:false, error:'cycle_failed', detail: error && error.message };
+}
+// Money: a finite number at or above zero. Blank counts as zero, because an
+// untouched field on the form is not an error.
+function weekAmount(v){
+  if(v===null || v===undefined || v==='') return 0;
+  // A number or a numeric string, and nothing else. Number([5]) is 5 and
+  // Number(true) is 1, so an array or a boolean would otherwise be coerced
+  // into money nobody typed.
+  if(typeof v !== 'number' && typeof v !== 'string') return false;
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 0) ? n : false;
+}
+// Counts: the same, but whole. Half a lead is not a lead.
+function weekCount(v){
+  if(v===null || v===undefined || v==='') return 0;
+  if(typeof v !== 'number' && typeof v !== 'string') return false;
+  const n = Number(v);
+  return (Number.isInteger(n) && n >= 0) ? n : false;
+}
 function numOrNull(v){
   if(v===null || v===undefined || v==='') return null;
   const n = Number(v);
@@ -931,6 +999,188 @@ exports.handler = async (event) => {
         const { error } = await admin.from('roles').delete().eq('id',id);
         if(error) return json(500,{error:'delete_failed', detail:error.message});
         return json(200,{ ok:true });
+      }
+      // ── LEAD SOURCES (admin) ─────────────────────────────────
+      case 'get_lead_sources': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const { data, error } = await admin.from('lead_sources')
+          .select('id,name,active,sort_order')
+          .order('sort_order',{ascending:true}).order('name',{ascending:true});
+        if(error) return json(500,{error:'sources_failed', detail:error.message});
+        return json(200,{ sources:(data||[]).map(r=>({
+          id:r.id, name:r.name, active: r.active !== false,
+          sort_order: Number.isFinite(Number(r.sort_order)) ? Number(r.sort_order) : 0 })) });
+      }
+      case 'create_lead_source': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const sort_order = Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0;
+        const { data, error } = await admin.from('lead_sources')
+          .insert({ name, active:true, sort_order }).select('id').single();
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'create_failed', detail:error.message});
+        }
+        return json(200,{ ok:true, id:data && data.id });
+      }
+      case 'update_lead_source': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const name = (p.name||'').toString().trim();
+        if(!name) return json(400,{error:'missing_name'});
+        const { data: existing } = await admin.from('lead_sources').select('id').eq('id',p.id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        const patch = { name, active: p.active !== false };
+        if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order)))
+          patch.sort_order = Number(p.sort_order);
+        const { error } = await admin.from('lead_sources').update(patch).eq('id',p.id);
+        if(error){
+          if(error.code === '23505') return json(409,{error:'name_exists'});
+          return json(500,{error:'update_failed', detail:error.message});
+        }
+        return json(200,{ ok:true });
+      }
+      case 'delete_lead_source': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: existing } = await admin.from('lead_sources').select('id').eq('id',p.id).single();
+        if(!existing) return json(404,{error:'not_found'});
+        // A source somebody has already reported against is history, not
+        // configuration: deleting it would silently rewrite past weeks.
+        const { data: used } = await admin.from('weekly_lead_rows').select('id').eq('source_id', p.id);
+        if(used && used.length) return json(409,{error:'in_use', count:used.length});
+        const { error } = await admin.from('lead_sources').delete().eq('id',p.id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      // ── THE WEEK ─────────────────────────────────────────────
+      case 'get_week': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const c = await currentCycle();
+        if(!c.ok) return json(500,{error:c.error, detail:c.detail});
+        return json(200,{ cycle:c.cycle });
+      }
+      case 'get_my_week_entry': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const c = await currentCycle();
+        if(!c.ok) return json(500,{error:c.error, detail:c.detail});
+        const { data: entry } = await admin.from('weekly_entries')
+          .select('id,sales_dub_received,sales_dub_expected,sales_lim_received,sales_lim_expected,submitted,submitted_at')
+          .eq('cycle_id', c.cycle.id).eq('user_id', me.id).single();
+        // The leads list is the ACTIVE source list, not whatever happens to be
+        // saved: a source added this morning has to appear on the form, and a
+        // deactivated one has to drop off it.
+        const { data: sources } = await admin.from('lead_sources')
+          .select('id,name,active,sort_order').eq('active', true)
+          .order('sort_order',{ascending:true}).order('name',{ascending:true});
+        const saved = {};
+        if(entry){
+          const { data: rows } = await admin.from('weekly_lead_rows')
+            .select('source_id,received,sold').eq('entry_id', entry.id);
+          (rows||[]).forEach(r=>{ saved[String(r.source_id)] = r; });
+        }
+        // Field by field, and zeros rather than nulls: a person who has never
+        // filed anything gets a clean form, not an error and not blanks.
+        return json(200,{
+          week: c.cycle,
+          entry: {
+            exists: !!entry,
+            sales_dub_received: entry ? Number(entry.sales_dub_received||0) : 0,
+            sales_dub_expected: entry ? Number(entry.sales_dub_expected||0) : 0,
+            sales_lim_received: entry ? Number(entry.sales_lim_received||0) : 0,
+            sales_lim_expected: entry ? Number(entry.sales_lim_expected||0) : 0,
+            submitted: entry ? !!entry.submitted : false,
+            submitted_at: entry ? (entry.submitted_at||null) : null
+          },
+          leads: (sources||[]).map(s=>({
+            source_id: s.id, name: s.name,
+            received: saved[String(s.id)] ? Number(saved[String(s.id)].received||0) : 0,
+            sold:     saved[String(s.id)] ? Number(saved[String(s.id)].sold||0)     : 0
+          }))
+        });
+      }
+      case 'save_week_entry': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Self only in this part. A target_user_id in the body is not an
+        // error to report back, it is simply not read - there is no path
+        // here that writes anybody else's row.
+        const c = await currentCycle();
+        if(!c.ok) return json(500,{error:c.error, detail:c.detail});
+        const nums = {
+          sales_dub_received: weekAmount(p.sales_dub_received),
+          sales_dub_expected: weekAmount(p.sales_dub_expected),
+          sales_lim_received: weekAmount(p.sales_lim_received),
+          sales_lim_expected: weekAmount(p.sales_lim_expected)
+        };
+        for(const k of Object.keys(nums)){
+          if(nums[k] === false) return json(400,{error:'bad_number', field:k});
+        }
+        // Validate every lead row BEFORE writing anything, so a bad one
+        // cannot leave the week half saved.
+        const leadsIn = Array.isArray(p.leads) ? p.leads : [];
+        const cleaned = [];
+        for(const row of leadsIn){
+          if(!row || row.source_id === undefined || row.source_id === null) continue;
+          const received = weekCount(row.received), sold = weekCount(row.sold);
+          if(received === false || sold === false) return json(400,{error:'bad_count'});
+          cleaned.push({ source_id: row.source_id, received, sold });
+        }
+        const { data: active } = await admin.from('lead_sources').select('id').eq('active', true);
+        const allowed = new Set((active||[]).map(s=>String(s.id)));
+        // Unknown or deactivated sources are dropped, not rejected: an open
+        // form from before a source was retired should still save.
+        const keep = cleaned.filter(r => allowed.has(String(r.source_id)));
+
+        const { data: existing } = await admin.from('weekly_entries')
+          .select('id').eq('cycle_id', c.cycle.id).eq('user_id', me.id).single();
+        const patch = Object.assign({}, nums, {
+          last_edited_by: me.id, updated_at: new Date().toISOString() });
+        let entryId = existing && existing.id;
+        if(entryId){
+          // submitted and submitted_at are deliberately absent: saving a
+          // draft never un-submits, and never submits either.
+          const { error } = await admin.from('weekly_entries').update(patch).eq('id', entryId);
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+        } else {
+          const { data: made, error } = await admin.from('weekly_entries')
+            .insert(Object.assign({ cycle_id:c.cycle.id, user_id:me.id, submitted:false }, patch))
+            .select('id').single();
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+          entryId = made && made.id;
+        }
+        if(!entryId) return json(500,{error:'save_failed'});
+        // Replace wholesale: a source cleared on the form has to disappear,
+        // which a row-by-row upsert would leave behind.
+        const { error: dErr } = await admin.from('weekly_lead_rows').delete().eq('entry_id', entryId);
+        if(dErr) return json(500,{error:'save_failed', detail:dErr.message});
+        if(keep.length){
+          const { error: iErr } = await admin.from('weekly_lead_rows')
+            .insert(keep.map(r=>({ entry_id:entryId, source_id:r.source_id,
+              received:r.received, sold:r.sold })));
+          if(iErr) return json(500,{error:'save_failed', detail:iErr.message});
+        }
+        return json(200,{ ok:true, entry_id:entryId, week:c.cycle, saved_leads:keep.length });
+      }
+      case 'submit_week_entry': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const c = await currentCycle();
+        if(!c.ok) return json(500,{error:c.error, detail:c.detail});
+        const { data: existing } = await admin.from('weekly_entries')
+          .select('id').eq('cycle_id', c.cycle.id).eq('user_id', me.id).single();
+        // Nothing to submit is a 404, not a silent success: the client has to
+        // be able to tell "save first" from "done".
+        if(!existing) return json(404,{error:'no_entry'});
+        const submitted_at = new Date().toISOString();
+        const { error } = await admin.from('weekly_entries')
+          .update({ submitted:true, submitted_at, last_edited_by: me.id, updated_at: submitted_at })
+          .eq('id', existing.id);
+        if(error) return json(500,{error:'submit_failed', detail:error.message});
+        // No time lock in this part: re-saving and re-submitting stay open.
+        return json(200,{ ok:true, submitted:true, submitted_at, week:c.cycle });
       }
       case 'set_team_target': {
         const me = await callerProfile(caller);
