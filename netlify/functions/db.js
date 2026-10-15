@@ -311,7 +311,10 @@ const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Ot
 // manage, anyone signed in reads. Two buckets, and the split matters:
 // content-covers is PUBLIC because a cover is decoration, content-files is
 // PRIVATE and only ever reaches a browser as a signed URL that expires.
-const CONTENT_TYPES = ['training','course','material','tool'];
+// 'update' is a news item: same table, same gates, same upload. It differs
+// only in how it is ordered (pinned first, newest first) and in needing
+// nothing but a title - a text-only announcement is a valid item.
+const CONTENT_TYPES = ['training','course','material','tool','update'];
 const CONTENT_BUCKETS = { cover:'content-covers', file:'content-files' };
 // A cover is stored as its public URL, because that is what a page needs. To
 // delete the object later the path has to be recovered from it; anything that
@@ -1477,9 +1480,19 @@ exports.handler = async (event) => {
       case 'get_content': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         let q = admin.from('content_items')
-          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,has_test,pass_threshold,sort_order,created_at')
-          .eq('active', true)
-          .order('sort_order',{ascending:true}).order('created_at',{ascending:true});
+          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,pinned,has_test,pass_threshold,sort_order,created_at')
+          .eq('active', true);
+        // A library is browsed; a news feed is read. Updates therefore order
+        // pinned-first then newest-first, and every other type keeps the
+        // hand-set order it has always had. The branch is on the REQUESTED
+        // type, so an unfiltered call - which mixes types - keeps the
+        // original ordering rather than quietly re-sorting the library.
+        const newestFirst = (p.type === 'update');
+        if(newestFirst){
+          q = q.order('pinned',{ascending:false}).order('created_at',{ascending:false});
+        } else {
+          q = q.order('sort_order',{ascending:true}).order('created_at',{ascending:true});
+        }
         if(p.type !== undefined && p.type !== null && p.type !== ''){
           if(!CONTENT_TYPES.includes(p.type)) return json(400,{error:'bad_type'});
           q = q.eq('type', p.type);
@@ -1499,6 +1512,7 @@ exports.handler = async (event) => {
           // sanitised on the way in, and is re-checked on the way out
           // because a row can also be edited outside this gateway.
           link_url: safeHttpUrl(r.link_url),
+          pinned: !!r.pinned,
           // Both are public by nature: a card has to be able to say "test
           // required, 70% to pass". Neither says anything about the answers.
           has_test: !!r.has_test,
@@ -1544,6 +1558,7 @@ exports.handler = async (event) => {
           // Sanitised here rather than trusted: whatever the client sends,
           // what lands on the row is an http(s) URL or nothing at all.
           link_url: safeHttpUrl(p.link_url),
+          pinned: !!p.pinned,
           sort_order: Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0,
           // Never from the request. A test is attached afterwards, by
           // save_training_test, which is the only action that may set these -
@@ -1575,6 +1590,7 @@ exports.handler = async (event) => {
         if(p.category !== undefined) patch.category = (p.category||'').toString().trim() || null;
         // safeHttpUrl('') is null, so clearing the field clears the column.
         if(p.link_url !== undefined) patch.link_url = safeHttpUrl(p.link_url);
+        if(p.pinned !== undefined) patch.pinned = !!p.pinned;
         if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order))) patch.sort_order = Number(p.sort_order);
         if(p.active !== undefined) patch.active = !!p.active;
         // A replaced cover or file leaves its predecessor in the bucket unless
