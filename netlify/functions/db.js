@@ -159,6 +159,115 @@ async function currentCycle(){
   if(again) return { ok:true, cycle:{ id:again.id, week_start:again.week_start } };
   return { ok:false, error:'cycle_failed', detail: error && error.message };
 }
+// ── THE SUBMISSION WINDOW ────────────────────────────────────────
+// Each role band gets its own slot in the week, and the slots run one after
+// the other: the people doing the selling file first, then their leaders,
+// then the managers. Nothing here is scheduled - the window is worked out by
+// comparing the Dublin clock to the cycle on every request, so there is no
+// cron to drift, nothing to back-fill, and a deploy cannot miss a deadline.
+//
+// The UTC instant of a Dublin wall-clock time. Dublin is UTC in winter and
+// UTC+1 in summer, so Date.UTC() alone is an hour out for half the year.
+// Guess, read the real offset AT that guess, then correct. The four window
+// times are 10:00, 11:00, 15:00 and 16:30 - none of them anywhere near the
+// 01:00-02:00 changeover, so the guess is never in the ambiguous hour and
+// one correction is enough.
+function dublinOffsetMinutes(at){
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Dublin',
+    timeZoneName:'shortOffset' }).formatToParts(at);
+  const tz = (parts.find(p=>p.type==='timeZoneName')||{}).value || 'GMT';
+  const m = tz.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if(!m) return 0;                                   // plain 'GMT' is +00:00
+  const sign = m[1] === '-' ? -1 : 1;
+  return sign * (Number(m[2])*60 + Number(m[3]||0));
+}
+function dublinInstant(ymd, hh, mm){
+  const [y,mo,d] = String(ymd).split('-').map(Number);
+  const guess = Date.UTC(y, mo-1, d, hh, mm, 0, 0);
+  const off = dublinOffsetMinutes(new Date(guess));
+  return new Date(guess - off*60000);
+}
+// Monday + n days, as a YYYY-MM-DD date string. Adding whole days to the
+// DATE rather than to an instant, for the same reason mondayOfWeek does.
+function dayOfWeekStart(week_start, n){
+  const [y,m,d] = String(week_start).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d, 12, 0, 0) + n*86400000);
+  return [dt.getUTCFullYear(),
+          String(dt.getUTCMonth()+1).padStart(2,'0'),
+          String(dt.getUTCDate()).padStart(2,'0')].join('-');
+}
+// The four boundaries of a cycle, as instants.
+function cycleWindows(cycle){
+  const ws = cycle && cycle.week_start;
+  const wed = dayOfWeekStart(ws, 2), thu = dayOfWeekStart(ws, 3), fri = dayOfWeekStart(ws, 4);
+  return {
+    ic_open:       dublinInstant(wed, 10, 0),
+    ic_close:      dublinInstant(thu, 15, 0),
+    leader_close:  dublinInstant(thu, 16, 30),
+    manager_close: dublinInstant(fri, 11, 0)
+  };
+}
+// Which slot a role files in. senior_exec has none - it reads the company
+// and writes nothing, here as everywhere else.
+function bandOf(role){
+  if(role === 'agent' || role === 'specialist' || role === 'executive') return 'ic';
+  if(role === 'leader' || role === 'supervisor') return 'leader';
+  if(role === 'manager') return 'manager';
+  if(role === 'director' || role === 'admin') return 'override';
+  return null;
+}
+// Which slot the week is in right now.
+function openBandNow(cycle, now){
+  const w = cycleWindows(cycle);
+  const t = now.getTime();
+  if(t < w.ic_open.getTime()) return 'pre';
+  if(t < w.ic_close.getTime()) return 'ic';
+  if(t < w.leader_close.getTime()) return 'leader';
+  if(t < w.manager_close.getTime()) return 'manager';
+  return 'closed';
+}
+// The one place the weekly clock is read. A test can pin it through
+// __setWeekClock below; nothing else can. It is NOT read from the
+// environment or from a request, so it cannot be switched on by
+// configuration, a header or a payload - only by code that has already
+// require()d this module, which by then owns the process anyway.
+let __weekClock = null;
+function weekNow(){ return __weekClock || new Date(); }
+function canWriteNow(me, cycle, now){
+  const band = bandOf(me && me.role);
+  if(band === 'override') return true;               // director and admin, any time
+  if(!band) return false;                            // senior_exec, never
+  return openBandNow(cycle, now) === band;
+}
+// When a given band opens and closes, as instants.
+function bandBounds(band, cycle){
+  const w = cycleWindows(cycle);
+  if(band === 'ic')      return { opens: w.ic_open,      closes: w.ic_close };
+  if(band === 'leader')  return { opens: w.ic_close,     closes: w.leader_close };
+  if(band === 'manager') return { opens: w.leader_close, closes: w.manager_close };
+  return { opens: null, closes: null };
+}
+const BAND_WORD = { ic:'Wednesday 10:00', leader:'Thursday 15:00', manager:'Thursday 16:30' };
+// Everything the banner needs, worked out once on the server so the client
+// never has to do timezone arithmetic of its own.
+function weekWindowInfo(me, cycle, now){
+  const my_band = bandOf(me && me.role);
+  const open_band = openBandNow(cycle, now);
+  const b = bandBounds(my_band, cycle);
+  const can = canWriteNow(me, cycle, now);
+  let stage_label;
+  if(my_band === 'override') stage_label = 'You can edit at any time';
+  else if(!my_band) stage_label = 'You have view-only access';
+  else if(can) stage_label = 'Your window is open';
+  else if(now.getTime() < b.opens.getTime()) stage_label = 'Opens ' + BAND_WORD[my_band];
+  else stage_label = 'Closed for this week';
+  return {
+    open_band, my_band, can_write_now: can,
+    my_opens_at:  b.opens  ? b.opens.toISOString()  : null,
+    my_closes_at: b.closes ? b.closes.toISOString() : null,
+    stage_label
+  };
+}
 // Who a weekly write is for. Absent or self means the caller, exactly as in
 // part 1. A different person has to pass canActOn - the same predicate every
 // other write gate uses, which is subtree AND outranks for a local leader and
@@ -598,6 +707,15 @@ async function accessibleIds(me){
   }
   return [me.id];
 }
+// Pure, side-effect-free window maths, exported so it can be asserted
+// directly. Nothing in the request path reads this object; it exists so the
+// DST boundaries can be tested without putting a clock override into
+// production code, which is the only other way to make them deterministic.
+exports.__week = { dublinInstant, dayOfWeekStart, cycleWindows, bandOf,
+  openBandNow, canWriteNow, bandBounds, weekWindowInfo };
+// Pin or release the weekly clock. Tests only - see weekNow().
+exports.__setWeekClock = (d) => { __weekClock = (d instanceof Date) ? d : null; };
+
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -1074,7 +1192,7 @@ exports.handler = async (event) => {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         const c = await currentCycle();
         if(!c.ok) return json(500,{error:c.error, detail:c.detail});
-        return json(200,{ cycle:c.cycle });
+        return json(200,{ cycle:c.cycle, window: weekWindowInfo(me, c.cycle, weekNow()) });
       }
       case 'get_my_week_entry': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
@@ -1099,6 +1217,7 @@ exports.handler = async (event) => {
         // filed anything gets a clean form, not an error and not blanks.
         return json(200,{
           week: c.cycle,
+          window: weekWindowInfo(me, c.cycle, weekNow()),
           entry: {
             exists: !!entry,
             sales_dub_received: entry ? Number(entry.sales_dub_received||0) : 0,
@@ -1125,6 +1244,14 @@ exports.handler = async (event) => {
         // past week, so history cannot be rewritten by any caller.
         const c = await currentCycle();
         if(!c.ok) return json(500,{error:c.error, detail:c.detail});
+        // The clock, on the CALLER's band. A leader filling an agent's line
+        // writes in the leader window, not the agent's - the question is who
+        // is doing the typing, not whose row it lands in.
+        {
+          const now = weekNow();
+          if(!canWriteNow(me, c.cycle, now))
+            return json(403,{ error:'window_closed', window: weekWindowInfo(me, c.cycle, now) });
+        }
         const nums = {
           sales_dub_received: weekAmount(p.sales_dub_received),
           sales_dub_expected: weekAmount(p.sales_dub_expected),
@@ -1190,6 +1317,11 @@ exports.handler = async (event) => {
         if(!who.ok) return json(who.status,{error:who.error});
         const c = await currentCycle();
         if(!c.ok) return json(500,{error:c.error, detail:c.detail});
+        {
+          const now = weekNow();
+          if(!canWriteNow(me, c.cycle, now))
+            return json(403,{ error:'window_closed', window: weekWindowInfo(me, c.cycle, now) });
+        }
         const { data: existing } = await admin.from('weekly_entries')
           .select('id').eq('cycle_id', c.cycle.id).eq('user_id', who.user_id).single();
         // Nothing to submit is a 404, not a silent success: the client has to
@@ -1268,6 +1400,9 @@ exports.handler = async (event) => {
         const byEntry = {};
         (rows||[]).forEach(r=>{ (byEntry[String(r.entry_id)] = byEntry[String(r.entry_id)] || {})[String(r.source_id)] = r; });
 
+        // One instant for the whole board, so two members cannot be judged
+        // against clocks a few milliseconds apart.
+        const boardNow = weekNow();
         const totals = { dub_received:0, dub_expected:0, lim_received:0, lim_expected:0 };
         const leadTotals = {}; srcList.forEach(s=>{ leadTotals[String(s.id)] = { received:0, sold:0 }; });
 
@@ -1295,8 +1430,22 @@ exports.handler = async (event) => {
             return { source_id: sx.id, name: sx.name, received, sold };
           });
           const name = [u.first, u.last].filter(Boolean).join(' ').trim() || (u.nickname||'');
+          // What this person's week looks like, judged against THEIR band's
+          // deadline rather than the caller's: a leader looking at an agent
+          // after Thursday 15:00 should see "missed", even though the
+          // leader's own window is still open.
+          const theirBand = bandOf(u.role);
+          const theirBounds = bandBounds(theirBand, cycle);
+          let status;
+          if(e && e.submitted) status = 'submitted';
+          else if(!theirBand) status = 'n/a';              // the read-only tier files nothing
+          else if(theirBounds.closes && boardNow.getTime() >= theirBounds.closes.getTime()) status = 'missed';
+          else if(theirBounds.opens && boardNow.getTime() < theirBounds.opens.getTime()) status = 'pending';
+          else if(e) status = 'draft';   // started, and still inside their window
+          else status = 'none';          // nothing filed yet, and still in time
           return {
             user_id: u.id,
+            status,
             name,
             cargo: roleName[String(u.role_id)] || null,
             role: u.role,
@@ -1316,6 +1465,12 @@ exports.handler = async (event) => {
 
         return json(200,{
           cycle, is_current: isCurrent,
+          // On a past board the caller can never write, whatever the clock
+          // says about this week.
+          window: isCurrent
+            ? weekWindowInfo(me, cycle, boardNow)
+            : Object.assign(weekWindowInfo(me, cycle, boardNow), { can_write_now:false,
+                stage_label:'This week is closed' }),
           members,
           totals: Object.assign({}, totals, {
             leads: srcList.map(sx => ({ source_id: sx.id, name: sx.name,
