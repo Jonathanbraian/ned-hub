@@ -849,6 +849,231 @@ async function mayManageHolidays(me, tgt){
 // rather than only through an action.
 exports.__holidays = { workingDays, ymdParts, holidayNum, holidaySort, HOLIDAY_TYPES, DEFAULT_ALLOWANCE };
 
+// ── COMPETITIONS: THE SALES RANKING ──────────────────────────────
+// The figures live in a Google Sheet the sales team already keeps by hand.
+// It is shared "anyone with the link", so this reads it with no credentials
+// at all - no service account, no OAuth, nothing to rotate. The sheet is the
+// source of truth; nothing here writes back to it.
+const COMP_MONTHS = ['January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+const COMP_CACHE_MS = 5 * 60 * 1000;
+const COMP_DEFAULT_SOURCE = { sheet_id:'', dublin_tab:'', limerick_tab:'' };
+
+async function competitionSource(){
+  const { data } = await admin.from('competition_source')
+    .select('id,sheet_id,dublin_tab,limerick_tab').eq('id', 1).single();
+  if(!data) return Object.assign({ id:1 }, COMP_DEFAULT_SOURCE);
+  return { id: data.id,
+    sheet_id: String(data.sheet_id || ''),
+    dublin_tab: String(data.dublin_tab || ''),
+    limerick_tab: String(data.limerick_tab || '') };
+}
+
+// Every agent in the sheet carries a campus suffix: "Alice Almeida -D". It is
+// bookkeeping for whoever maintains the sheet, never part of the person's
+// name, so it comes off before anything - display, matching, sorting.
+function cleanAgent(name){
+  return String(name == null ? '' : name).replace(/\s*-\s*[DL]\s*$/i, '').trim();
+}
+// "€14,000" -> 14000. The commas are thousands separators, the euro sign and
+// any stray spaces are decoration, and anything that is not a number at the
+// end of all that is "no target" rather than zero - an agent without a target
+// cannot be measured against one.
+function parseEuro(v){
+  if(v === null || v === undefined) return null;
+  const raw = String(v).replace(/ /g, ' ').trim();
+  if(!raw) return null;
+  const cleaned = raw.replace(/[€$£\s]/g, '').replace(/,/g, '');
+  if(!cleaned || !/^-?\d*\.?\d+$/.test(cleaned)) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+// A monthly cell. Blank or unreadable is 0 - a month somebody sold nothing in
+// is a real zero, not a gap - and decimals survive.
+function parseCell(v){
+  const n = parseEuro(v);
+  return n === null ? 0 : n;
+}
+// A real CSV reader, not a split on commas: the Target column arrives as
+// "€14,000", quoted precisely because it contains one. Doubled quotes inside
+// a quoted field are an escaped quote, and a field may span newlines.
+function parseCsv(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  const src = String(text == null ? '' : text);
+  for(let i = 0; i < src.length; i++){
+    const c = src[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(src[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+      continue;
+    }
+    if(c === '"'){ inQuotes = true; continue; }
+    if(c === ','){ row.push(field); field = ''; continue; }
+    if(c === '\r'){ continue; }
+    if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; continue; }
+    field += c;
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+// Turn a sheet tab into agent rows. Columns are found by their HEADING, not
+// by position, so a column inserted in the sheet does not silently shift the
+// whole year's figures by one month.
+function parseCompetitionCsv(text, campus){
+  const rows = parseCsv(text);
+  if(!rows.length) return { error:'empty' };
+  const head = rows[0].map(h => String(h == null ? '' : h).trim().toLowerCase());
+  const idxOf = (name) => head.indexOf(String(name).toLowerCase());
+  const agentIdx = idxOf('agent');
+  if(agentIdx < 0) return { error:'no_agent_column' };
+  const teamIdx = idxOf('team');
+  const targetIdx = idxOf('target');
+  // A month matches its full name or its first three letters, so "Jan" and
+  // "January" are the same column.
+  const monthIdx = COMP_MONTHS.map(m => {
+    let i = idxOf(m);
+    if(i < 0) i = head.indexOf(m.slice(0,3).toLowerCase());
+    return i;
+  });
+  const out = [];
+  for(let r = 1; r < rows.length; r++){
+    const cells = rows[r];
+    const agent = cleanAgent(cells[agentIdx]);
+    if(!agent) continue;                    // trailing blank rows, and there are many
+    out.push({
+      agent,
+      team: teamIdx >= 0 ? String(cells[teamIdx] == null ? '' : cells[teamIdx]).trim() : '',
+      campus,
+      months: monthIdx.map(i => i >= 0 ? parseCell(cells[i]) : 0),
+      target: targetIdx >= 0 ? parseEuro(cells[targetIdx]) : null,
+    });
+  }
+  return { rows: out };
+}
+
+// The network, behind a seam. Tests replace it with a fixture; production
+// uses the runtime's own fetch (Node 18+, and this function runs on 22).
+let __compFetch = null;
+function compFetch(url){
+  if(__compFetch) return __compFetch(url);
+  if(typeof fetch !== 'function') return Promise.reject(new Error('no fetch in this runtime'));
+  return fetch(url);
+}
+const __compCache = new Map();
+function compCacheKey(sheetId, tab){ return sheetId + '|' + tab; }
+function competitionUrl(sheetId, tab){
+  return 'https://docs.google.com/spreadsheets/d/' + encodeURIComponent(sheetId) +
+    '/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent(tab);
+}
+// Never throws. A sheet that is unreachable, renamed, unshared or malformed
+// is a state the page knows how to show; an exception here would be a 500 on
+// a screen that is only ever decorative.
+async function fetchTab(sheetId, tab, campus, now){
+  if(!sheetId || !tab) return { error:'not_configured' };
+  const at = (now instanceof Date ? now : new Date()).getTime();
+  const key = compCacheKey(sheetId, tab);
+  const hit = __compCache.get(key);
+  if(hit && (at - hit.at) < COMP_CACHE_MS) return { rows: hit.rows, cached:true };
+  let text;
+  try {
+    const res = await compFetch(competitionUrl(sheetId, tab));
+    if(!res || !res.ok) return { error:'fetch_failed', status: res ? res.status : 0 };
+    text = await res.text();
+  } catch(e){
+    return { error:'fetch_failed', detail: String(e && e.message || e) };
+  }
+  const parsed = parseCompetitionCsv(text, campus);
+  if(parsed.error) return { error: parsed.error };
+  __compCache.set(key, { at, rows: parsed.rows });
+  return { rows: parsed.rows };
+}
+async function loadCompetition(src, now){
+  const d = await fetchTab(src.sheet_id, src.dublin_tab, 'dublin', now);
+  if(d.error) return { error:'sheet_unavailable', detail:d.error };
+  const l = await fetchTab(src.sheet_id, src.limerick_tab, 'limerick', now);
+  if(l.error) return { error:'sheet_unavailable', detail:l.error };
+  return { rows: d.rows.concat(l.rows) };
+}
+
+// Who is top, and on what. Two different questions: the biggest number, and
+// the biggest number RELATIVE to what that person was asked for - which is
+// why a small target with a big overshoot can win the second and not the
+// first. A month nobody sold anything in has no winner at all; crowning a
+// zero would be worse than crowning nobody.
+function competitionWinner(rows, monthIdx, kind){
+  let best = null, bestKey = 0;
+  (rows || []).forEach(r => {
+    const value = Number((r.months || [])[monthIdx] || 0);
+    let key;
+    if(kind === 'star'){
+      if(!(Number(r.target) > 0)) return;   // nothing to be measured against
+      key = value / Number(r.target);
+    } else {
+      key = value;
+    }
+    // ONE rule for "does this person qualify at all", and it is the figure
+    // the prize is actually awarded on. A separate value > 0 guard above
+    // would be redundant - for either prize a zero month gives a zero key -
+    // and a redundant guard is one no test can hold to account.
+    if(!(key > 0)) return;
+    if(best === null || key > bestKey){ best = r; bestKey = key; }
+  });
+  if(!best) return null;
+  const value = Number((best.months || [])[monthIdx] || 0);
+  const target = Number(best.target) > 0 ? Number(best.target) : null;
+  return { name: best.agent, team: best.team || '', campus: best.campus,
+    value, target, pct: target ? value / target : null };
+}
+function competitionHighlights(rows, monthIdx){
+  const dub = (rows || []).filter(r => r.campus === 'dublin');
+  const lim = (rows || []).filter(r => r.campus === 'limerick');
+  const by = (kind) => ({
+    company: competitionWinner(rows, monthIdx, kind),
+    dublin: competitionWinner(dub, monthIdx, kind),
+    limerick: competitionWinner(lim, monthIdx, kind),
+  });
+  return { staff_of_month: by('staff'), sales_star: by('star') };
+}
+// Standard competition ranking: equal figures share a place, and the next
+// one down skips. Two people on 10k are both second, and nobody is third.
+function competitionRanking(rows, monthIdx){
+  const list = (rows || []).map(r => {
+    const value = Number((r.months || [])[monthIdx] || 0);
+    const target = Number(r.target) > 0 ? Number(r.target) : null;
+    return { name: r.agent, team: r.team || '', campus: r.campus,
+      value, target, pct: target ? value / target : null };
+  }).sort((a,b) => b.value - a.value || String(a.name).localeCompare(String(b.name)));
+  let lastValue = null, lastRank = 0;
+  list.forEach((row, i) => {
+    if(lastValue !== null && row.value === lastValue) row.rank = lastRank;
+    else { row.rank = i + 1; lastRank = row.rank; lastValue = row.value; }
+  });
+  return list;
+}
+// Best effort, and only that: the sheet is maintained by hand and the
+// directory is not, so a winner whose name does not match a profile is still
+// a winner. Matching never decides anything - it only finds a face.
+function attachProfile(winner, profiles){
+  if(!winner) return null;
+  const key = String(winner.name || '').trim().toLowerCase();
+  if(!key) return winner;
+  const hit = (profiles || []).find(u =>
+    [u.first, u.last].filter(Boolean).join(' ').trim().toLowerCase() === key);
+  if(!hit) return winner;
+  return Object.assign({}, winner, { user_id: hit.id, photo: hit.photo || '' });
+}
+// Pure, side-effect-free, exported so the parsing and the ranking can be
+// asserted directly against fixture CSV - the test environment cannot reach
+// Google, and a test that depends on a live sheet is not a test.
+exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
+  parseCompetitionCsv, competitionWinner, competitionHighlights,
+  competitionRanking, attachProfile, competitionUrl, COMP_MONTHS };
+exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
+exports.__clearCompetitionCache = () => { __compCache.clear(); };
+
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -2963,6 +3188,72 @@ exports.handler = async (event) => {
           allowances: { year, days: allowDays === false ? DEFAULT_ALLOWANCE : allowDays,
             is_default: allowDays === false },
           adjustments, requests });
+      }
+      // ── COMPETITIONS & RECOGNITION ───────────────────────────
+      case 'get_competition': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const src = await competitionSource();
+        const data = await loadCompetition(src);
+        // A sheet that cannot be read is a state, not a failure: the page
+        // says so quietly and the rest of the app carries on.
+        if(data.error) return json(200,{ ok:false, error:'sheet_unavailable' });
+        // The current month in Dublin, which is the month the office is in.
+        const nowMonth = Number(dublinYMD(new Date()).slice(5,7));
+        let month = Number(p.month);
+        if(!Number.isFinite(month)) month = nowMonth;
+        month = Math.min(12, Math.max(1, Math.round(month)));
+        const monthIdx = month - 1;
+        // Highlights follow the SELECTED month, which with no month asked
+        // for is the current one - so the home band gets this month and the
+        // page's cards follow its picker instead of contradicting it.
+        const { data: profs } = await admin.from('profiles')
+          .select('id,first,last,photo,status');
+        const live = (profs || []).filter(u => u.status !== 'inactive');
+        const hi = competitionHighlights(data.rows, monthIdx);
+        const highlights = {
+          staff_of_month: {
+            company: attachProfile(hi.staff_of_month.company, live),
+            dublin: attachProfile(hi.staff_of_month.dublin, live),
+            limerick: attachProfile(hi.staff_of_month.limerick, live) },
+          sales_star: {
+            company: attachProfile(hi.sales_star.company, live),
+            dublin: attachProfile(hi.sales_star.dublin, live),
+            limerick: attachProfile(hi.sales_star.limerick, live) },
+        };
+        return json(200,{ ok:true,
+          months: COMP_MONTHS.map((label,i) => ({ value:i+1, label })),
+          selected_month: month, current_month: nowMonth,
+          ranking: competitionRanking(data.rows, monthIdx),
+          highlights,
+          teams: Array.from(new Set(data.rows.map(r => r.team).filter(Boolean))).sort(),
+        });
+      }
+      case 'get_competition_source': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Repointing the sheet changes what the whole company sees, so it is
+        // an admin job rather than an ordinary management one.
+        if(rank(me.role) < ROLE_RANK.admin) return json(403,{error:'forbidden'});
+        const src = await competitionSource();
+        return json(200,{ source: { sheet_id: src.sheet_id,
+          dublin_tab: src.dublin_tab, limerick_tab: src.limerick_tab } });
+      }
+      case 'set_competition_source': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(rank(me.role) < ROLE_RANK.admin) return json(403,{error:'forbidden'});
+        const sheet_id = String(p.sheet_id == null ? '' : p.sheet_id).trim();
+        const dublin_tab = String(p.dublin_tab == null ? '' : p.dublin_tab).trim();
+        const limerick_tab = String(p.limerick_tab == null ? '' : p.limerick_tab).trim();
+        if(!sheet_id) return json(400,{error:'missing_sheet_id'});
+        if(!dublin_tab || !limerick_tab) return json(400,{error:'missing_tab'});
+        const { error } = await admin.from('competition_source')
+          .update({ sheet_id, dublin_tab, limerick_tab,
+            updated_by: me.id, updated_at: new Date().toISOString() })
+          .eq('id', 1);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        // The cache is keyed by sheet and tab, so a repoint would otherwise
+        // keep serving the old sheet for up to five minutes.
+        __compCache.clear();
+        return json(200,{ ok:true, source:{ sheet_id, dublin_tab, limerick_tab } });
       }
       default: return json(400, { error:'unknown_action' });
     }
