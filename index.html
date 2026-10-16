@@ -351,6 +351,15 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    deliberately untouched - still repeat(4,1fr), dropping to 2 then 1 - so
    the fifth tile wraps instead of squeezing the other four to 20%. */
 .ac5::before{background:linear-gradient(-155deg,#7C3AED,#22D3EE)}
+/* A sixth, for Time Off. Six tiles fill the 4-wide grid as 4 + 2 - the
+   same wrap the fifth already relies on, so again the grid itself does
+   not change. */
+.ac6::before{background:linear-gradient(-25deg,#00A7B5,#0032FF)}
+/* The one tile that carries live numbers rather than a sentence. */
+.acard-num{display:flex;align-items:baseline;gap:7px;margin-top:2px}
+.acard-big{font-size:25px;font-weight:700;letter-spacing:-.8px;line-height:1;font-variant-numeric:tabular-nums}
+.acard-of{font-size:12px;color:var(--muted)}
+.acard-pend{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);align-self:flex-start}
 .ci{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center}
 .ci1{background:rgba(0,50,255,.08);color:var(--blue)}.ci2{background:rgba(0,167,181,.08);color:var(--teal)}.ci3{background:rgba(0,167,181,.1);color:var(--teal-text)}.ci4{background:rgba(0,50,255,.06);color:var(--blue-deep)}
 .ctag{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase}
@@ -1549,6 +1558,83 @@ a.clib-open{text-decoration:none}
   .wk-board-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .wk-board{min-width:560px}
 }
+/* ── HOLIDAYS / TIME OFF ───────────────────────────────────────
+   Three areas on one page, each a section rather than a tab: your own
+   balance and requests, the queue of people waiting on you, and the
+   balances you look after. A person with none of the second two simply
+   does not see them, so an agent's page is just their own. */
+.hol-wrap{max-width:1200px;margin:0 auto;padding:30px 36px 60px}
+.hol-sec{margin-bottom:34px}
+.hol-sec:last-child{margin-bottom:0}
+.hol-sec-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.hol-sec-title{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.hol-sec-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.hol-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow-card)}
+/* The balance, as four numbers that visibly add up to the fifth. */
+.hol-bal{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:stretch}
+.hol-bal-cell{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px 15px}
+.hol-bal-cell.lead{background:var(--light-blue);border-color:var(--border2)}
+.hol-bal-k{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.hol-bal-v{font-size:24px;font-weight:700;letter-spacing:-.7px;margin-top:6px;font-variant-numeric:tabular-nums}
+.hol-bal-cell.lead .hol-bal-v{color:var(--blue)}
+.hol-bal-n{font-size:11.5px;color:var(--muted);margin-top:3px}
+.hol-sum{font-size:12px;color:var(--muted);margin-top:14px;padding-top:12px;border-top:1px solid var(--border);line-height:1.6}
+/* Requests: a table on a desk, a stack of cards on a phone. */
+.hol-tbl{width:100%;border-collapse:collapse}
+.hol-tbl th{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 10px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.hol-tbl td{padding:11px 10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+.hol-tbl tr:last-child td{border-bottom:none}
+.hol-tbl td.num,.hol-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.hol-who{font-size:13.5px;font-weight:600;letter-spacing:-.1px}
+.hol-meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.hol-dates{font-size:13px;white-space:nowrap}
+.hol-note{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.hol-why{font-size:11.5px;color:var(--danger);margin-top:3px;line-height:1.5}
+.hol-type{display:inline-flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border2);white-space:nowrap}
+.hol-type.annual{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
+.hol-st{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.hol-st.pending{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
+.hol-st.approved{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.hol-st.rejected{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.hol-st.cancelled{background:var(--bg);color:var(--muted);border-color:var(--border2)}
+.hol-empty{padding:26px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--bg);border:1px dashed var(--border2);border-radius:12px}
+.hol-acts{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}
+.hol-btn{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid var(--border2);background:var(--bg);color:var(--text)}
+.hol-btn:hover{border-color:var(--blue);color:var(--blue)}
+.hol-btn.ok{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.hol-btn.ok:hover{background:var(--success);color:#fff}
+.hol-btn.no{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.hol-btn.no:hover{background:var(--danger);color:#fff}
+.hol-btn[disabled]{opacity:.55;cursor:not-allowed}
+.hol-left{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.hol-left b{color:var(--text);font-variant-numeric:tabular-nums}
+.hol-left.over b{color:var(--danger)}
+/* The request modal's running total, which answers the only question the
+   form really has: how many days is this, and what is left after it. */
+.hol-calc{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 14px;font-size:12.5px;line-height:1.6;color:var(--muted)}
+.hol-calc b{color:var(--text);font-variant-numeric:tabular-nums}
+.hol-calc.warn{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger)}
+.hol-calc.warn b{color:var(--danger)}
+.hol-adj{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:12.5px}
+.hol-adj:first-child{border-top:none}
+.hol-adj-d{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:38px}
+.hol-adj-d.up{color:var(--success)}
+.hol-adj-d.down{color:var(--danger)}
+.hol-adj-r{flex:1;min-width:0;color:var(--muted);line-height:1.5}
+.hol-adj-w{font-size:11px;color:var(--muted);white-space:nowrap}
+.hol-readonly{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:5px 11px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border2)}
+.hol-count{display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:5px 11px;border-radius:999px;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2)}
+.hol-busy{font-size:12px;color:var(--muted);display:none;align-items:center;gap:7px;margin-left:auto}
+.hol-busy.on{display:flex}
+@media(max-width:900px){ .hol-bal{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media(max-width:768px){
+  .hol-wrap{padding:22px 18px 70px}
+  /* Same decision as the weekly board: a table that scrolls inside its card
+     rather than being reflowed, so the columns stay comparable. */
+  .hol-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .hol-tbl{min-width:560px}
+  .hol-sec-head .btn-save,.hol-sec-head .btn-cancel{width:100%}
+}
 /* ── LATEST UPDATES (home band + the Updates page cards) ───────
    The band borrows the birthday band's shell so the two read as one
    column, but its rows are a feed: chip, title, date, action. */
@@ -1866,6 +1952,12 @@ a.clib-open{text-decoration:none}
         <div class="acard ac3" onclick="showPage('trainings')"><div class="ci ci3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div><div class="ctag ct3">Trainings</div><h3>Our Trainings</h3><p>Learning paths, onboarding and skill development.</p><span class="arrow">↗</span></div>
         <div class="acard ac4" onclick="showPage('materials')"><div class="ci ci4"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div><div class="ctag ct4">Materials</div><h3>Sales Materials</h3><p>Decks, one-pagers and collateral ready to use.</p><span class="arrow">↗</span></div>
         <div class="acard ac5" onclick="showPage('updates')"><div class="ci ci1"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div><div class="ctag ct1">Updates</div><h3>News and Updates</h3><p>Immigration, QQI and company announcements.</p><span class="arrow">↗</span></div>
+        <!-- The one tile with live numbers on it: your own balance, and - for
+             anyone with people under them - how many requests are waiting. It
+             hides itself if the balance cannot be loaded, so a stale cache or
+             a gateway that does not know the action yet leaves the home page
+             exactly as it was rather than showing a broken card. -->
+        <div class="acard ac6" id="home-hol-card" style="display:none" onclick="showPage('holidays')"><div class="ci ci2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 15h3"/></svg></div><div class="ctag ct2">Time Off</div><h3 id="home-hol-title">Your Time Off</h3><div class="acard-num"><span class="acard-big" id="home-hol-remaining">-</span><span class="acard-of" id="home-hol-of"></span></div><span class="acard-pend" id="home-hol-pending" style="display:none"></span><p id="home-hol-desc">Annual leave left this year.</p><span class="arrow">↗</span></div>
       </div>
     </div>
     <div id="home-mgr-band" style="display:none">
@@ -2591,6 +2683,66 @@ a.clib-open{text-decoration:none}
     </div>
   </div>
 
+  <div id="page-holidays" class="page">
+    <div class="grad-bar"></div>
+    <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Time Off</div><h1>Holidays</h1><p class="ph-desc">Ask for time off, see where your request got to, and keep an eye on the days you have left.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=680&q=80" alt=""></div></div></div>
+    <div class="hol-wrap">
+
+      <!-- MY TIME OFF - everyone, always. -->
+      <div class="hol-sec" id="hol-sec-mine">
+        <div class="hol-sec-head">
+          <div>
+            <div class="hol-sec-title">My time off</div>
+            <div class="hol-sec-sub" id="hol-year-sub">This leave year</div>
+          </div>
+          <span class="hol-busy" id="hol-busy"><span class="clib-spin"></span><span id="hol-busy-text">Saving...</span></span>
+          <button class="btn-save" id="hol-ask" onclick="openHolidayRequest()" style="margin-left:auto">Request time off</button>
+        </div>
+        <div class="hol-card" style="margin-bottom:16px">
+          <div class="hol-bal">
+            <div class="hol-bal-cell"><div class="hol-bal-k">Allowance</div><div class="hol-bal-v" id="hol-allowance">-</div><div class="hol-bal-n">Days for the year</div></div>
+            <div class="hol-bal-cell"><div class="hol-bal-k">Adjustments</div><div class="hol-bal-v" id="hol-adjust">-</div><div class="hol-bal-n">Added or taken back</div></div>
+            <div class="hol-bal-cell"><div class="hol-bal-k">Used</div><div class="hol-bal-v" id="hol-used">-</div><div class="hol-bal-n">Approved annual leave</div></div>
+            <div class="hol-bal-cell lead"><div class="hol-bal-k">Remaining</div><div class="hol-bal-v" id="hol-remaining">-</div><div class="hol-bal-n">Left to book</div></div>
+          </div>
+          <div class="hol-sum" id="hol-sum"></div>
+        </div>
+        <div class="hol-card">
+          <div class="hol-scroll" id="hol-mine-host"></div>
+        </div>
+      </div>
+
+      <!-- TO APPROVE - anyone who leads or oversees a branch. The read-only
+           tier reaches this too, and is shown the queue without the buttons. -->
+      <div class="hol-sec" id="hol-sec-inbox" style="display:none">
+        <div class="hol-sec-head">
+          <div>
+            <div class="hol-sec-title">To approve</div>
+            <div class="hol-sec-sub">Requests from the people you look after.</div>
+          </div>
+          <span class="hol-count" id="hol-pending-count" style="display:none"></span>
+          <span class="hol-readonly" id="hol-inbox-ro" style="display:none">View only</span>
+        </div>
+        <div class="hol-card">
+          <div class="hol-scroll" id="hol-inbox-host"></div>
+        </div>
+      </div>
+
+      <!-- BALANCES - the screen a manager uses to seed everyone's days. -->
+      <div class="hol-sec" id="hol-sec-balances" style="display:none">
+        <div class="hol-sec-head">
+          <div>
+            <div class="hol-sec-title">Balances</div>
+            <div class="hol-sec-sub">Set an allowance, or add and take back days.</div>
+          </div>
+        </div>
+        <div class="hol-card">
+          <div class="hol-scroll" id="hol-people-host"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
   <div id="page-lead-sources" class="page">
     <div class="mgr-grad-bar"></div>
     <div class="mgr-ph"><div class="mgr-ph-inner" style="grid-template-columns:1fr;padding-bottom:36px"><div><div class="mgr-eyebrow">Management Area</div><h1>Lead Sources</h1><p class="ph-desc">Where leads come from. Every active source becomes a row on everyone's weekly results form, in this order.</p></div></div></div>
@@ -2642,7 +2794,7 @@ a.clib-open{text-decoration:none}
       <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="" style="height:20px" onerror="this.style.display='none'">
       <span class="footer-copy">Internal use only</span>
     </div>
-    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a></div>
+    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a><a onclick="showPage('holidays')">Time Off</a></div>
     <span class="footer-copy">© 2026 NED College</span>
   </footer>
 </div>
@@ -3031,6 +3183,59 @@ a.clib-open{text-decoration:none}
       <button class="btn-cancel" id="wkm-save" onclick="saveMemberWeek()">Save</button>
       <button class="btn-save" id="wkm-submit" onclick="saveMemberWeek(true)">Save &amp; mark submitted</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-holiday">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Request time off</div><button class="modal-close" onclick="closeModal('modal-holiday')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="hol-type" onchange="holidayCalc()">
+          <option value="annual">Annual leave</option>
+          <option value="sick">Sick leave</option>
+          <option value="unpaid">Unpaid leave</option>
+          <option value="other">Other</option>
+        </select>
+        <div class="form-hint">Only annual leave comes out of your balance.</div>
+      </div>
+      <div class="modal-row">
+        <div class="form-group"><label class="form-label">First day</label><input class="form-input" type="date" id="hol-start" onchange="holidayCalc()" oninput="holidayCalc()"></div>
+        <div class="form-group"><label class="form-label">Last day</label><input class="form-input" type="date" id="hol-end" onchange="holidayCalc()" oninput="holidayCalc()"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Note <span class="form-hint" style="display:inline">(optional)</span></label><input class="form-input" type="text" id="hol-note" placeholder="Anything your manager should know"></div>
+      <div class="hol-calc" id="hol-calc">Pick the first and last day.</div>
+      <div class="login-error" id="hol-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-holiday')">Cancel</button><button class="btn-save" id="hol-send" onclick="sendHolidayRequest()">Send request</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-holiday-person">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="holp-title">Balance</div><button class="modal-close" onclick="closeModal('modal-holiday-person')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="hol-bal" id="holp-bal" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+      <div class="form-group" style="margin-top:18px"><label class="form-label">Allowance for <span id="holp-year"></span></label>
+        <div class="modal-row" style="align-items:flex-end">
+          <input class="form-input" type="number" id="holp-days" min="0" step="1" inputmode="numeric">
+          <button class="btn-save" id="holp-save-allow" onclick="saveHolidayAllowance()">Set allowance</button>
+        </div>
+        <div class="form-hint" id="holp-days-hint"></div>
+      </div>
+      <div class="form-group" style="border-top:1px solid var(--border);padding-top:16px">
+        <label class="form-label">Add an adjustment</label>
+        <div class="modal-row" style="align-items:flex-end">
+          <input class="form-input" type="number" id="holp-delta" step="0.5" inputmode="decimal" placeholder="e.g. 2 or -1">
+          <input class="form-input" type="text" id="holp-reason" placeholder="Reason">
+        </div>
+        <div class="form-hint">A positive number gives days, a negative one takes them back. Every adjustment is kept.</div>
+        <div style="margin-top:10px;text-align:right"><button class="btn-cancel" id="holp-save-adj" onclick="saveHolidayAdjustment()">Add adjustment</button></div>
+      </div>
+      <div id="holp-adj-host"></div>
+      <div class="login-error" id="holp-error" style="margin-top:10px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-holiday-person')">Close</button></div>
   </div>
 </div>
 
@@ -4404,6 +4609,14 @@ function showPage(name){
   // Fire-and-forget beside the other home loaders: the band draws itself when
   // the updates land and stays hidden until then.
   if(name==='home') (async()=>{ await softLoad('content:update', ()=>loadContent('update')); renderHomeUpdates(); })();
+  if(name==='holidays') (async()=>{ await openHolidaysPage(); })();
+  // The home tile carries live numbers, so it loads with the rest of home and
+  // stays hidden until they arrive.
+  if(name==='home') (async()=>{
+    await softLoad('holidays', loadHolidayOverview);
+    if(canSeeHolidayInbox()) await softLoad('holiday-inbox', loadHolidayInbox);
+    renderHolidayHome();
+  })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
   if(name==='orgchart'){ fillOrgTeamFilter(); renderOrgChart(); }
@@ -6720,6 +6933,470 @@ function updateStats(){
 function filterUsers(v){searchVal=v;renderUsers();}
 function filterByRole(v){roleFilter=v;renderUsers();}
 function filterByCampus(v){campusFilter=v;renderUsers();}
+
+// ═══════════════════════════════════════
+// HOLIDAYS / TIME OFF
+// ═══════════════════════════════════════
+// Three areas on one page, all fed by two reads. Nothing here decides who may
+// do what - the gateway does, and every refusal is shown as it comes back -
+// but the page does hide controls the server would refuse, so nobody is
+// offered a button that cannot work.
+const HOLIDAY_ERRORS = {
+  bad_type:'Pick a type of leave',
+  bad_dates:'Check the first and last day',
+  no_working_days:'There is no working day in those dates - weekends do not count',
+  not_yours:'That request is not yours to cancel',
+  not_pending:'That request has already been decided',
+  out_of_scope:"You don't have permission for this",
+  cannot_decide_own:'Somebody else has to approve your own time off',
+  reason_required:'Give a reason for the rejection',
+  bad_decision:'Something went wrong - please try again',
+  bad_days:'Days must be zero or more',
+  bad_delta:'Enter a number of days - positive to give, negative to take back',
+  bad_year:'That year is out of range',
+  missing_user:'Pick a person first',
+  missing_id:'Something went wrong - please try again',
+  not_found:'That is no longer there',
+  create_failed:'Could not send your request',
+  save_failed:'Could not save that',
+  forbidden:"You don't have permission for this",
+};
+const HOL_TYPE_LABEL = { annual:'Annual leave', sick:'Sick leave', unpaid:'Unpaid leave', other:'Other' };
+const HOL_ST_LABEL = { pending:'Pending', approved:'Approved', rejected:'Rejected', cancelled:'Cancelled' };
+
+let holOverview = null, holInbox = null, holPerson = null;
+
+function holErr(r){ return HOLIDAY_ERRORS[r && r.error] || 'Something went wrong - please try again'; }
+function holDayWord(n){ const v = Number(n||0); return v + (Math.abs(v) === 1 ? ' day' : ' days'); }
+function holSigned(n){ const v = Number(n||0); return (v > 0 ? '+' : '') + v; }
+// The same Monday-to-Friday count the gateway does, so the form can show a
+// running total without a round trip. The server counts again on arrival -
+// this is a convenience, never the authority.
+function holWorkingDays(start, end){
+  const re = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const a = re.exec(String(start||'')), b = re.exec(String(end||''));
+  if(!a || !b) return null;
+  const ta = Date.UTC(+a[1], +a[2]-1, +a[3]), tb = Date.UTC(+b[1], +b[2]-1, +b[3]);
+  if(!isFinite(ta) || !isFinite(tb) || ta > tb) return null;
+  const span = Math.round((tb - ta) / 86400000) + 1;
+  if(span > 366) return null;
+  let n = 0;
+  for(let i = 0; i < span; i++){
+    const wd = new Date(ta + i*86400000).getUTCDay();
+    if(wd !== 0 && wd !== 6) n++;
+  }
+  return n;
+}
+// A YYYY-MM-DD written out without going near a time zone: new Date('2026-03-02')
+// is midnight UTC, which prints as the 1st for anyone west of Greenwich.
+function holDate(ymd){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd||''));
+  if(!m) return esc(ymd || '');
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return (+m[3]) + ' ' + MONTHS[(+m[2]) - 1] + ' ' + m[1];
+}
+function holRange(a, b){ return a === b ? holDate(a) : holDate(a) + ' &ndash; ' + holDate(b); }
+
+// Who is offered what. The inbox and the balances belong to anyone who leads
+// or oversees a branch; the buttons on them belong only to people the gateway
+// would actually let act, which is what can_decide reports.
+function canSeeHolidayInbox(){ return !!roleCfg(currentRole).leader; }
+function holCanAct(){ return !!(holInbox && holInbox.can_decide); }
+// Mirrors the gateway's gate closely enough to avoid offering a doomed
+// button: a local leader is not in their own subtree, so they cannot edit
+// their own balance, while a director or admin can.
+function holMayEditPerson(id){
+  if(!holCanAct()) return false;
+  if(String(id) === String(currentUserId)) return rank(currentRole) >= ROLE_RANK.director;
+  return true;
+}
+function setHolidayBusy(on, text){
+  const b = document.getElementById('hol-busy');
+  if(b){ b.classList.toggle('on', !!on);
+    const t = document.getElementById('hol-busy-text'); if(t && text) t.textContent = text; }
+  const ask = document.getElementById('hol-ask'); if(ask) ask.disabled = !!on;
+}
+
+async function loadHolidayOverview(){
+  const r = await callDb('get_holiday_overview');
+  // An error body is not an overview. Leaving the old one in place would
+  // show figures that are no longer true, so it is cleared instead.
+  holOverview = (r && r.balance) ? r : null;
+}
+async function loadHolidayInbox(){
+  const r = await callDb('get_holiday_inbox');
+  holInbox = (r && Array.isArray(r.requests)) ? r : null;
+}
+
+function renderHolidayBalance(){
+  const b = holOverview && holOverview.balance;
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  const sub = document.getElementById('hol-year-sub');
+  if(sub) sub.textContent = holOverview ? ('Leave year ' + holOverview.year) : 'This leave year';
+  const yr = document.getElementById('hol-year'); if(yr) yr.textContent = holOverview ? holOverview.year : '';
+  if(!b){ ['hol-allowance','hol-adjust','hol-used','hol-remaining'].forEach(id=>set(id,'-'));
+    const sm = document.getElementById('hol-sum'); if(sm) sm.textContent = '';
+    return; }
+  set('hol-allowance', b.allowance);
+  set('hol-adjust', holSigned(b.adjustments_total));
+  set('hol-used', b.used);
+  set('hol-remaining', b.remaining);
+  const sm = document.getElementById('hol-sum');
+  // The arithmetic written out, so a number nobody expects can be traced
+  // rather than argued about.
+  if(sm) sm.textContent = b.allowance + ' allowance ' + (b.adjustments_total < 0 ? '-' : '+') + ' ' +
+    Math.abs(b.adjustments_total) + ' adjustment' + (Math.abs(b.adjustments_total) === 1 ? '' : 's') +
+    ' - ' + b.used + ' used = ' + holDayWord(b.remaining) + ' remaining. Only annual leave is counted.';
+}
+
+function holStatusCell(r){
+  const cls = HOL_ST_LABEL[r.status] ? r.status : 'cancelled';
+  return '<span class="hol-st ' + cls + '">' + esc(HOL_ST_LABEL[r.status] || r.status) + '</span>';
+}
+function holTypeCell(r){
+  return '<span class="hol-type ' + (r.type === 'annual' ? 'annual' : '') + '">' +
+    esc((HOL_TYPE_LABEL[r.type] || r.type || '').replace(' leave','')) + '</span>';
+}
+
+function renderHolidayMine(){
+  const host = document.getElementById('hol-mine-host');
+  if(!host) return;
+  const rows = (holOverview && holOverview.requests) || [];
+  if(!rows.length){
+    host.innerHTML = '<div class="hol-empty">No time off booked this year yet. ' +
+      'Use <b>Request time off</b> when you are ready.</div>';
+    return;
+  }
+  host.innerHTML = '<table class="hol-tbl"><thead><tr>' +
+    '<th>Type</th><th>Dates</th><th class="num">Days</th><th>Status</th><th></th>' +
+    '</tr></thead><tbody>' + rows.map(r => {
+      const why = (r.status === 'rejected' && r.decision_note)
+        ? '<div class="hol-why">' + esc(r.decision_note) + '</div>' : '';
+      const note = r.note ? '<div class="hol-note">' + esc(r.note) + '</div>' : '';
+      const act = r.status === 'pending'
+        ? '<div class="hol-acts"><button class="hol-btn" onclick="cancelHolidayRequest(\'' +
+          esc(r.id) + '\')">Cancel</button></div>' : '';
+      return '<tr><td>' + holTypeCell(r) + '</td>' +
+        '<td><div class="hol-dates">' + holRange(r.start_date, r.end_date) + '</div>' + note + '</td>' +
+        '<td class="num">' + Number(r.working_days || 0) + '</td>' +
+        '<td>' + holStatusCell(r) + why + '</td>' +
+        '<td>' + act + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function renderHolidayInbox(){
+  const sec = document.getElementById('hol-sec-inbox');
+  const host = document.getElementById('hol-inbox-host');
+  if(!sec || !host) return;
+  if(!canSeeHolidayInbox()){ sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const ro = document.getElementById('hol-inbox-ro');
+  if(ro) ro.style.display = holCanAct() ? 'none' : '';
+  const rows = (holInbox && holInbox.requests) || [];
+  const pending = rows.filter(r => r.status === 'pending');
+  const chip = document.getElementById('hol-pending-count');
+  if(chip){
+    chip.style.display = pending.length ? '' : 'none';
+    chip.textContent = pending.length + ' waiting';
+  }
+  if(!rows.length){
+    host.innerHTML = '<div class="hol-empty">Nothing is waiting on you.</div>';
+    return;
+  }
+  host.innerHTML = '<table class="hol-tbl"><thead><tr>' +
+    '<th>Person</th><th>Type</th><th>Dates</th><th class="num">Days</th>' +
+    '<th>Left</th><th>Status</th><th></th></tr></thead><tbody>' + rows.map(r => {
+      const p = r.person || {};
+      const meta = [p.role_label, p.campus ? (p.campus[0].toUpperCase() + p.campus.slice(1)) : '']
+        .filter(Boolean).join(' &middot; ');
+      const note = r.note ? '<div class="hol-note">' + esc(r.note) + '</div>' : '';
+      const why = (r.status === 'rejected' && r.decision_note)
+        ? '<div class="hol-why">' + esc(r.decision_note) + '</div>' : '';
+      // Their remaining, not the viewer's, and flagged when this request
+      // would take them past it.
+      const b = r.balance;
+      const over = b && r.type === 'annual' && Number(r.working_days||0) > Number(b.remaining);
+      const left = b ? '<span class="hol-left' + (over ? ' over' : '') + '"><b>' + b.remaining +
+        '</b> left</span>' : '';
+      const act = (r.status === 'pending' && holCanAct())
+        ? '<div class="hol-acts">' +
+          '<button class="hol-btn ok" onclick="decideHoliday(\'' + esc(r.id) + '\',\'approved\')">Approve</button>' +
+          '<button class="hol-btn no" onclick="decideHoliday(\'' + esc(r.id) + '\',\'rejected\')">Reject</button>' +
+          '</div>' : '';
+      return '<tr><td><div class="hol-who">' + esc(p.name || '') + '</div>' +
+        (meta ? '<div class="hol-meta">' + meta + '</div>' : '') + '</td>' +
+        '<td>' + holTypeCell(r) + '</td>' +
+        '<td><div class="hol-dates">' + holRange(r.start_date, r.end_date) + '</div>' + note + '</td>' +
+        '<td class="num">' + Number(r.working_days || 0) + '</td>' +
+        '<td>' + left + '</td>' +
+        '<td>' + holStatusCell(r) + why + '</td>' +
+        '<td>' + act + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function renderHolidayPeople(){
+  const sec = document.getElementById('hol-sec-balances');
+  const host = document.getElementById('hol-people-host');
+  if(!sec || !host) return;
+  if(!canSeeHolidayInbox()){ sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const people = (holInbox && holInbox.people) || [];
+  if(!people.length){
+    host.innerHTML = '<div class="hol-empty">Nobody reports to you yet.</div>';
+    return;
+  }
+  host.innerHTML = '<table class="hol-tbl"><thead><tr>' +
+    '<th>Person</th><th class="num">Allowance</th><th class="num">Adjustments</th>' +
+    '<th class="num">Used</th><th class="num">Remaining</th><th></th></tr></thead><tbody>' +
+    people.map(p => {
+      const b = p.balance || { allowance:'-', adjustments_total:0, used:'-', remaining:'-' };
+      const meta = [p.role_label, String(p.id) === String(currentUserId) ? 'You' : '']
+        .filter(Boolean).join(' &middot; ');
+      const btn = '<div class="hol-acts"><button class="hol-btn" onclick="openHolidayPerson(\'' +
+        esc(p.id) + '\')">' + (holMayEditPerson(p.id) ? 'Edit balance' : 'View') + '</button></div>';
+      return '<tr><td><div class="hol-who">' + esc(p.name || '') + '</div>' +
+        (meta ? '<div class="hol-meta">' + meta + '</div>' : '') + '</td>' +
+        '<td class="num">' + esc(b.allowance) + '</td>' +
+        '<td class="num">' + holSigned(b.adjustments_total) + '</td>' +
+        '<td class="num">' + esc(b.used) + '</td>' +
+        '<td class="num"><b>' + esc(b.remaining) + '</b></td>' +
+        '<td>' + btn + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+// The home tile. It hides itself when there is no overview, so a page that
+// could not load one looks exactly as it did before this feature existed.
+function renderHolidayHome(){
+  const card = document.getElementById('home-hol-card');
+  if(!card) return;
+  const b = holOverview && holOverview.balance;
+  if(!b){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('home-hol-remaining', b.remaining);
+  set('home-hol-of', 'of ' + b.allowance + ' days left');
+  set('home-hol-desc', 'Annual leave for ' + holOverview.year + '. Ask for time off, or see where a request got to.');
+  const pend = document.getElementById('home-hol-pending');
+  const n = (holInbox && canSeeHolidayInbox()) ? Number(holInbox.pending_count || 0) : 0;
+  if(pend){
+    pend.style.display = n ? '' : 'none';
+    pend.textContent = n + ' pending to approve';
+  }
+}
+
+function renderHolidays(){
+  renderHolidayBalance();
+  renderHolidayMine();
+  renderHolidayInbox();
+  renderHolidayPeople();
+}
+
+// ── Asking for time off ─────────────────────────────────────────
+function openHolidayRequest(){
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
+  set('hol-type','annual'); set('hol-start',''); set('hol-end',''); set('hol-note','');
+  const err = document.getElementById('hol-error'); if(err) err.textContent = '';
+  const send = document.getElementById('hol-send'); if(send) send.disabled = false;
+  holidayCalc();
+  openBackdrop('modal-holiday');
+}
+// The running total, and what it leaves behind. Recomputed on every keystroke
+// rather than on submit, because "how many days is this?" is the question the
+// form exists to answer.
+function holidayCalc(){
+  const box = document.getElementById('hol-calc');
+  if(!box) return 0;
+  const type = (document.getElementById('hol-type')||{}).value || 'annual';
+  const a = (document.getElementById('hol-start')||{}).value || '';
+  const b = (document.getElementById('hol-end')||{}).value || '';
+  box.classList.remove('warn');
+  if(!a || !b){ box.innerHTML = 'Pick the first and last day.'; return 0; }
+  const n = holWorkingDays(a, b);
+  if(n === null){ box.innerHTML = 'The last day cannot be before the first.'; return 0; }
+  if(n === 0){ box.innerHTML = 'That is a weekend - there is no working day in it.'; return 0; }
+  if(type !== 'annual'){
+    box.innerHTML = '<b>' + holDayWord(n) + '</b>. ' +
+      esc(HOL_TYPE_LABEL[type] || type) + ' does not come out of your balance.';
+    return n;
+  }
+  const rem = holOverview && holOverview.balance ? Number(holOverview.balance.remaining) : null;
+  if(rem === null){ box.innerHTML = '<b>' + holDayWord(n) + '</b>.'; return n; }
+  const after = rem - n;
+  box.innerHTML = '<b>' + holDayWord(n) + '</b> of annual leave. ' +
+    'This leaves <b>' + holDayWord(after) + '</b> of your ' + rem + '.';
+  if(after < 0){
+    box.classList.add('warn');
+    box.innerHTML += '<br>That is ' + holDayWord(Math.abs(after)) +
+      ' more than you have left. You can still send it - your manager decides.';
+  }
+  return n;
+}
+async function sendHolidayRequest(){
+  const err = document.getElementById('hol-error');
+  const send = document.getElementById('hol-send');
+  const type = (document.getElementById('hol-type')||{}).value || 'annual';
+  const start_date = (document.getElementById('hol-start')||{}).value || '';
+  const end_date = (document.getElementById('hol-end')||{}).value || '';
+  const note = ((document.getElementById('hol-note')||{}).value || '').trim();
+  if(err) err.textContent = '';
+  if(!start_date || !end_date){ if(err) err.textContent = 'Pick the first and last day'; return; }
+  if(holWorkingDays(start_date, end_date) === 0){
+    if(err) err.textContent = HOLIDAY_ERRORS.no_working_days; return; }
+  if(send) send.disabled = true;
+  setHolidayBusy(true, 'Sending...');
+  try {
+    const r = await callDb('create_holiday_request', { type, start_date, end_date, note });
+    if(!r || !r.ok){ if(err) err.textContent = holErr(r); if(send) send.disabled = false; return; }
+    closeModal('modal-holiday');
+    await loadHolidayOverview();
+    renderHolidays(); renderHolidayHome();
+    showToast(r.would_exceed
+      ? 'Sent - it is over your balance, so your manager will decide'
+      : 'Request sent', r.would_exceed ? 'warning' : 'success');
+  } finally {
+    setHolidayBusy(false);
+    if(send) send.disabled = false;
+  }
+}
+async function cancelHolidayRequest(id){
+  if(!confirm('Cancel this request?')) return;
+  setHolidayBusy(true, 'Cancelling...');
+  try {
+    const r = await callDb('cancel_holiday_request', { id });
+    if(!r || !r.ok){ showToast(holErr(r), 'error'); }
+    else showToast('Request cancelled');
+    await loadHolidayOverview();
+    renderHolidays(); renderHolidayHome();
+  } finally { setHolidayBusy(false); }
+}
+
+// ── Deciding ────────────────────────────────────────────────────
+async function decideHoliday(id, decision){
+  let decision_note = '';
+  if(decision === 'rejected'){
+    // The gateway refuses a rejection with no reason; asking here means the
+    // person is not told so after the fact.
+    const why = prompt('Why is this being rejected? The person will see this.');
+    if(why === null) return;
+    decision_note = String(why).trim();
+    if(!decision_note){ showToast(HOLIDAY_ERRORS.reason_required, 'warning'); return; }
+  }
+  setHolidayBusy(true, 'Saving...');
+  try {
+    const r = await callDb('decide_holiday_request', { id, decision, decision_note });
+    if(!r || !r.ok){ showToast(holErr(r), 'error'); }
+    else showToast(decision === 'approved' ? 'Approved' : 'Rejected');
+    // Both lists move: the queue loses a row and that person's balance
+    // changes, so neither is patched by hand.
+    await Promise.all([loadHolidayInbox(), loadHolidayOverview()]);
+    renderHolidays(); renderHolidayHome();
+  } finally { setHolidayBusy(false); }
+}
+
+// ── The balance editor ──────────────────────────────────────────
+async function openHolidayPerson(userId){
+  holPerson = null;
+  const err = document.getElementById('holp-error'); if(err) err.textContent = '';
+  const title = document.getElementById('holp-title'); if(title) title.textContent = 'Balance';
+  const host = document.getElementById('holp-adj-host'); if(host) host.innerHTML = '';
+  openBackdrop('modal-holiday-person');
+  const r = await callDb('get_person_holiday', { user_id: userId });
+  if(!r || !r.balance){
+    if(err) err.textContent = holErr(r);
+    renderHolidayPerson();
+    return;
+  }
+  holPerson = r;
+  renderHolidayPerson();
+}
+function renderHolidayPerson(){
+  const r = holPerson;
+  const title = document.getElementById('holp-title');
+  const bal = document.getElementById('holp-bal');
+  const host = document.getElementById('holp-adj-host');
+  const yr = document.getElementById('holp-year');
+  const days = document.getElementById('holp-days');
+  const hint = document.getElementById('holp-days-hint');
+  const saveA = document.getElementById('holp-save-allow');
+  const saveJ = document.getElementById('holp-save-adj');
+  const delta = document.getElementById('holp-delta');
+  const reason = document.getElementById('holp-reason');
+  if(!r){
+    if(bal) bal.innerHTML = '';
+    if(host) host.innerHTML = '';
+    [saveA, saveJ, days, delta, reason].forEach(el => { if(el) el.disabled = true; });
+    return;
+  }
+  const may = holMayEditPerson(r.person.id);
+  [saveA, saveJ, days, delta, reason].forEach(el => { if(el) el.disabled = !may; });
+  if(title) title.textContent = r.person.name || 'Balance';
+  if(yr) yr.textContent = r.year;
+  if(days) days.value = r.allowances.days;
+  if(hint) hint.textContent = may
+    ? (r.allowances.is_default
+        ? 'Nothing has been set, so the default of ' + r.allowances.days + ' applies.'
+        : 'Set for ' + r.year + '.')
+    : 'Your own balance is set by your manager.';
+  const b = r.balance;
+  if(bal) bal.innerHTML =
+    '<div class="hol-bal-cell"><div class="hol-bal-k">Allowance</div><div class="hol-bal-v">' + esc(b.allowance) + '</div></div>' +
+    '<div class="hol-bal-cell"><div class="hol-bal-k">Adjustments</div><div class="hol-bal-v">' + holSigned(b.adjustments_total) + '</div></div>' +
+    '<div class="hol-bal-cell"><div class="hol-bal-k">Used</div><div class="hol-bal-v">' + esc(b.used) + '</div></div>' +
+    '<div class="hol-bal-cell lead"><div class="hol-bal-k">Remaining</div><div class="hol-bal-v">' + esc(b.remaining) + '</div></div>';
+  if(host){
+    const adj = r.adjustments || [];
+    host.innerHTML = '<div class="form-label" style="margin-bottom:8px">Adjustment history</div>' +
+      (adj.length
+        ? adj.map(a => '<div class="hol-adj"><div class="hol-adj-d ' + (a.delta < 0 ? 'down' : 'up') + '">' +
+            holSigned(a.delta) + '</div><div class="hol-adj-r">' + (a.reason ? esc(a.reason) : '<i>No reason given</i>') +
+            '</div><div class="hol-adj-w">' + esc(fmtDate(a.created_at)) + '</div></div>').join('')
+        : '<div class="hol-empty">No adjustments yet.</div>');
+  }
+}
+async function saveHolidayAllowance(){
+  if(!holPerson) return;
+  const err = document.getElementById('holp-error'); if(err) err.textContent = '';
+  const raw = (document.getElementById('holp-days')||{}).value;
+  if(String(raw).trim() === ''){ if(err) err.textContent = HOLIDAY_ERRORS.bad_days; return; }
+  const r = await callDb('set_holiday_allowance',
+    { user_id: holPerson.person.id, year: holPerson.year, days: Number(raw) });
+  if(!r || !r.ok){ if(err) err.textContent = holErr(r); return; }
+  showToast('Allowance set');
+  await Promise.all([refreshHolidayPerson(), loadHolidayInbox(), loadHolidayOverview()]);
+  renderHolidays(); renderHolidayHome();
+}
+async function saveHolidayAdjustment(){
+  if(!holPerson) return;
+  const err = document.getElementById('holp-error'); if(err) err.textContent = '';
+  const raw = (document.getElementById('holp-delta')||{}).value;
+  const reason = ((document.getElementById('holp-reason')||{}).value || '').trim();
+  if(String(raw).trim() === ''){ if(err) err.textContent = HOLIDAY_ERRORS.bad_delta; return; }
+  const r = await callDb('add_holiday_adjustment',
+    { user_id: holPerson.person.id, year: holPerson.year, delta: Number(raw), reason });
+  if(!r || !r.ok){ if(err) err.textContent = holErr(r); return; }
+  const d = document.getElementById('holp-delta'); if(d) d.value = '';
+  const rs = document.getElementById('holp-reason'); if(rs) rs.value = '';
+  showToast('Adjustment added');
+  await Promise.all([refreshHolidayPerson(), loadHolidayInbox(), loadHolidayOverview()]);
+  renderHolidays(); renderHolidayHome();
+}
+async function refreshHolidayPerson(){
+  if(!holPerson) return;
+  const r = await callDb('get_person_holiday', { user_id: holPerson.person.id });
+  if(r && r.balance) holPerson = r;
+  renderHolidayPerson();
+}
+
+// Loaded fresh on every visit rather than cached on a key: a decision made by
+// somebody else, or a request sent from another device, has to turn up here.
+async function openHolidaysPage(){
+  renderHolidays();
+  await softLoad('holidays', loadHolidayOverview);
+  if(canSeeHolidayInbox()) await softLoad('holiday-inbox', loadHolidayInbox);
+  renderHolidays();
+  renderHolidayHome();
+}
+
 
 // ═══════════════════════════════════════
 // MODALS
