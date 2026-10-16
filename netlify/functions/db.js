@@ -716,6 +716,139 @@ exports.__week = { dublinInstant, dayOfWeekStart, cycleWindows, bandOf,
 // Pin or release the weekly clock. Tests only - see weekNow().
 exports.__setWeekClock = (d) => { __weekClock = (d instanceof Date) ? d : null; };
 
+// ── HOLIDAYS / TIME OFF ──────────────────────────────────────────
+// Four kinds of leave, one of which costs days. Sick, unpaid and other are
+// recorded so a manager can see them, and are deliberately invisible to the
+// balance arithmetic - only 'annual' is deducted.
+const HOLIDAY_TYPES = ['annual','sick','unpaid','other'];
+const DEFAULT_ALLOWANCE = 20;
+// The leave year is the calendar year, read in Dublin: a request made at
+// 23:30 on 31 December belongs to the year the office is in, not UTC's.
+function holidayYear(now){ return Number(dublinYMD(now || new Date()).slice(0,4)); }
+
+// A holiday date is a DATE, not an instant: the 3rd is the 3rd in every time
+// zone. Parsed and validated by hand so 2026-02-31, which Date.UTC would
+// silently roll into March, is refused instead of counted.
+function ymdParts(v){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v == null ? '' : v).trim());
+  if(!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  if(mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const t = Date.UTC(y, mo - 1, d);
+  const back = new Date(t);
+  if(back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return null;
+  return { y, mo, d, t };
+}
+// Working days, Monday to Friday, both ends included. Returns false for a
+// span that cannot be counted at all (unparseable, backwards, or absurdly
+// long) and 0 for a real span that happens to hold no weekday - a Saturday
+// to Sunday request. The caller treats those differently: one is a broken
+// payload, the other is a request worth nothing.
+function workingDays(start, end){
+  const a = ymdParts(start), b = ymdParts(end);
+  if(!a || !b) return false;
+  if(a.t > b.t) return false;
+  const span = Math.round((b.t - a.t) / 86400000) + 1;
+  if(span > 366) return false;
+  let n = 0;
+  for(let i = 0; i < span; i++){
+    const wd = new Date(a.t + i * 86400000).getUTCDay();   // 0 Sun ... 6 Sat
+    if(wd !== 0 && wd !== 6) n++;
+  }
+  return n;
+}
+// Number or numeric string ONLY. Number([5]) is 5 and Number(true) is 1, so
+// an array or a boolean must never reach the arithmetic. Unlike numOrNull
+// this accepts negatives, because an adjustment of -3 days is the point.
+function holidayNum(v){
+  if(typeof v === 'number') return Number.isFinite(v) ? v : false;
+  if(typeof v === 'string' && v.trim() !== ''){
+    const n = Number(v);
+    return Number.isFinite(n) ? n : false;
+  }
+  return false;
+}
+
+// Balances for a whole list of people in three queries rather than three per
+// person: an inbox of thirty would otherwise be ninety round trips. There is
+// exactly one implementation of the arithmetic - holidayBalance() below is
+// this function with a list of one - so the single and the batch can never
+// drift apart.
+async function holidayBalances(userIds, year){
+  const y = Number(year);
+  const ids = Array.from(new Set((userIds || []).map(String)));
+  const out = {};
+  ids.forEach(id => { out[id] = { allowance: DEFAULT_ALLOWANCE,
+    adjustments_total: 0, used: 0, remaining: DEFAULT_ALLOWANCE }; });
+  if(!ids.length) return out;
+  // No row means the default, not zero: nobody has to be seeded before the
+  // feature works.
+  const { data: allowRows } = await admin.from('holiday_allowances')
+    .select('user_id,days').eq('year', y).in('user_id', ids);
+  (allowRows || []).forEach(r => {
+    const n = holidayNum(r.days), k = String(r.user_id);
+    if(out[k] && n !== false) out[k].allowance = n;
+  });
+  const { data: adjRows } = await admin.from('holiday_adjustments')
+    .select('user_id,delta').eq('year', y).in('user_id', ids);
+  (adjRows || []).forEach(r => {
+    const n = holidayNum(r.delta), k = String(r.user_id);
+    if(out[k] && n !== false) out[k].adjustments_total += n;
+  });
+  // Only approved annual leave is spent. A pending request reserves nothing,
+  // so two people cannot both be told they have the last day.
+  const { data: reqRows } = await admin.from('holiday_requests')
+    .select('user_id,working_days,start_date').eq('type','annual').eq('status','approved')
+    .in('user_id', ids);
+  (reqRows || []).forEach(r => {
+    // A request belongs to the year it STARTS in, so one that crosses New
+    // Year comes out of one balance rather than being split across two.
+    if(String(r.start_date || '').slice(0,4) !== String(y)) return;
+    const n = holidayNum(r.working_days), k = String(r.user_id);
+    if(out[k] && n !== false) out[k].used += n;
+  });
+  ids.forEach(id => { const b = out[id];
+    b.remaining = b.allowance + b.adjustments_total - b.used; });
+  return out;
+}
+async function holidayBalance(user_id, year){
+  const m = await holidayBalances([user_id], year);
+  return m[String(user_id)];
+}
+// One request, built field by field. Nothing from the row reaches the client
+// except these, so a column added to the table later cannot leak by being
+// picked up in a projection.
+function holidayRequestOut(r){
+  return { id: r.id, type: r.type, start_date: r.start_date, end_date: r.end_date,
+    working_days: Number(r.working_days || 0), note: r.note || '', status: r.status,
+    decided_at: r.decided_at || null, decision_note: r.decision_note || '',
+    created_at: r.created_at || null };
+}
+// Pending first, then everything decided, newest first within each group.
+function holidaySort(rows){
+  const key = r => String(r.created_at || '') + '|' + String(r.id);
+  return rows.slice().sort((a,b) => {
+    const pa = a.status === 'pending' ? 0 : 1, pb = b.status === 'pending' ? 0 : 1;
+    if(pa !== pb) return pa - pb;
+    return key(b).localeCompare(key(a));
+  });
+}
+// The gate for every holiday write that lands on somebody else: the ordinary
+// Manager = LOCAL question. NOT seesWholeCompany, which would let senior_exec
+// - a rank-0 read-only tier - set everyone's allowance.
+// The admin line is deliberate belt and braces, and today it is redundant:
+// canActOn already admits an admin through its director-or-above branch, so
+// removing it changes no behaviour and no test. It is written down because
+// seeding every balance in the company is an ADMIN job, and a later
+// tightening of canActOn must not take that away by accident.
+async function mayManageHolidays(me, tgt){
+  if(rank(me.role) >= ROLE_RANK.admin) return true;
+  return canActOn(me, tgt);
+}
+// Pure date maths, exported so the weekday counting can be asserted directly
+// rather than only through an action.
+exports.__holidays = { workingDays, ymdParts, holidayNum, holidaySort, HOLIDAY_TYPES, DEFAULT_ALLOWANCE };
+
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -2604,6 +2737,232 @@ exports.handler = async (event) => {
         const { error } = await admin.from('locations').delete().eq('id',p.id);
         if(error) return json(500,{error:'delete_failed', detail:error.message});
         return json(200,{ ok:true });
+      }
+      // ── HOLIDAYS / TIME OFF ──────────────────────────────────
+      case 'get_holiday_overview': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const year = holidayYear();
+        const balance = await holidayBalance(me.id, year);
+        const { data: rows } = await admin.from('holiday_requests')
+          .select('id,user_id,type,start_date,end_date,working_days,note,status,decided_at,decision_note,created_at')
+          .eq('user_id', me.id);
+        const mine = (rows || []).filter(r => String(r.start_date || '').slice(0,4) === String(year));
+        // Newest first, whatever their state: this is your own list, so a
+        // pending row does not deserve to jump above a decided one.
+        const requests = mine.slice()
+          .sort((a,b) => (String(b.created_at||'')+'|'+String(b.id))
+            .localeCompare(String(a.created_at||'')+'|'+String(a.id)))
+          .map(holidayRequestOut);
+        return json(200,{ year, balance, requests, types: HOLIDAY_TYPES });
+      }
+      case 'create_holiday_request': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Always the caller's own row: there is no target_user_id here, so
+        // nobody can book time off in somebody else's name.
+        const type = String(p.type == null ? '' : p.type);
+        if(!HOLIDAY_TYPES.includes(type)) return json(400,{error:'bad_type'});
+        const days = workingDays(p.start_date, p.end_date);
+        if(days === false) return json(400,{error:'bad_dates'});
+        // A weekend parses perfectly well and is worth nothing, which is a
+        // different mistake from an unreadable date.
+        if(days <= 0) return json(400,{error:'no_working_days'});
+        const start_date = String(p.start_date).trim(), end_date = String(p.end_date).trim();
+        const note = String(p.note == null ? '' : p.note).trim().slice(0,500);
+        const { data, error } = await admin.from('holiday_requests').insert({
+          user_id: me.id, type, start_date, end_date, working_days: days, note,
+          status: 'pending', decided_by: null, decided_at: null, decision_note: '',
+          created_at: new Date().toISOString() }).select('id').single();
+        if(error) return json(500,{error:'create_failed', detail:error.message});
+        const year = Number(start_date.slice(0,4));
+        const balance = await holidayBalance(me.id, year);
+        // A warning, never a wall. The request is already stored; whether
+        // going over is acceptable is the approver's call, not the form's.
+        const would_exceed = type === 'annual' && days > balance.remaining;
+        return json(200,{ ok:true, id: data && data.id, status:'pending',
+          working_days: days, would_exceed, balance });
+      }
+      case 'cancel_holiday_request': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('holiday_requests')
+          .select('id,user_id,status').eq('id', p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        // Your own row only. A manager does not cancel on your behalf - they
+        // reject, which leaves a reason behind.
+        if(String(row.user_id) !== String(me.id)) return json(403,{error:'not_yours'});
+        if(row.status !== 'pending') return json(409,{error:'not_pending', status:row.status});
+        const { error } = await admin.from('holiday_requests')
+          .update({ status:'cancelled' }).eq('id', row.id);
+        if(error) return json(500,{error:'cancel_failed', detail:error.message});
+        return json(200,{ ok:true, status:'cancelled' });
+      }
+      case 'get_holiday_inbox': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const year = holidayYear();
+        // Exactly the Manager = LOCAL scope every other screen uses: null is
+        // the whole company, otherwise the caller's subtree plus themselves.
+        const ids = await scopeIdsFor(me);
+        const { data: profs } = await admin.from('profiles')
+          .select('id,first,last,nickname,role,role_id,campus,status');
+        const inScope = (profs || [])
+          .filter(u => u.status !== 'inactive')
+          .filter(u => ids === null || ids.has(u.id));
+        const { data: roleRows } = await admin.from('roles').select('id,name');
+        const roleName = {}; (roleRows || []).forEach(r => { roleName[String(r.id)] = r.name; });
+        const personOut = (u) => ({ id: u.id,
+          name: [u.first, u.last].filter(Boolean).join(' ').trim() || (u.nickname || ''),
+          role_label: roleName[String(u.role_id)] || null, campus: u.campus || null });
+        const memberIds = inScope.map(u => u.id);
+        const { data: rows } = memberIds.length
+          ? await admin.from('holiday_requests')
+              .select('id,user_id,type,start_date,end_date,working_days,note,status,decided_at,decision_note,created_at')
+              .in('user_id', memberIds)
+          : { data: [] };
+        // Every pending request, whatever year it falls in - a January
+        // request made in December still has to be approvable - plus this
+        // year's decided ones as the history underneath.
+        const keep = (rows || []).filter(r => r.status === 'pending' ||
+          String(r.start_date || '').slice(0,4) === String(year));
+        const balances = await holidayBalances(keep.map(r => r.user_id), year);
+        const byId = {}; inScope.forEach(u => { byId[String(u.id)] = u; });
+        const requests = holidaySort(keep).map(r => Object.assign(holidayRequestOut(r), {
+          person: personOut(byId[String(r.user_id)] || { id: r.user_id }),
+          balance: balances[String(r.user_id)] || null }));
+        // The people themselves, for the balances screen: the same scope,
+        // so a manager seeds exactly the branch they already manage.
+        const peopleBal = await holidayBalances(memberIds, year);
+        const people = inScope
+          .map(u => Object.assign(personOut(u), { role: u.role,
+            balance: peopleBal[String(u.id)] || null }))
+          .sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
+        return json(200,{ year, requests, people,
+          pending_count: requests.filter(r => r.status === 'pending').length,
+          // "May this caller decide anything at all", for hiding buttons the
+          // client would otherwise offer in vain. The seesEverything clause is
+          // redundant today - senior_exec is rank 0, so the floor already
+          // excludes it - and is written down because that tier reads the
+          // whole company and must never act on it: if its rank were ever
+          // raised to sort it above agents somewhere, this would otherwise
+          // quietly start saying yes.
+          can_decide: rank(me.role) >= ROLE_RANK.leader && !seesEverything(me.role) });
+      }
+      case 'decide_holiday_request': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const decision = String(p.decision == null ? '' : p.decision);
+        if(decision !== 'approved' && decision !== 'rejected') return json(400,{error:'bad_decision'});
+        const { data: row } = await admin.from('holiday_requests')
+          .select('id,user_id,type,start_date,status').eq('id', p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: owner } = await admin.from('profiles')
+          .select('id,role,first,last').eq('id', row.user_id).single();
+        if(!owner) return json(404,{error:'not_found'});
+        // Nobody signs off their own time off, an admin included. Checked
+        // BEFORE the scope test, which a director or admin would pass on
+        // themselves - rank arithmetic says you outrank you.
+        if(String(owner.id) === String(me.id)) return json(403,{error:'cannot_decide_own'});
+        if(!await canActOn(me, owner)) return json(403,{error:'out_of_scope'});
+        // Deciding twice is a conflict, not a silent overwrite: the second
+        // approver has to know somebody got there first.
+        if(row.status !== 'pending') return json(409,{error:'not_pending', status:row.status});
+        const note = String(p.decision_note == null ? '' : p.decision_note).trim().slice(0,500);
+        // A rejection with no reason is the thing people complain about, so
+        // it is simply not possible.
+        if(decision === 'rejected' && !note) return json(400,{error:'reason_required'});
+        const decided_at = new Date().toISOString();
+        const { error } = await admin.from('holiday_requests')
+          .update({ status: decision, decided_by: me.id, decided_at, decision_note: note })
+          .eq('id', row.id);
+        if(error) return json(500,{error:'decide_failed', detail:error.message});
+        const year = Number(String(row.start_date || '').slice(0,4)) || holidayYear();
+        return json(200,{ ok:true, status: decision, decided_at,
+          user_id: owner.id, balance: await holidayBalance(owner.id, year) });
+      }
+      case 'set_holiday_allowance': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.user_id) return json(400,{error:'missing_user'});
+        const { data: tgt } = await admin.from('profiles').select('id,role').eq('id', p.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await mayManageHolidays(me, tgt)) return json(403,{error:'out_of_scope'});
+        const days = holidayNum(p.days);
+        if(days === false || days < 0) return json(400,{error:'bad_days'});
+        const year = Number(p.year) || holidayYear();
+        if(!Number.isFinite(year) || year < 2000 || year > 2100) return json(400,{error:'bad_year'});
+        const updated_at = new Date().toISOString();
+        // unique(user_id,year), so this is a read then one of two writes -
+        // the same shape every other small write in this file uses.
+        const { data: existing } = await admin.from('holiday_allowances')
+          .select('id').eq('user_id', tgt.id).eq('year', year).single();
+        if(existing && existing.id){
+          const { error } = await admin.from('holiday_allowances')
+            .update({ days, updated_by: me.id, updated_at }).eq('id', existing.id);
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+        } else {
+          const { error } = await admin.from('holiday_allowances')
+            .insert({ user_id: tgt.id, year, days, updated_by: me.id, updated_at });
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+        }
+        return json(200,{ ok:true, year, days,
+          balance: await holidayBalance(tgt.id, year) });
+      }
+      case 'add_holiday_adjustment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.user_id) return json(400,{error:'missing_user'});
+        const { data: tgt } = await admin.from('profiles').select('id,role').eq('id', p.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await mayManageHolidays(me, tgt)) return json(403,{error:'out_of_scope'});
+        // Negative on purpose: this is how days are taken back as well as
+        // given, which is why it cannot go through numOrNull.
+        const delta = holidayNum(p.delta);
+        if(delta === false) return json(400,{error:'bad_delta'});
+        const year = Number(p.year) || holidayYear();
+        if(!Number.isFinite(year) || year < 2000 || year > 2100) return json(400,{error:'bad_year'});
+        const reason = String(p.reason == null ? '' : p.reason).trim().slice(0,300);
+        const { error } = await admin.from('holiday_adjustments').insert({
+          user_id: tgt.id, year, delta, reason, created_by: me.id,
+          created_at: new Date().toISOString() });
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, year, delta,
+          balance: await holidayBalance(tgt.id, year) });
+      }
+      case 'get_person_holiday': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.user_id) return json(400,{error:'missing_user'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,first,last,nickname,role,role_id,campus').eq('id', p.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        const self = String(tgt.id) === String(me.id);
+        if(!self && !await mayManageHolidays(me, tgt)) return json(403,{error:'out_of_scope'});
+        const year = Number(p.year) || holidayYear();
+        const { data: roleRows } = await admin.from('roles').select('id,name');
+        const roleName = {}; (roleRows || []).forEach(r => { roleName[String(r.id)] = r.name; });
+        const { data: allowRow } = await admin.from('holiday_allowances')
+          .select('days').eq('user_id', tgt.id).eq('year', year).single();
+        const allowDays = allowRow ? holidayNum(allowRow.days) : false;
+        const { data: adjRows } = await admin.from('holiday_adjustments')
+          .select('delta,reason,created_at').eq('user_id', tgt.id).eq('year', year);
+        const adjustments = (adjRows || [])
+          .map(r => ({ delta: Number(r.delta || 0), reason: r.reason || '',
+            created_at: r.created_at || null }))
+          .sort((a,b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        const { data: reqRows } = await admin.from('holiday_requests')
+          .select('id,type,start_date,end_date,working_days,note,status,decided_at,decision_note,created_at')
+          .eq('user_id', tgt.id);
+        const requests = (reqRows || [])
+          .filter(r => String(r.start_date || '').slice(0,4) === String(year))
+          .sort((a,b) => (String(b.created_at||'')+'|'+String(b.id))
+            .localeCompare(String(a.created_at||'')+'|'+String(a.id)))
+          .map(holidayRequestOut);
+        return json(200,{ year,
+          person: { id: tgt.id,
+            name: [tgt.first, tgt.last].filter(Boolean).join(' ').trim() || (tgt.nickname || ''),
+            role_label: roleName[String(tgt.role_id)] || null, campus: tgt.campus || null },
+          balance: await holidayBalance(tgt.id, year),
+          // The stored row if there is one, otherwise the default made
+          // visible, so the editor opens on the number actually in force.
+          allowances: { year, days: allowDays === false ? DEFAULT_ALLOWANCE : allowDays,
+            is_default: allowDays === false },
+          adjustments, requests });
       }
       default: return json(400, { error:'unknown_action' });
     }
