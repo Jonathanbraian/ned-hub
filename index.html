@@ -1635,6 +1635,92 @@ a.clib-open{text-decoration:none}
   .hol-tbl{min-width:560px}
   .hol-sec-head .btn-save,.hol-sec-head .btn-cancel{width:100%}
 }
+/* ── COMPETITIONS & RECOGNITION ────────────────────────────────
+   A leaderboard read live from the sales team's own Google Sheet. Two
+   prizes sit above it, because they answer different questions: the
+   biggest number, and the biggest number relative to what that person was
+   asked for. The home band borrows the birthday band's shell so the two
+   read as one column. */
+.comp-wrap{max-width:1200px;margin:0 auto;padding:30px 36px 60px}
+.comp-toolbar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.comp-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.comp-field-k{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.comp-select{font-family:'Rubik',sans-serif;font-size:13px;background:var(--bg);border:1.5px solid var(--border);border-radius:9px;padding:8px 11px;color:var(--text);outline:none;cursor:pointer;max-width:100%}
+.comp-select:focus{border-color:var(--blue)}
+/* The sort is a two-way switch, not a dropdown: there are exactly two
+   questions a leaderboard answers and both deserve to be visible. */
+.comp-toggle{display:flex;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px}
+.comp-tog{font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:transparent;color:var(--muted);border:none;border-radius:7px;padding:7px 14px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.comp-tog:hover{color:var(--text)}
+.comp-tog.on{background:var(--blue);color:#fff}
+.comp-count{margin-left:auto;font-size:12.5px;color:var(--muted);white-space:nowrap}
+/* The two prize cards. */
+.comp-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:22px}
+.comp-card{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow-card)}
+.comp-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.comp-card.gold::before{background:linear-gradient(-25deg,#F59E0B,#FDE68A)}
+.comp-card.star::before{background:linear-gradient(-25deg,#7C3AED,#22D3EE)}
+.comp-card-k{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.comp-win{display:flex;align-items:center;gap:13px;margin-top:12px}
+.comp-face{width:46px;height:46px;border-radius:12px;flex-shrink:0;object-fit:cover;background:var(--light-blue);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;letter-spacing:-.4px}
+.comp-win-name{font-size:17px;font-weight:700;letter-spacing:-.3px;line-height:1.25}
+.comp-win-meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+.comp-win-v{margin-left:auto;text-align:right;flex-shrink:0}
+.comp-win-big{font-size:20px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.comp-win-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.comp-split{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.comp-split-c{flex:1;min-width:132px}
+.comp-split-k{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.comp-split-n{font-size:13px;font-weight:600;margin-top:3px;letter-spacing:-.1px}
+.comp-split-v{font-size:11.5px;color:var(--muted);margin-top:1px;font-variant-numeric:tabular-nums}
+.comp-none{font-size:12.5px;color:var(--muted);margin-top:12px;line-height:1.6}
+/* The board itself. */
+.comp-board{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow-card)}
+.comp-tbl{width:100%;border-collapse:collapse}
+.comp-tbl th{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 10px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.comp-tbl td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+.comp-tbl tr:last-child td{border-bottom:none}
+.comp-tbl td.num,.comp-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.comp-rank{font-size:14px;font-weight:700;color:var(--muted);width:46px;text-align:center;font-variant-numeric:tabular-nums}
+/* The top three are the only ones anybody looks for by position. */
+.comp-rank.top1{color:#B45309}
+.comp-rank.top2{color:#6B7280}
+.comp-rank.top3{color:#92400E}
+.comp-agent{font-size:13.5px;font-weight:600;letter-spacing:-.1px}
+.comp-team{font-size:11.5px;color:var(--muted);margin-top:2px}
+.comp-campus{display:inline-flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border2);white-space:nowrap}
+.comp-campus.dublin{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
+.comp-pct{display:flex;align-items:center;gap:9px;justify-content:flex-end}
+.comp-pct-n{font-variant-numeric:tabular-nums;white-space:nowrap;min-width:46px;text-align:right}
+.comp-bar{width:84px;height:6px;border-radius:999px;background:var(--border);overflow:hidden;flex-shrink:0}
+.comp-bar i{display:block;height:100%;border-radius:999px;background:var(--blue)}
+.comp-bar i.over{background:var(--success)}
+.comp-empty{padding:30px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--bg);border:1px dashed var(--border2);border-radius:12px;line-height:1.7}
+/* The home band: the birthday band's shell, a row of two. */
+.comp-band-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.comp-band-card{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--border2);border-radius:13px;padding:14px 16px;display:flex;align-items:center;gap:13px;box-shadow:var(--shadow-card)}
+.comp-band-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.comp-band-card.gold::before{background:linear-gradient(-25deg,#F59E0B,#FDE68A)}
+.comp-band-card.star::before{background:linear-gradient(-25deg,#7C3AED,#22D3EE)}
+.comp-band-k{font-size:9.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted)}
+.comp-band-n{font-size:14.5px;font-weight:700;letter-spacing:-.2px;margin-top:2px}
+.comp-band-s{font-size:11.5px;color:var(--muted);margin-top:2px}
+.comp-band-v{margin-left:auto;font-size:15px;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.comp-band-foot{font-size:11.5px;color:var(--muted);margin-top:11px;line-height:1.6}
+@media(max-width:900px){
+  .comp-cards{grid-template-columns:1fr}
+  .comp-band-row{grid-template-columns:1fr}
+}
+@media(max-width:768px){
+  .comp-wrap{padding:22px 18px 70px}
+  .comp-field,.comp-toggle{flex:1 1 100%}
+  .comp-select{width:100%}
+  .comp-count{margin-left:0;flex-basis:100%}
+  /* Same decision as every other table in here: it scrolls inside its card
+     rather than being reflowed, so places stay comparable. */
+  .comp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .comp-tbl{min-width:580px}
+}
 /* ── LATEST UPDATES (home band + the Updates page cards) ───────
    The band borrows the birthday band's shell so the two read as one
    column, but its rows are a feed: chip, title, date, action. */
@@ -1926,6 +2012,26 @@ a.clib-open{text-decoration:none}
          state that is really just "not loaded yet". -->
     <div class="bday-band" id="bday-band" style="display:none">
       <div class="bday-inner" id="bday-content"></div>
+    </div>
+
+    <!-- RECOGNITION - this month's two winners, read live from the sales
+         sheet. It borrows the birthday band's shell so the two read as one
+         column, and stays hidden until there is something true to say: a
+         sheet that cannot be read, or a month nobody has sold in yet, is
+         not a band with empty boxes in it. -->
+    <div class="bday-band" id="comp-band" style="display:none">
+      <div class="bday-inner">
+        <div class="bday-head">
+          <div class="bday-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2"/><path d="M7 5H5a2 2 0 0 0 0 4h2"/></svg></div>
+          <div>
+            <div class="bday-title">Recognition</div>
+            <div class="bday-sub" id="comp-band-sub">This month's top performers.</div>
+          </div>
+          <button class="upd-viewall" onclick="showPage('competitions')">View rankings</button>
+        </div>
+        <div class="comp-band-row" id="comp-band-row"></div>
+        <div class="comp-band-foot" id="comp-band-foot"></div>
+      </div>
     </div>
 
     <!-- LATEST UPDATES — rendered by JS from the 'update' content cache.
@@ -2743,6 +2849,81 @@ a.clib-open{text-decoration:none}
 
     </div>
   </div>
+  <div id="page-competitions" class="page">
+    <div class="grad-bar"></div>
+    <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Competitions</div><h1>Sales Rankings</h1><p class="ph-desc">Live from the sales sheet. Two prizes: the biggest month, and the biggest month against your own target.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=680&q=80" alt=""></div></div></div>
+    <div class="comp-wrap">
+      <!-- Shown instead of everything below when the sheet cannot be read.
+           A noticeboard that is temporarily blank is not an error anybody
+           needs to act on. -->
+      <div id="comp-unavailable" style="display:none">
+        <div class="comp-empty">
+          <b>Rankings are temporarily unavailable</b><br>
+          The sales sheet could not be read just now. Nothing is lost - try again shortly.
+        </div>
+      </div>
+      <div id="comp-main">
+        <div class="comp-toolbar">
+          <div class="comp-field">
+            <label class="comp-field-k" for="comp-month">Month</label>
+            <select class="comp-select" id="comp-month" onchange="pickCompetitionMonth()"></select>
+          </div>
+          <div class="comp-field">
+            <label class="comp-field-k" for="comp-scope">Showing</label>
+            <select class="comp-select" id="comp-scope" onchange="renderCompetitionBoard()"></select>
+          </div>
+          <div class="comp-field">
+            <span class="comp-field-k">Sort by</span>
+            <div class="comp-toggle">
+              <button class="comp-tog on" id="comp-sort-value" onclick="setCompetitionSort('value')">Value</button>
+              <button class="comp-tog" id="comp-sort-pct" onclick="setCompetitionSort('pct')">% of target</button>
+            </div>
+          </div>
+          <div class="comp-count" id="comp-count"></div>
+        </div>
+
+        <div class="comp-cards">
+          <div class="comp-card gold">
+            <div class="comp-card-k">Staff of the Month</div>
+            <div id="comp-staff"></div>
+          </div>
+          <div class="comp-card star">
+            <div class="comp-card-k">Sales Star &middot; % of target</div>
+            <div id="comp-star"></div>
+          </div>
+        </div>
+
+        <div class="comp-board">
+          <div class="comp-scroll" id="comp-board-host"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-competitions-admin" class="page">
+    <div class="mgr-grad-bar"></div>
+    <div class="mgr-ph"><div class="mgr-ph-inner" style="grid-template-columns:1fr;padding-bottom:36px"><div><div class="mgr-eyebrow">Management Area</div><h1>Rankings Source</h1><p class="ph-desc">Which Google Sheet the rankings are read from, and which tab holds each campus. This is how the board is pointed at a new year.</p></div></div></div>
+    <div class="um-wrap">
+      <div class="um-toolbar">
+        <div style="flex:1;font-size:13px;color:var(--muted)">The sheet must be shared so that anyone with the link can view it - nothing here signs in to Google. The tab names must match the sheet exactly, spaces and all.</div>
+      </div>
+      <div class="hol-card">
+        <div class="form-group"><label class="form-label">Sheet ID</label>
+          <input class="form-input" type="text" id="cs-sheet-id" placeholder="1e0HMTDFuTiOMiqA6fPpE6QhpB17DQpjrnuX-tz3jfk8">
+          <div class="form-hint">The long id in the sheet's own address, between <code>/d/</code> and <code>/edit</code>.</div>
+        </div>
+        <div class="modal-row">
+          <div class="form-group"><label class="form-label">Dublin tab</label><input class="form-input" type="text" id="cs-dublin" placeholder="Dublin 2026"></div>
+          <div class="form-group"><label class="form-label">Limerick tab</label><input class="form-input" type="text" id="cs-limerick" placeholder="Limerick 2026"></div>
+        </div>
+        <div class="login-error" id="cs-error" style="margin-top:4px;margin-bottom:0"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:16px">
+          <div class="form-hint" style="flex:1" id="cs-hint">Saving takes effect immediately - the next person to open the rankings reads the new sheet.</div>
+          <button class="btn-save mgr-save" id="cs-save" onclick="saveCompetitionSource()">Save source</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="page-lead-sources" class="page">
     <div class="mgr-grad-bar"></div>
     <div class="mgr-ph"><div class="mgr-ph-inner" style="grid-template-columns:1fr;padding-bottom:36px"><div><div class="mgr-eyebrow">Management Area</div><h1>Lead Sources</h1><p class="ph-desc">Where leads come from. Every active source becomes a row on everyone's weekly results form, in this order.</p></div></div></div>
@@ -2794,7 +2975,7 @@ a.clib-open{text-decoration:none}
       <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="" style="height:20px" onerror="this.style.display='none'">
       <span class="footer-copy">Internal use only</span>
     </div>
-    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a><a onclick="showPage('holidays')">Time Off</a></div>
+    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a><a onclick="showPage('holidays')">Time Off</a><a onclick="showPage('competitions')">Competitions</a></div>
     <span class="footer-copy">© 2026 NED College</span>
   </footer>
 </div>
@@ -4422,6 +4603,12 @@ function startApp(user){
       {id:'locations', label:'Locations', icon:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'},
       {id:'lead-sources', label:'Lead Sources', icon:'<path d="M3 3v18h18"/><path d="M7 14l4-5 3 3 5-7"/><circle cx="7" cy="14" r="1.6"/>'},
     ] : []),
+    // Repointing the rankings at a different sheet changes what the whole
+    // company sees, so this one is ADMIN only - a tighter gate than the
+    // management block above, and deliberately not folded into it.
+    ...(rank(currentRole) >= ROLE_RANK.admin ? [
+      {id:'competitions-admin', label:'Rankings Source', icon:'<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2"/><path d="M7 5H5a2 2 0 0 0 0 4h2"/>'},
+    ] : []),
   ] : [];
 
   // Build regular nav links
@@ -4610,12 +4797,23 @@ function showPage(name){
   // the updates land and stays hidden until then.
   if(name==='home') (async()=>{ await softLoad('content:update', ()=>loadContent('update')); renderHomeUpdates(); })();
   if(name==='holidays') (async()=>{ await openHolidaysPage(); })();
+  if(name==='competitions') (async()=>{ await openCompetitionsPage(); })();
+  if(name==='competitions-admin') (async()=>{
+    await softLoad('competition-source', loadCompetitionSource);
+    renderCompetitionSource();
+  })();
   // The home tile carries live numbers, so it loads with the rest of home and
   // stays hidden until they arrive.
   if(name==='home') (async()=>{
     await softLoad('holidays', loadHolidayOverview);
     if(canSeeHolidayInbox()) await softLoad('holiday-inbox', loadHolidayInbox);
     renderHolidayHome();
+  })();
+  // The recognition band is read from the sheet like everything else here,
+  // so it loads with home and draws itself when the figures land.
+  if(name==='home') (async()=>{
+    await softLoad('competitions', () => loadCompetitionBoard());
+    renderCompetitionBand();
   })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
@@ -6933,6 +7131,285 @@ function updateStats(){
 function filterUsers(v){searchVal=v;renderUsers();}
 function filterByRole(v){roleFilter=v;renderUsers();}
 function filterByCampus(v){campusFilter=v;renderUsers();}
+
+// ═══════════════════════════════════════
+// COMPETITIONS & RECOGNITION
+// ═══════════════════════════════════════
+// The board is read live from the sales team's own Google Sheet by the
+// gateway; nothing here knows about Google. The page's job is to let one
+// set of figures be looked at three ways - whose month, whose campus, and
+// value against percentage - without asking the server again each time.
+let compData = null, compScope = 'company', compSort = 'value', compSource = null;
+// Declared WITH the rest of the state rather than below its first use: a
+// top-level let is hoisted into a dead zone, and reading one before its
+// declaration line has run is a ReferenceError no syntax check would catch.
+let compUnavailable = false;
+
+const compPct = p => (p === null || p === undefined) ? '' : Math.round(Number(p) * 100) + '%';
+// Initials, for a winner the directory could not match to a photo. Never a
+// reason to leave the card empty: the name is the point, the face is a bonus.
+function compInitials(name){
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '?';
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length-1][0] : '')).toUpperCase();
+}
+function compFace(w){
+  if(w && w.photo) return '<img class="comp-face" src="' + esc(w.photo) + '" alt="">';
+  return '<div class="comp-face">' + esc(compInitials(w && w.name)) + '</div>';
+}
+function compCampusLabel(c){
+  return c === 'dublin' ? 'Dublin' : c === 'limerick' ? 'Limerick' : (c || '');
+}
+function compMonthLabel(){
+  if(!compData || !Array.isArray(compData.months)) return '';
+  const m = compData.months.find(x => Number(x.value) === Number(compData.selected_month));
+  return m ? m.label : '';
+}
+
+async function loadCompetitionBoard(month){
+  const payload = (month === undefined || month === null || month === '') ? {} : { month: Number(month) };
+  const r = await callDb('get_competition', payload);
+  // An error body is not a board. Keeping the old one would show last
+  // month's winners under this month's heading.
+  compData = (r && r.ok && Array.isArray(r.ranking)) ? r : null;
+  // Only an outright refusal is "unavailable"; a page that has never loaded
+  // is simply not loaded yet.
+  compUnavailable = !!(r && r.ok === false);
+}
+
+// ── The home band ───────────────────────────────────────────────
+function compBandCard(kind, w, label, sub){
+  if(!w) return '';
+  const big = kind === 'star' ? compPct(w.pct) : money(w.value);
+  return '<div class="comp-band-card ' + (kind === 'star' ? 'star' : 'gold') + '">' +
+    compFace(w) +
+    '<div style="min-width:0">' +
+      '<div class="comp-band-k">' + esc(label) + '</div>' +
+      '<div class="comp-band-n">' + esc(w.name) + '</div>' +
+      '<div class="comp-band-s">' + esc([w.team, compCampusLabel(w.campus)].filter(Boolean).join(' · ')) +
+        (sub ? ' · ' + esc(sub) : '') + '</div>' +
+    '</div>' +
+    '<div class="comp-band-v">' + esc(big) + '</div>' +
+  '</div>';
+}
+function renderCompetitionBand(){
+  const band = document.getElementById('comp-band');
+  const row = document.getElementById('comp-band-row');
+  if(!band || !row) return;
+  const hi = compData && compData.highlights;
+  const staff = hi && hi.staff_of_month && hi.staff_of_month.company;
+  const star = hi && hi.sales_star && hi.sales_star.company;
+  // Nothing true to say yet - no sheet, or a month nobody has sold in - so
+  // the band is not there at all rather than there and empty.
+  if(!staff && !star){ band.style.display = 'none'; return; }
+  band.style.display = '';
+  const sub = document.getElementById('comp-band-sub');
+  if(sub) sub.textContent = compMonthLabel() ? (compMonthLabel() + "'s top performers.")
+    : "This month's top performers.";
+  // No trailing "of target" here: on one line it reads as part of the
+  // person's team and campus rather than as a unit for the number.
+  row.innerHTML = compBandCard('staff', staff, 'Staff of the Month', '') +
+    compBandCard('star', star, 'Sales Star', '');
+  // The per-campus line: compact, and only for campuses that have a winner.
+  const foot = document.getElementById('comp-band-foot');
+  if(foot){
+    const bits = [];
+    ['dublin','limerick'].forEach(c => {
+      const sm = hi && hi.staff_of_month && hi.staff_of_month[c];
+      const ss = hi && hi.sales_star && hi.sales_star[c];
+      if(!sm && !ss) return;
+      const parts = [];
+      if(sm) parts.push(esc(sm.name) + ' ' + esc(money(sm.value)));
+      if(ss) parts.push(esc(ss.name) + ' ' + esc(compPct(ss.pct)));
+      bits.push('<b>' + esc(compCampusLabel(c)) + '</b> ' + parts.join(' · '));
+    });
+    foot.innerHTML = bits.join(' &nbsp;&nbsp;|&nbsp;&nbsp; ');
+  }
+}
+
+// ── The page ────────────────────────────────────────────────────
+function compRows(){
+  const all = (compData && compData.ranking) || [];
+  let rows = all;
+  if(compScope === 'dublin' || compScope === 'limerick'){
+    rows = all.filter(r => r.campus === compScope);
+  } else if(compScope.indexOf('team:') === 0){
+    const t = compScope.slice(5);
+    rows = all.filter(r => String(r.team || '') === t);
+  }
+  if(compSort === 'pct'){
+    // Somebody with no target has no percentage, so they cannot be ranked
+    // by one - they go last rather than being treated as zero.
+    rows = rows.slice().sort((a,b) => {
+      const pa = a.pct === null || a.pct === undefined ? -1 : a.pct;
+      const pb = b.pct === null || b.pct === undefined ? -1 : b.pct;
+      return pb - pa || b.value - a.value || String(a.name).localeCompare(String(b.name));
+    });
+  } else {
+    rows = rows.slice().sort((a,b) => b.value - a.value || String(a.name).localeCompare(String(b.name)));
+  }
+  return rows;
+}
+function setCompetitionSort(kind){
+  compSort = (kind === 'pct') ? 'pct' : 'value';
+  const v = document.getElementById('comp-sort-value'), p = document.getElementById('comp-sort-pct');
+  if(v) v.classList.toggle('on', compSort === 'value');
+  if(p) p.classList.toggle('on', compSort === 'pct');
+  renderCompetitionBoard();
+}
+function renderCompetitionBoard(){
+  const scopeSel = document.getElementById('comp-scope');
+  if(scopeSel) compScope = scopeSel.value || 'company';
+  const host = document.getElementById('comp-board-host');
+  if(!host) return;
+  const rows = compRows();
+  const count = document.getElementById('comp-count');
+  if(count) count.textContent = rows.length
+    ? (rows.length + (rows.length === 1 ? ' agent' : ' agents') + ' · ' + compMonthLabel())
+    : '';
+  if(!rows.length){
+    host.innerHTML = '<div class="comp-empty">Nobody to show for this selection.</div>';
+    return;
+  }
+  host.innerHTML = '<table class="comp-tbl"><thead><tr>' +
+    '<th class="num" style="text-align:center">#</th><th>Agent</th><th>Campus</th>' +
+    '<th class="num">Value</th><th class="num">% of target</th>' +
+    '</tr></thead><tbody>' + rows.map((r, i) => {
+      // The place is the one the GATEWAY worked out, on value - a filtered
+      // or re-sorted view renumbers its own rows rather than claiming
+      // somebody moved up the company board by being looked at differently.
+      const place = (compScope === 'company' && compSort === 'value') ? r.rank : (i + 1);
+      const cls = place <= 3 ? (' top' + place) : '';
+      const pctNum = (r.pct === null || r.pct === undefined) ? null : Number(r.pct);
+      const barW = pctNum === null ? 0 : Math.max(0, Math.min(100, Math.round(pctNum * 100)));
+      const bar = pctNum === null
+        ? '<span class="comp-pct-n">&mdash;</span>'
+        : '<span class="comp-pct-n">' + esc(compPct(pctNum)) + '</span>' +
+          '<span class="comp-bar"><i class="' + (pctNum >= 1 ? 'over' : '') +
+          '" style="width:' + barW + '%"></i></span>';
+      return '<tr><td class="comp-rank' + cls + '">' + place + '</td>' +
+        '<td><div class="comp-agent">' + esc(r.name) + '</div>' +
+          (r.team ? '<div class="comp-team">' + esc(r.team) + '</div>' : '') + '</td>' +
+        '<td><span class="comp-campus ' + (r.campus === 'dublin' ? 'dublin' : '') + '">' +
+          esc(compCampusLabel(r.campus)) + '</span></td>' +
+        '<td class="num">' + esc(money(r.value)) + '</td>' +
+        '<td class="num"><span class="comp-pct">' + bar + '</span></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function compWinnerBlock(kind, hi){
+  if(!hi) return '';
+  const w = hi.company;
+  if(!w) return '<div class="comp-none">No winner for ' + esc(compMonthLabel() || 'this month') +
+    ' yet - nobody has figures in the sheet.</div>';
+  const big = kind === 'star' ? compPct(w.pct) : money(w.value);
+  const sub = kind === 'star' ? ('of ' + money(w.target)) : (w.pct === null ? 'no target set' : compPct(w.pct) + ' of target');
+  let out = '<div class="comp-win">' + compFace(w) +
+    '<div style="min-width:0"><div class="comp-win-name">' + esc(w.name) + '</div>' +
+      '<div class="comp-win-meta">' + esc([w.team, compCampusLabel(w.campus)].filter(Boolean).join(' · ')) + '</div></div>' +
+    '<div class="comp-win-v"><div class="comp-win-big">' + esc(big) + '</div>' +
+      '<div class="comp-win-sub">' + esc(sub) + '</div></div></div>';
+  const split = ['dublin','limerick'].map(c => {
+    const x = hi[c];
+    return '<div class="comp-split-c"><div class="comp-split-k">' + esc(compCampusLabel(c)) + '</div>' +
+      (x ? '<div class="comp-split-n">' + esc(x.name) + '</div><div class="comp-split-v">' +
+            esc(kind === 'star' ? compPct(x.pct) : money(x.value)) + '</div>'
+         : '<div class="comp-split-n" style="color:var(--muted);font-weight:500">&mdash;</div>') +
+      '</div>';
+  }).join('');
+  return out + '<div class="comp-split">' + split + '</div>';
+}
+function pickCompetitionMonth(){
+  const sel = document.getElementById('comp-month');
+  if(!sel) return;
+  (async()=>{
+    await softLoad('competitions', () => loadCompetitionBoard(sel.value));
+    renderCompetitionPage();
+  })();
+}
+function renderCompetitionPage(){
+  const main = document.getElementById('comp-main');
+  const gone = document.getElementById('comp-unavailable');
+  // Only an outright refusal shows the friendly empty state; a page that is
+  // still loading shows neither, so nothing flashes.
+  if(gone) gone.style.display = compUnavailable ? '' : 'none';
+  if(main) main.style.display = compUnavailable ? 'none' : '';
+  renderCompetitionBand();
+  if(!compData) return;
+  const msel = document.getElementById('comp-month');
+  if(msel){
+    msel.innerHTML = (compData.months || []).map(m =>
+      '<option value="' + esc(m.value) + '">' + esc(m.label) + '</option>').join('');
+    msel.value = String(compData.selected_month);
+  }
+  const ssel = document.getElementById('comp-scope');
+  if(ssel){
+    const teams = compData.teams || [];
+    const opts = ['<option value="company">Everyone</option>',
+      '<option value="dublin">Dublin</option>',
+      '<option value="limerick">Limerick</option>']
+      .concat(teams.map(t => '<option value="team:' + esc(t) + '">Team ' + esc(t) + '</option>'));
+    ssel.innerHTML = opts.join('');
+    // A team that has vanished from the sheet cannot stay selected.
+    const keep = Array.from(ssel.options).some(o => o.value === compScope);
+    ssel.value = keep ? compScope : 'company';
+    compScope = ssel.value;
+  }
+  const hi = compData.highlights || {};
+  const staffHost = document.getElementById('comp-staff');
+  const starHost = document.getElementById('comp-star');
+  if(staffHost) staffHost.innerHTML = compWinnerBlock('staff', hi.staff_of_month);
+  if(starHost) starHost.innerHTML = compWinnerBlock('star', hi.sales_star);
+  renderCompetitionBoard();
+}
+async function openCompetitionsPage(){
+  await softLoad('competitions', () => loadCompetitionBoard());
+  renderCompetitionPage();
+}
+
+// ── The admin config ────────────────────────────────────────────
+async function loadCompetitionSource(){
+  const r = await callDb('get_competition_source');
+  compSource = (r && r.source) ? r.source : null;
+}
+function renderCompetitionSource(){
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
+  const err = document.getElementById('cs-error'); if(err) err.textContent = '';
+  set('cs-sheet-id', compSource ? compSource.sheet_id : '');
+  set('cs-dublin', compSource ? compSource.dublin_tab : '');
+  set('cs-limerick', compSource ? compSource.limerick_tab : '');
+  const save = document.getElementById('cs-save');
+  // Not an admin, or it could not be read: show the screen, offer nothing.
+  if(save) save.disabled = !compSource;
+  const hint = document.getElementById('cs-hint');
+  if(hint && !compSource) hint.textContent = 'Only an administrator can change where the rankings are read from.';
+}
+async function saveCompetitionSource(){
+  const err = document.getElementById('cs-error');
+  const save = document.getElementById('cs-save');
+  const sheet_id = ((document.getElementById('cs-sheet-id')||{}).value || '').trim();
+  const dublin_tab = ((document.getElementById('cs-dublin')||{}).value || '').trim();
+  const limerick_tab = ((document.getElementById('cs-limerick')||{}).value || '').trim();
+  if(err) err.textContent = '';
+  if(!sheet_id){ if(err) err.textContent = 'Paste the sheet id'; return; }
+  if(!dublin_tab || !limerick_tab){ if(err) err.textContent = 'Both tab names are needed'; return; }
+  if(save) save.disabled = true;
+  try {
+    const r = await callDb('set_competition_source', { sheet_id, dublin_tab, limerick_tab });
+    if(!r || !r.ok){
+      if(err) err.textContent = (r && r.error === 'forbidden')
+        ? "You don't have permission for this"
+        : 'Could not save the source';
+      return;
+    }
+    compSource = r.source;
+    showToast('Rankings source saved');
+    // The board behind it is now reading a different sheet, so neither the
+    // page nor the home band may keep showing the old one.
+    await softLoad('competitions', () => loadCompetitionBoard());
+    renderCompetitionPage();
+  } finally { if(save) save.disabled = false; }
+}
+
 
 // ═══════════════════════════════════════
 // HOLIDAYS / TIME OFF
@@ -9797,6 +10274,7 @@ const MOB_LEADER_ITEMS=[
   {id:'teams',          label:'Teams',             icon:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
   {id:'locations',      label:'Locations',         icon:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>'},
   {id:'lead-sources',   label:'Lead Sources',      icon:'<path d="M3 3v18h18"/><path d="M7 14l4-5 3 3 5-7"/>'},
+  {id:'competitions-admin', label:'Rankings Src', icon:'<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2"/><path d="M7 5H5a2 2 0 0 0 0 4h2"/>'},
 ];
 
 function buildMobLeadersMenu(){
@@ -9804,7 +10282,14 @@ function buildMobLeadersMenu(){
   if(!cfg) return;
   const grid=document.getElementById('mob-leaders-grid');
   if(!grid) return;
-  const items=MOB_LEADER_ITEMS.filter(item=>!['users','roles','teams','locations','lead-sources'].includes(item.id)||cfg.mgr);
+  // Two gates, not one: the management block needs a manager, and the
+  // rankings source needs an admin. Letting the second ride on the first
+  // would put it in front of every manager on a phone while the desktop
+  // menu kept it hidden.
+  const items=MOB_LEADER_ITEMS.filter(item=>{
+    if(item.id==='competitions-admin') return rank(currentRole) >= ROLE_RANK.admin;
+    return !['users','roles','teams','locations','lead-sources'].includes(item.id)||cfg.mgr;
+  });
   grid.innerHTML=items.map(item=>`
     <div class="mob-leaders-item" onclick="closeMobLeaders();showPage('${item.id}')">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${item.icon}</svg>
