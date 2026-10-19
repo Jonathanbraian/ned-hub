@@ -355,6 +355,8 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    same wrap the fifth already relies on, so again the grid itself does
    not change. */
 .ac6::before{background:linear-gradient(-25deg,#00A7B5,#0032FF)}
+/* A seventh. Seven tiles fill the 4-wide grid as 4 + 3. */
+.ac7::before{background:linear-gradient(-155deg,#F59E0B,#00A7B5)}
 /* The one tile that carries live numbers rather than a sentence. */
 .acard-num{display:flex;align-items:baseline;gap:7px;margin-top:2px}
 .acard-big{font-size:25px;font-weight:700;letter-spacing:-.8px;line-height:1;font-variant-numeric:tabular-nums}
@@ -1756,6 +1758,60 @@ a.clib-open{text-decoration:none}
 .hof-none{font-size:12.5px;color:var(--muted);margin-top:9px}
 .hof-empty{padding:30px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--bg);border:1px dashed var(--border2);border-radius:12px;line-height:1.7}
 @media(max-width:900px){ .hof-awards{grid-template-columns:1fr} }
+/* ── ASSIGNMENTS ───────────────────────────────────────────────
+   Three sections on one page: what I owe, what is waiting on me to
+   confirm, and what my branch owes. Rows rather than cards, because the
+   question a person opens this page with is "what is late", and a list
+   answers that faster than a grid. */
+.asg-wrap{max-width:1200px;margin:0 auto;padding:30px 36px 60px}
+.asg-sec{margin-bottom:34px}
+.asg-sec:last-child{margin-bottom:0}
+.asg-sec-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.asg-sec-title{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.asg-sec-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.asg-count{display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:5px 11px;border-radius:999px;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2)}
+.asg-count.warn{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.asg-readonly{display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:5px 11px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border2)}
+.asg-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:8px 10px;box-shadow:var(--shadow-card)}
+.asg-row{display:flex;align-items:center;gap:13px;padding:13px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.asg-row:last-child{border-bottom:none}
+.asg-main{flex:1;min-width:190px}
+.asg-title{font-size:14px;font-weight:600;letter-spacing:-.1px;line-height:1.4}
+.asg-desc{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.55;white-space:pre-line}
+.asg-who{font-size:11.5px;color:var(--muted);margin-top:3px}
+.asg-type{display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;padding:3px 8px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--border2);white-space:nowrap;flex-shrink:0}
+.asg-type.task{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
+.asg-type.project{background:rgba(124,58,237,.1);color:#7C3AED;border-color:var(--border2)}
+.asg-type.training{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.asg-due{font-size:12px;color:var(--muted);white-space:nowrap;min-width:92px}
+.asg-due b{color:var(--text);font-weight:600}
+/* The four labels, and they are the point of the page: on time and late
+   are facts about a finished thing, overdue and pending about an open one. */
+.asg-chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid transparent;white-space:nowrap;flex-shrink:0}
+.asg-chip.on_time{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.asg-chip.late{background:rgba(245,158,11,.12);color:#B45309;border-color:rgba(245,158,11,.3)}
+.asg-chip.overdue{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.asg-chip.pending{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
+.asg-chip.waiting{background:var(--bg);color:var(--muted);border-color:var(--border2)}
+.asg-acts{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap;margin-left:auto}
+.asg-btn{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .15s;white-space:nowrap;border:1px solid var(--border2);background:var(--bg);color:var(--text)}
+.asg-btn:hover{border-color:var(--blue);color:var(--blue)}
+.asg-btn.go{background:var(--light-blue);color:var(--blue)}
+.asg-btn.go:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.asg-btn.ok{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+.asg-btn.ok:hover{background:var(--success);color:#fff}
+.asg-btn.no{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+.asg-btn.no:hover{background:var(--danger);color:#fff}
+.asg-btn[disabled]{opacity:.55;cursor:not-allowed}
+.asg-empty{padding:26px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--bg);border:1px dashed var(--border2);border-radius:12px;line-height:1.7}
+/* The profile tab, and the home tile's number. */
+.asg-prof-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+@media(max-width:768px){
+  .asg-wrap{padding:22px 18px 70px}
+  .asg-row{align-items:flex-start}
+  .asg-acts{margin-left:0;flex-basis:100%;justify-content:flex-start}
+  .asg-due{min-width:0;flex-basis:100%}
+}
 /* ── LATEST UPDATES (home band + the Updates page cards) ───────
    The band borrows the birthday band's shell so the two read as one
    column, but its rows are a feed: chip, title, date, action. */
@@ -2099,6 +2155,9 @@ a.clib-open{text-decoration:none}
              a gateway that does not know the action yet leaves the home page
              exactly as it was rather than showing a broken card. -->
         <div class="acard ac6" id="home-hol-card" style="display:none" onclick="showPage('holidays')"><div class="ci ci2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 15h3"/></svg></div><div class="ctag ct2">Time Off</div><h3 id="home-hol-title">Your Time Off</h3><div class="acard-num"><span class="acard-big" id="home-hol-remaining">-</span><span class="acard-of" id="home-hol-of"></span></div><span class="acard-pend" id="home-hol-pending" style="display:none"></span><p id="home-hol-desc">Annual leave left this year.</p><span class="arrow">↗</span></div>
+        <!-- Open work, counted. Hidden until the count is in, so a page
+             that could not load one looks as it did before. -->
+        <div class="acard ac7" id="home-asg-card" style="display:none" onclick="showPage('tasks')"><div class="ci ci3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="ctag ct3">My Tasks</div><h3 id="home-asg-title">Tasks and Trainings</h3><div class="acard-num"><span class="acard-big" id="home-asg-open">-</span><span class="acard-of" id="home-asg-of"></span></div><span class="acard-pend" id="home-asg-confirm" style="display:none"></span><p id="home-asg-desc">What has been assigned to you.</p><span class="arrow">↗</span></div>
       </div>
     </div>
     <div id="home-mgr-band" style="display:none">
@@ -2884,6 +2943,50 @@ a.clib-open{text-decoration:none}
 
     </div>
   </div>
+  <div id="page-tasks" class="page">
+    <div class="grad-bar"></div>
+    <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Assignments</div><h1>Tasks and Trainings</h1><p class="ph-desc">What has been assigned to you, what is waiting on you to confirm, and how your branch is doing.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=680&q=80" alt=""></div></div></div>
+    <div class="asg-wrap">
+
+      <!-- MINE - everyone, always. -->
+      <div class="asg-sec" id="asg-sec-mine">
+        <div class="asg-sec-head">
+          <div>
+            <div class="asg-sec-title">My tasks</div>
+            <div class="asg-sec-sub">Mark a task done and your manager confirms it. A training finishes when you pass its test.</div>
+          </div>
+          <span class="asg-count warn" id="asg-mine-count" style="display:none"></span>
+        </div>
+        <div class="asg-card"><div id="asg-mine-host"></div></div>
+      </div>
+
+      <!-- WAITING ON ME - anyone who leads a branch. The read-only tier
+           reaches this too and is offered no buttons. -->
+      <div class="asg-sec" id="asg-sec-confirm" style="display:none">
+        <div class="asg-sec-head">
+          <div>
+            <div class="asg-sec-title">To confirm</div>
+            <div class="asg-sec-sub">Work your team has marked done.</div>
+          </div>
+          <span class="asg-count" id="asg-confirm-count" style="display:none"></span>
+          <span class="asg-readonly" id="asg-confirm-ro" style="display:none">View only</span>
+        </div>
+        <div class="asg-card"><div id="asg-confirm-host"></div></div>
+      </div>
+
+      <!-- THE BRANCH -->
+      <div class="asg-sec" id="asg-sec-team" style="display:none">
+        <div class="asg-sec-head">
+          <div>
+            <div class="asg-sec-title">Team tracking</div>
+            <div class="asg-sec-sub">Everything assigned across the people you look after.</div>
+          </div>
+        </div>
+        <div class="asg-card"><div id="asg-team-host"></div></div>
+      </div>
+
+    </div>
+  </div>
   <div id="page-competitions" class="page">
     <div class="grad-bar"></div>
     <div class="page-hero"><div class="page-hero-inner"><div><div class="sec-label">Competitions</div><h1>Sales Rankings</h1><p class="ph-desc">Live from the sales sheet. Two prizes: the biggest month, and the biggest month against your own target.</p></div><div class="ph-img"><img src="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=680&q=80" alt=""></div></div></div>
@@ -3024,7 +3127,7 @@ a.clib-open{text-decoration:none}
       <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="" style="height:20px" onerror="this.style.display='none'">
       <span class="footer-copy">Internal use only</span>
     </div>
-    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a><a onclick="showPage('holidays')">Time Off</a><a onclick="showPage('competitions')">Competitions</a></div>
+    <div class="footer-links"><a onclick="showPage('home')">Home</a><a onclick="showPage('procedures')">Procedures</a><a onclick="showPage('trainings')">Trainings</a><a onclick="showPage('materials')">Materials</a><a onclick="showPage('tools')">Tools</a><a onclick="showPage('updates')">Updates</a><a onclick="showPage('holidays')">Time Off</a><a onclick="showPage('competitions')">Competitions</a><a onclick="showPage('tasks')">Tasks</a></div>
     <span class="footer-copy">© 2026 NED College</span>
   </footer>
 </div>
@@ -3413,6 +3516,31 @@ a.clib-open{text-decoration:none}
       <button class="btn-cancel" id="wkm-save" onclick="saveMemberWeek()">Save</button>
       <button class="btn-save" id="wkm-submit" onclick="saveMemberWeek(true)">Save &amp; mark submitted</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-assign">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="asg-modal-title">Assign work</div><button class="modal-close" onclick="closeModal('modal-assign')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select class="form-select" id="asg-type" onchange="assignTypeChanged()">
+          <option value="task">Task</option>
+          <option value="project">Project</option>
+          <option value="training">Training</option>
+        </select>
+        <div class="form-hint" id="asg-type-hint">A task is marked done by the person and confirmed by you.</div>
+      </div>
+      <div class="form-group" id="asg-training-group" style="display:none"><label class="form-label">Which training</label>
+        <select class="form-select" id="asg-training"></select>
+        <div class="form-hint">From the Content Library. It completes on its own when they pass its test - there is nothing for you to confirm.</div>
+      </div>
+      <div class="form-group"><label class="form-label">Title</label><input class="form-input" type="text" id="asg-title" placeholder="What needs doing"></div>
+      <div class="form-group"><label class="form-label">Details <span class="form-hint" style="display:inline">(optional)</span></label><input class="form-input" type="text" id="asg-desc" placeholder="Anything they should know"></div>
+      <div class="form-group"><label class="form-label">Due date <span class="form-hint" style="display:inline">(optional)</span></label><input class="form-input" type="date" id="asg-due"></div>
+      <div class="login-error" id="asg-error" style="margin-top:4px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-assign')">Cancel</button><button class="btn-save mgr-save" id="asg-save" onclick="saveAssignment()">Assign</button></div>
   </div>
 </div>
 
@@ -4847,6 +4975,7 @@ function showPage(name){
   if(name==='home') (async()=>{ await softLoad('content:update', ()=>loadContent('update')); renderHomeUpdates(); })();
   if(name==='holidays') (async()=>{ await openHolidaysPage(); })();
   if(name==='competitions') (async()=>{ await openCompetitionsPage(); })();
+  if(name==='tasks') (async()=>{ await openTasksPage(); })();
   if(name==='competitions-admin') (async()=>{
     await softLoad('competition-source', loadCompetitionSource);
     renderCompetitionSource();
@@ -4863,6 +4992,11 @@ function showPage(name){
   if(name==='home') (async()=>{
     await softLoad('competitions', () => loadCompetitionBoard());
     renderCompetitionBand();
+  })();
+  if(name==='home') (async()=>{
+    await softLoad('assignments', loadMyAssignments);
+    if(asgCanLead()) await softLoad('team-assignments', loadTeamAssignments);
+    renderAssignmentsHome();
   })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
@@ -5345,6 +5479,10 @@ function buildProfileHTML(u,isMyProfile){
   const canManageCerts=!!detail.can_manage_certs;
   const showAppraisals=!!detail.can_see_appraisals;
   const showDocuments=!!detail.can_see_documents;
+  // Assigning is its own question: can this viewer act on this person at
+  // all. canActOn mirrors the gateway's gate, so the tab is only ever
+  // offered where create_assignment would actually go through.
+  const showAssignments=canAssignTo(u.id);
   const isSelfView=u.id===currentUserId;
   const catalogNames=(certCatalog.length?certCatalog.map(c=>c.name):CERT_LIST);
   const earnedByName={}; dCerts.forEach(c=>{ earnedByName[c.name]=c.date_earned; });
@@ -5414,6 +5552,7 @@ function buildProfileHTML(u,isMyProfile){
       <button class="profile-tab" data-tab="certificates" onclick="switchTab('${u.id}','certificates')">Certificates</button>
       ${showAppraisals?`<button class="profile-tab" data-tab="appraisals" onclick="switchTab('${u.id}','appraisals')">Appraisals</button>`:''}
       ${showDocuments?`<button class="profile-tab" data-tab="documents" onclick="switchTab('${u.id}','documents')">Documents</button>`:''}
+      ${showAssignments?`<button class="profile-tab" data-tab="assignments" onclick="switchTab('${u.id}','assignments');openProfileAssignments('${u.id}')">Assignments</button>`:''}
     </div>
     ${(!showAppraisals||!showDocuments)&&isSelfView?`<div class="form-hint" style="margin:-14px 0 18px">Appraisals and personal documents are visible to your managers only.</div>`:''}
     <div class="profile-tab-content active" id="tab-${u.id}-overview">
@@ -5482,6 +5621,13 @@ function buildProfileHTML(u,isMyProfile){
       <div class="profile-section-card">
         <div class="ps-title" style="display:flex;align-items:center;justify-content:space-between"><span>Performance Appraisals</span><button class="btn-action" style="font-size:11px;padding:5px 12px" onclick="openAppraisal('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add appraisal</button></div>
         <div class="appraisal-list">${appraisalHTML}</div>
+      </div>
+    </div>`:''}
+    ${showAssignments?`<div class="profile-tab-content" id="tab-${u.id}-assignments">
+      <div class="profile-section-card">
+        <div class="ps-title asg-prof-head"><span>Assigned Work</span><button class="btn-action" style="font-size:12px" onclick="openAssignModal('${u.id}')">Assign</button></div>
+        <div class="asg-card" style="box-shadow:none;margin-top:12px"><div id="asg-prof-host-${u.id}"></div></div>
+        <div class="form-hint" style="margin-top:12px">Tasks and projects are confirmed by you once they are marked done. A training completes on its own when its test is passed.</div>
       </div>
     </div>`:''}
     ${showDocuments?`<div class="profile-tab-content" id="tab-${u.id}-documents">
@@ -7180,6 +7326,305 @@ function updateStats(){
 function filterUsers(v){searchVal=v;renderUsers();}
 function filterByRole(v){roleFilter=v;renderUsers();}
 function filterByCampus(v){campusFilter=v;renderUsers();}
+
+// ═══════════════════════════════════════
+// ASSIGNMENTS
+// ═══════════════════════════════════════
+// Two lifecycles on one page. A task is a handshake - the person marks it
+// done, their manager confirms - and a training is not: it finishes when
+// its test is passed, which the training system already records. The
+// gateway works out which, and every label on this page comes from there,
+// so nothing here can decide somebody was late when the server disagrees.
+const ASSIGNMENT_ERRORS = {
+  out_of_scope:"You don't have permission for this",
+  not_yours:'That is not your task to mark',
+  training_auto:'A training finishes when its test is passed - there is nothing to confirm',
+  not_assigned:'That has already been marked done',
+  not_submitted:'That is not waiting on a decision',
+  bad_type:'Pick a type',
+  missing_title:'Give it a title',
+  bad_due_date:'Check the due date',
+  training_not_found:'Pick a training from the library',
+  not_a_training:'That is not a training',
+  missing_user:'Pick a person',
+  not_found:'That is no longer there',
+  create_failed:'Could not assign that',
+  save_failed:'Could not save that',
+  forbidden:"You don't have permission for this",
+};
+const ASG_TYPE_LABEL = { task:'Task', project:'Project', training:'Training' };
+const ASG_CHIP = { on_time:['on_time','On time'], late:['late','Late'],
+  overdue:['overdue','Overdue'], pending:['pending','Pending'],
+  cancelled:['waiting','Cancelled'] };
+
+let asgMine = null, asgTeam = null, asgTarget = null;
+
+function asgErr(r){ return ASSIGNMENT_ERRORS[r && r.error] || 'Something went wrong - please try again'; }
+function asgCanLead(){ return !!roleCfg(currentRole).leader; }
+function asgCanAct(){ return !!(asgTeam && asgTeam.can_decide); }
+// A row is open when it is not finished. The home count and the red chip
+// both read this, so they cannot disagree about what "open" means.
+function asgIsOpen(r){ return !r.effective_done; }
+function asgDue(r){
+  if(!r.due_date) return '<span class="asg-due">No due date</span>';
+  return '<span class="asg-due">Due <b>' + esc(holDate(r.due_date)) + '</b></span>';
+}
+function asgChip(r){
+  // Submitted work is not finished and not merely pending: it is waiting on
+  // somebody else, and saying so stops a person chasing their own task.
+  if(!r.effective_done && r.status === 'submitted')
+    return '<span class="asg-chip waiting">Awaiting confirmation</span>';
+  const pair = ASG_CHIP[r.effective_label] || ASG_CHIP.pending;
+  return '<span class="asg-chip ' + pair[0] + '">' + esc(pair[1]) + '</span>';
+}
+function asgTypeChip(r){
+  return '<span class="asg-type ' + esc(r.type) + '">' +
+    esc(ASG_TYPE_LABEL[r.type] || r.type) + '</span>';
+}
+
+async function loadMyAssignments(){
+  const r = await callDb('get_my_assignments');
+  asgMine = (r && r.ok && Array.isArray(r.assignments)) ? r : null;
+}
+async function loadTeamAssignments(){
+  const r = await callDb('get_team_assignments');
+  asgTeam = (r && r.ok && Array.isArray(r.assignments)) ? r : null;
+}
+
+function renderMyAssignments(){
+  const host = document.getElementById('asg-mine-host');
+  if(!host) return;
+  const rows = (asgMine && asgMine.assignments) || [];
+  const open = rows.filter(asgIsOpen).length;
+  const chip = document.getElementById('asg-mine-count');
+  if(chip){
+    const over = rows.filter(r => asgIsOpen(r) && r.effective_label === 'overdue').length;
+    chip.style.display = over ? '' : 'none';
+    chip.textContent = over + (over === 1 ? ' overdue' : ' overdue');
+  }
+  if(!rows.length){
+    host.innerHTML = '<div class="asg-empty">Nothing is assigned to you right now.</div>';
+    return;
+  }
+  host.innerHTML = rows.map(r => {
+    let acts = '';
+    if(r.type === 'training'){
+      // Straight into the training system - the same two entry points the
+      // library uses, so there is one way to take a training.
+      // Once it is passed there is no test left to sit, but the material
+      // is still worth going back to - so the test button goes and the
+      // training itself stays.
+      const go = (r.training && r.training.can_take && !r.effective_done)
+        ? '<button class="asg-btn go" onclick="openTest(\'' + esc(r.content_id) + '\')">Take test</button>'
+        : '';
+      acts = '<div class="asg-acts">' + go +
+        '<button class="asg-btn" onclick="openContentFile(\'' + esc(r.content_id) + '\')">Open training</button></div>';
+    } else if(r.status === 'assigned'){
+      acts = '<div class="asg-acts"><button class="asg-btn ok" onclick="submitAssignment(\'' +
+        esc(r.id) + '\')">Mark done</button></div>';
+    }
+    return '<div class="asg-row">' + asgTypeChip(r) +
+      '<div class="asg-main"><div class="asg-title">' + esc(r.title) + '</div>' +
+        (r.description ? '<div class="asg-desc">' + esc(r.description) + '</div>' : '') + '</div>' +
+      asgDue(r) + asgChip(r) + acts + '</div>';
+  }).join('');
+}
+
+function renderAssignmentsToConfirm(){
+  const sec = document.getElementById('asg-sec-confirm');
+  const host = document.getElementById('asg-confirm-host');
+  if(!sec || !host) return;
+  if(!asgCanLead()){ sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const ro = document.getElementById('asg-confirm-ro');
+  if(ro) ro.style.display = asgCanAct() ? 'none' : '';
+  const rows = ((asgTeam && asgTeam.assignments) || []).filter(r => r.status === 'submitted');
+  const chip = document.getElementById('asg-confirm-count');
+  if(chip){
+    chip.style.display = rows.length ? '' : 'none';
+    chip.textContent = rows.length + ' waiting';
+  }
+  if(!rows.length){
+    host.innerHTML = '<div class="asg-empty">Nothing is waiting on you.</div>';
+    return;
+  }
+  host.innerHTML = rows.map(r => {
+    const acts = asgCanAct()
+      ? '<div class="asg-acts">' +
+        '<button class="asg-btn ok" onclick="decideAssignment(\'' + esc(r.id) + '\',\'confirm\')">Confirm</button>' +
+        '<button class="asg-btn no" onclick="decideAssignment(\'' + esc(r.id) + '\',\'reject\')">Reject</button></div>'
+      : '';
+    return '<div class="asg-row">' + asgTypeChip(r) +
+      '<div class="asg-main"><div class="asg-title">' + esc(r.title) + '</div>' +
+        '<div class="asg-who">' + esc((r.person && r.person.name) || '') +
+        ((r.person && r.person.role_label) ? ' · ' + esc(r.person.role_label) : '') + '</div></div>' +
+      asgDue(r) + asgChip(r) + acts + '</div>';
+  }).join('');
+}
+
+function renderTeamAssignments(){
+  const sec = document.getElementById('asg-sec-team');
+  const host = document.getElementById('asg-team-host');
+  if(!sec || !host) return;
+  if(!asgCanLead()){ sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  const rows = (asgTeam && asgTeam.assignments) || [];
+  if(!rows.length){
+    host.innerHTML = '<div class="asg-empty">Nothing is assigned across your team yet.</div>';
+    return;
+  }
+  host.innerHTML = rows.map(r =>
+    '<div class="asg-row">' + asgTypeChip(r) +
+      '<div class="asg-main"><div class="asg-title">' + esc(r.title) + '</div>' +
+        '<div class="asg-who">' + esc((r.person && r.person.name) || '') +
+        ((r.person && r.person.role_label) ? ' · ' + esc(r.person.role_label) : '') + '</div></div>' +
+      asgDue(r) + asgChip(r) + '</div>').join('');
+}
+
+// The home tile: open work, and - for anyone with people under them - how
+// much is waiting on them to confirm.
+function renderAssignmentsHome(){
+  const card = document.getElementById('home-asg-card');
+  if(!card) return;
+  if(!asgMine){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const rows = asgMine.assignments || [];
+  const open = rows.filter(asgIsOpen).length;
+  const over = rows.filter(r => asgIsOpen(r) && r.effective_label === 'overdue').length;
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('home-asg-open', open);
+  set('home-asg-of', open === 1 ? 'open item' : 'open items');
+  set('home-asg-desc', over
+    ? (over + (over === 1 ? ' of them is overdue.' : ' of them are overdue.'))
+    : 'Tasks, projects and trainings assigned to you.');
+  const pend = document.getElementById('home-asg-confirm');
+  const n = (asgTeam && asgCanLead())
+    ? ((asgTeam.assignments || []).filter(r => r.status === 'submitted').length) : 0;
+  if(pend){
+    pend.style.display = n ? '' : 'none';
+    pend.textContent = n + ' to confirm';
+  }
+}
+
+function renderAssignments(){
+  renderMyAssignments();
+  renderAssignmentsToConfirm();
+  renderTeamAssignments();
+}
+async function openTasksPage(){
+  renderAssignments();
+  await softLoad('assignments', loadMyAssignments);
+  if(asgCanLead()) await softLoad('team-assignments', loadTeamAssignments);
+  renderAssignments();
+  renderAssignmentsHome();
+}
+async function refreshAssignments(){
+  await softLoad('assignments', loadMyAssignments);
+  if(asgCanLead()) await softLoad('team-assignments', loadTeamAssignments);
+  renderAssignments();
+  renderAssignmentsHome();
+  if(asgTarget) await renderProfileAssignments(asgTarget);
+}
+
+async function submitAssignment(id){
+  const r = await callDb('submit_assignment', { id });
+  if(!r || !r.ok){ showToast(asgErr(r), 'error'); }
+  else showToast('Marked done - your manager will confirm it');
+  await refreshAssignments();
+}
+async function decideAssignment(id, decision){
+  let note = '';
+  if(decision === 'reject'){
+    const why = prompt('Why is this going back? The person will see this.');
+    if(why === null) return;
+    note = String(why).trim();
+  }
+  const r = await callDb('confirm_assignment', { id, decision, note });
+  if(!r || !r.ok){ showToast(asgErr(r), 'error'); }
+  else showToast(decision === 'confirm' ? 'Confirmed' : 'Sent back');
+  await refreshAssignments();
+}
+
+// ── Assigning from a profile ────────────────────────────────────
+// Shown only where the viewer could actually act on this person. The
+// gateway refuses anyway; this keeps a doomed button off the screen.
+function canAssignTo(userId){
+  const u = users.find(x => String(x.id) === String(userId));
+  return !!u && canActOn(u);
+}
+// Opening the tab is what loads it. The profile page does not otherwise
+// fetch the team board, and loading it on every profile render would be a
+// round trip for a tab most viewers never open.
+async function openProfileAssignments(userId){
+  asgTarget = userId;
+  await softLoad('team-assignments', loadTeamAssignments);
+  await renderProfileAssignments(userId);
+}
+async function renderProfileAssignments(userId){
+  const host = document.getElementById('asg-prof-host-' + userId);
+  if(!host) return;
+  const rows = ((asgTeam && asgTeam.assignments) || [])
+    .filter(r => String(r.person && r.person.id) === String(userId));
+  host.innerHTML = rows.length
+    ? rows.map(r => '<div class="asg-row">' + asgTypeChip(r) +
+        '<div class="asg-main"><div class="asg-title">' + esc(r.title) + '</div></div>' +
+        asgDue(r) + asgChip(r) + '</div>').join('')
+    : '<div class="asg-empty">Nothing assigned yet.</div>';
+}
+function openAssignModal(userId){
+  asgTarget = userId;
+  const u = users.find(x => String(x.id) === String(userId));
+  const title = document.getElementById('asg-modal-title');
+  if(title) title.textContent = u ? ('Assign to ' + dashFix(u.first + ' ' + u.last)) : 'Assign work';
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v; };
+  set('asg-type','task'); set('asg-title',''); set('asg-desc',''); set('asg-due','');
+  const err = document.getElementById('asg-error'); if(err) err.textContent = '';
+  const save = document.getElementById('asg-save'); if(save) save.disabled = false;
+  // The picker is filled from the library the page already caches; if it has
+  // not been loaded yet, fetch it once.
+  (async()=>{
+    if(!contentCache['training']) await softLoad('content:training', () => loadContent('training'));
+    const sel = document.getElementById('asg-training');
+    if(sel) sel.innerHTML = ((contentCache['training'] || []).map(t =>
+      '<option value="' + esc(t.id) + '">' + esc(t.title) + '</option>').join('')) ||
+      '<option value="">No trainings in the library yet</option>';
+    assignTypeChanged();
+  })();
+  assignTypeChanged();
+  openBackdrop('modal-assign');
+}
+function assignTypeChanged(){
+  const type = (document.getElementById('asg-type') || {}).value || 'task';
+  const group = document.getElementById('asg-training-group');
+  if(group) group.style.display = type === 'training' ? '' : 'none';
+  const hint = document.getElementById('asg-type-hint');
+  if(hint) hint.textContent = type === 'training'
+    ? 'A training finishes on its own when they pass its test.'
+    : 'Marked done by the person, then confirmed by you.';
+}
+async function saveAssignment(){
+  const err = document.getElementById('asg-error');
+  const save = document.getElementById('asg-save');
+  if(err) err.textContent = '';
+  const type = (document.getElementById('asg-type') || {}).value || 'task';
+  const title = ((document.getElementById('asg-title') || {}).value || '').trim();
+  const description = ((document.getElementById('asg-desc') || {}).value || '').trim();
+  const due_date = (document.getElementById('asg-due') || {}).value || '';
+  const content_id = (document.getElementById('asg-training') || {}).value || '';
+  if(!title){ if(err) err.textContent = ASSIGNMENT_ERRORS.missing_title; return; }
+  if(type === 'training' && !content_id){
+    if(err) err.textContent = ASSIGNMENT_ERRORS.training_not_found; return; }
+  if(save) save.disabled = true;
+  try {
+    const r = await callDb('create_assignment', { user_id: asgTarget, type, title,
+      description, due_date, content_id: type === 'training' ? content_id : null });
+    if(!r || !r.ok){ if(err) err.textContent = asgErr(r); return; }
+    closeModal('modal-assign');
+    showToast('Assigned');
+    await refreshAssignments();
+  } finally { if(save) save.disabled = false; }
+}
+
 
 // ═══════════════════════════════════════
 // COMPETITIONS & RECOGNITION

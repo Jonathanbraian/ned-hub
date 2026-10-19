@@ -1165,6 +1165,102 @@ function hofWinnerOut(r){
 }
 exports.__hof = { sheetYear, completedMonths, archiveCompletedMonths, hofWinnerOut };
 
+// ── ASSIGNMENTS ──────────────────────────────────────────────────
+// A manager gives one person a task, a project or a training. Tasks and
+// projects are a handshake - the assignee says done, the manager confirms -
+// and a training is not: it completes when its test is passed, which the
+// training system already records. So a training's status column is never
+// the authority; the pass is.
+const ASSIGNMENT_TYPES = ['task','project','training'];
+const ASSIGNMENT_STATUSES = ['assigned','submitted','done','cancelled'];
+
+// Every passing completion for the pairs we are about to judge, in ONE
+// query. A per-row lookup would be a query per training on every page load.
+// The key is user and content together, because the same training passed by
+// a different person says nothing about this one.
+function assignmentPassKey(userId, contentId){ return String(userId) + '|' + String(contentId); }
+async function assignmentPasses(rows){
+  const out = new Map();
+  const pairs = (rows || []).filter(r => r.type === 'training' && r.content_id);
+  if(!pairs.length) return out;
+  const userIds = Array.from(new Set(pairs.map(r => r.user_id)));
+  const contentIds = Array.from(new Set(pairs.map(r => r.content_id)));
+  // A completion row exists ONLY when a test was passed - submit_test mints
+  // it after the threshold check and not before - so its presence is the
+  // pass, and its completed_at is the date the prize was earned.
+  const { data } = await admin.from('training_completions')
+    .select('user_id,content_id,completed_at').in('user_id', userIds).in('content_id', contentIds);
+  (data || []).forEach(c => {
+    const k = assignmentPassKey(c.user_id, c.content_id);
+    const prev = out.get(k);
+    // The earliest pass is the one that counts: passing again later does not
+    // make somebody later than they were.
+    if(!prev || String(c.completed_at || '') < String(prev)) out.set(k, c.completed_at || null);
+  });
+  return out;
+}
+// What this assignment actually amounts to, for one row. The single place
+// that decides "is it done, when, and was that on time" - the list, the
+// team board and (later) the appraisal summary all read it from here, so
+// they cannot disagree about somebody's record.
+function assignmentEffective(row, passLookup, today){
+  const type = row && row.type;
+  let done = false, completed_at = null;
+  if(type === 'training'){
+    const at = passLookup && passLookup.get(assignmentPassKey(row.user_id, row.content_id));
+    if(at !== undefined && at !== null){ done = true; completed_at = at; }
+  } else {
+    done = row && row.status === 'done';
+    completed_at = done ? (row.completed_at || null) : null;
+  }
+  const due = row && row.due_date ? String(row.due_date).slice(0,10) : null;
+  const now = today || dublinYMD(new Date());
+  let label;
+  if(row && row.status === 'cancelled' && type !== 'training') label = 'cancelled';
+  else if(done){
+    // No due date means nothing to be late for.
+    if(!due) label = 'on_time';
+    else label = (String(completed_at || '').slice(0,10) <= due) ? 'on_time' : 'late';
+  } else {
+    if(!due) label = 'pending';
+    else label = (due < now) ? 'overdue' : 'pending';
+  }
+  return { done, completed_at, label };
+}
+// One row, field by field. assigned_by and the raw timestamps the client has
+// no use for stay on the server.
+function assignmentOut(row, eff){
+  return { id: row.id, type: row.type, title: row.title || '',
+    description: row.description || '', due_date: row.due_date || null,
+    status: row.status, content_id: row.content_id || null,
+    submitted_at: row.submitted_at || null,
+    effective_done: eff.done, effective_completed_at: eff.completed_at,
+    effective_label: eff.label };
+}
+// The one scope question for every assignment write that lands on somebody
+// else. Self is NOT a shortcut here: a manager assigning themselves work is
+// the same question as assigning anybody else, and canActOn answers it.
+async function assignmentTarget(me, userId){
+  if(!userId) return { ok:false, status:400, error:'missing_user' };
+  const { data: tgt } = await admin.from('profiles')
+    .select('id,first,last,nickname,role,role_id,status').eq('id', userId).single();
+  if(!tgt) return { ok:false, status:404, error:'not_found' };
+  if(!await canActOn(me, tgt)) return { ok:false, status:403, error:'out_of_scope' };
+  return { ok:true, tgt };
+}
+// A row the caller may act on as its MANAGER.
+async function assignmentForManager(me, id){
+  if(!id) return { ok:false, status:400, error:'missing_id' };
+  const { data: row } = await admin.from('assignments')
+    .select('id,user_id,type,title,description,content_id,due_date,status,submitted_at,completed_at')
+    .eq('id', id).single();
+  if(!row) return { ok:false, status:404, error:'not_found' };
+  const who = await assignmentTarget(me, row.user_id);
+  if(!who.ok) return who;
+  return { ok:true, row, tgt: who.tgt };
+}
+exports.__assignments = { assignmentEffective, assignmentPassKey, ASSIGNMENT_TYPES };
+
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -3384,6 +3480,191 @@ exports.handler = async (event) => {
         return json(200,{ ok:true, months,
           month_names: COMP_MONTHS.map((label,i) => ({ value:i+1, label })),
           sheet_unavailable: !!data.error });
+      }
+      // ── ASSIGNMENTS ──────────────────────────────────────────
+      case 'get_my_assignments': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const { data: rows } = await admin.from('assignments')
+          .select('id,user_id,type,title,description,content_id,due_date,status,submitted_at,completed_at,assigned_at')
+          .eq('user_id', me.id);
+        const live = (rows || []).filter(r => r.status !== 'cancelled');
+        const passes = await assignmentPasses(live);
+        const today = dublinYMD(new Date());
+        // The trainings' own titles, so a row can say what it is rather than
+        // just carrying an id the client would have to resolve.
+        const tIds = Array.from(new Set(live.filter(r => r.type === 'training' && r.content_id)
+          .map(r => r.content_id)));
+        const titleById = {};
+        if(tIds.length){
+          const { data: items } = await admin.from('content_items')
+            .select('id,title,has_test,active').in('id', tIds);
+          (items || []).forEach(i => { titleById[String(i.id)] = i; });
+        }
+        const out = live.map(r => {
+          const eff = assignmentEffective(r, passes, today);
+          const o = assignmentOut(r, eff);
+          if(r.type === 'training'){
+            const item = titleById[String(r.content_id)] || null;
+            o.training = { title: item ? (item.title || '') : '',
+              // can_take says whether there is a test to sit at all. A
+              // training without one is finished by reading it, and the
+              // client must not offer a button that leads nowhere.
+              can_take: !!(item && item.has_test && item.active !== false),
+              passed: eff.done };
+          }
+          return o;
+        });
+        // Most urgent first: anything still open before anything finished,
+        // then by due date, with undated work last.
+        const rank2 = o => o.effective_done ? 1 : 0;
+        out.sort((a,b) => rank2(a) - rank2(b) ||
+          (a.due_date ? 0 : 1) - (b.due_date ? 0 : 1) ||
+          String(a.due_date || '').localeCompare(String(b.due_date || '')) ||
+          String(b.id).localeCompare(String(a.id)));
+        return json(200,{ ok:true, assignments: out, today });
+      }
+      case 'create_assignment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const who = await assignmentTarget(me, p.user_id);
+        if(!who.ok) return json(who.status,{error:who.error});
+        const type = String(p.type == null ? '' : p.type);
+        if(!ASSIGNMENT_TYPES.includes(type)) return json(400,{error:'bad_type'});
+        const title = String(p.title == null ? '' : p.title).trim().slice(0,200);
+        if(!title) return json(400,{error:'missing_title'});
+        const description = String(p.description == null ? '' : p.description).trim().slice(0,2000);
+        let due_date = null;
+        if(p.due_date !== undefined && p.due_date !== null && String(p.due_date).trim() !== ''){
+          const d = ymdParts(p.due_date);
+          if(!d) return json(400,{error:'bad_due_date'});
+          due_date = String(p.due_date).trim().slice(0,10);
+        }
+        let content_id = null;
+        if(type === 'training'){
+          // A training assignment that points at nothing, or at a material,
+          // could never complete - the pass it waits for would never exist.
+          const t = await trainingRow(p.content_id);
+          if(!t.ok) return json(t.status,{error: t.error === 'not_found' ? 'training_not_found' : t.error});
+          content_id = t.row.id;
+        }
+        const now = new Date().toISOString();
+        const { data, error } = await admin.from('assignments').insert({
+          user_id: who.tgt.id, type, title, description, content_id, due_date,
+          status: 'assigned', assigned_by: me.id, assigned_at: now,
+          submitted_at: null, completed_at: null, updated_at: now })
+          .select('id').single();
+        if(error) return json(500,{error:'create_failed', detail:error.message});
+        return json(200,{ ok:true, id: data && data.id });
+      }
+      case 'submit_assignment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('assignments')
+          .select('id,user_id,type,status').eq('id', p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        // Your own row only. A manager marking your work done for you is
+        // the confirm step, not this one.
+        if(String(row.user_id) !== String(me.id)) return json(403,{error:'not_yours'});
+        // A training is not submitted, it is passed. Saying so plainly beats
+        // a silent no-op that leaves somebody pressing a button.
+        if(row.type === 'training') return json(400,{error:'training_auto'});
+        if(row.status !== 'assigned') return json(409,{error:'not_assigned', status:row.status});
+        const now = new Date().toISOString();
+        const { error } = await admin.from('assignments')
+          .update({ status:'submitted', submitted_at: now, updated_at: now }).eq('id', row.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, status:'submitted' });
+      }
+      case 'confirm_assignment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const decision = String(p.decision == null ? '' : p.decision);
+        if(decision !== 'confirm' && decision !== 'reject') return json(400,{error:'bad_decision'});
+        const got = await assignmentForManager(me, p.id);
+        if(!got.ok) return json(got.status,{error:got.error});
+        if(got.row.type === 'training') return json(400,{error:'training_auto'});
+        if(got.row.status !== 'submitted') return json(409,{error:'not_submitted', status:got.row.status});
+        const now = new Date().toISOString();
+        const patch = decision === 'confirm'
+          ? { status:'done', completed_at: now, updated_at: now }
+          // Back where it started, and the submission stamp goes with it:
+          // the work was not submitted, as far as the record is concerned.
+          : { status:'assigned', submitted_at: null, updated_at: now };
+        if(decision === 'reject' && p.note !== undefined && p.note !== null){
+          const note = String(p.note).trim().slice(0,500);
+          if(note) patch.description = String(got.row.description || '').slice(0,1400) +
+            '\n\nReturned by ' + [me.first, me.last].filter(Boolean).join(' ').trim() + ': ' + note;
+        }
+        const { error } = await admin.from('assignments').update(patch).eq('id', got.row.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, status: patch.status });
+      }
+      case 'update_assignment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const got = await assignmentForManager(me, p.id);
+        if(!got.ok) return json(got.status,{error:got.error});
+        const patch = { updated_at: new Date().toISOString() };
+        if(p.title !== undefined){
+          const t = String(p.title == null ? '' : p.title).trim().slice(0,200);
+          if(!t) return json(400,{error:'missing_title'});
+          patch.title = t;
+        }
+        if(p.description !== undefined)
+          patch.description = String(p.description == null ? '' : p.description).trim().slice(0,2000);
+        if(p.due_date !== undefined){
+          if(p.due_date === null || String(p.due_date).trim() === '') patch.due_date = null;
+          else {
+            if(!ymdParts(p.due_date)) return json(400,{error:'bad_due_date'});
+            patch.due_date = String(p.due_date).trim().slice(0,10);
+          }
+        }
+        const { error } = await admin.from('assignments').update(patch).eq('id', got.row.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'cancel_assignment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const got = await assignmentForManager(me, p.id);
+        if(!got.ok) return json(got.status,{error:got.error});
+        const { error } = await admin.from('assignments')
+          .update({ status:'cancelled', updated_at: new Date().toISOString() }).eq('id', got.row.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, status:'cancelled' });
+      }
+      case 'get_team_assignments': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // The same Manager = LOCAL scope every other screen uses.
+        const ids = await scopeIdsFor(me);
+        const { data: profs } = await admin.from('profiles')
+          .select('id,first,last,nickname,role,role_id,status');
+        const inScope = (profs || [])
+          .filter(u => u.status !== 'inactive')
+          .filter(u => ids === null || ids.has(u.id));
+        const { data: roleRows } = await admin.from('roles').select('id,name');
+        const roleName = {}; (roleRows || []).forEach(r => { roleName[String(r.id)] = r.name; });
+        const byId = {}; inScope.forEach(u => { byId[String(u.id)] = u; });
+        const memberIds = inScope.map(u => u.id);
+        const { data: rows } = memberIds.length
+          ? await admin.from('assignments')
+              .select('id,user_id,type,title,description,content_id,due_date,status,submitted_at,completed_at,assigned_at')
+              .in('user_id', memberIds)
+          : { data: [] };
+        const live = (rows || []).filter(r => r.status !== 'cancelled');
+        const passes = await assignmentPasses(live);
+        const today = dublinYMD(new Date());
+        const person = u => ({ id: u.id,
+          name: [u.first, u.last].filter(Boolean).join(' ').trim() || (u.nickname || ''),
+          role_label: roleName[String(u.role_id)] || null, role: u.role });
+        const out = live.map(r => {
+          const eff = assignmentEffective(r, passes, today);
+          return Object.assign(assignmentOut(r, eff),
+            { person: person(byId[String(r.user_id)] || { id: r.user_id }) });
+        }).sort((a,b) => String(a.person.name).localeCompare(String(b.person.name)) ||
+          String(a.due_date || '').localeCompare(String(b.due_date || '')));
+        // Whether this caller may actually decide anything, so the client is
+        // not left offering buttons the gateway will refuse. The read-only
+        // tier sees the board and acts on nobody.
+        const can_decide = rank(me.role) >= ROLE_RANK.leader && !seesEverything(me.role);
+        return json(200,{ ok:true, assignments: out, today, can_decide,
+          to_confirm: out.filter(r => r.status === 'submitted').map(r => r.id) });
       }
       default: return json(400, { error:'unknown_action' });
     }
