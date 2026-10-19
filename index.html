@@ -1357,6 +1357,9 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .clib-cover-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--grad-bt);color:var(--on-brand);opacity:.92}
 .clib-cover img{position:relative;width:100%;height:100%;object-fit:cover;display:block}
 .clib-body{padding:14px 16px 10px;flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+/* Who an item is aimed at, said on the card. Only ever drawn when that is
+   not everyone, so the ordinary case stays quiet. */
+.clib-aud{align-self:flex-start;display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
 .clib-chip{align-self:flex-start;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--light-blue);color:var(--blue);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .clib-title{font-size:14.5px;font-weight:700;letter-spacing:-.2px;line-height:1.35}
 .clib-desc{font-size:12.5px;color:var(--muted);line-height:1.5;flex:1}
@@ -3418,6 +3421,18 @@ a.clib-open{text-decoration:none}
           </div>
           <div class="form-hint">Pinned updates stay at the top of the list and of the Home band.</div>
         </div>
+      </div>
+      <!-- Every type, one question: the modal is shared, so this is asked
+           once and applies to trainings, materials, procedures and the rest
+           alike. -->
+      <div class="form-group">
+        <label class="form-label" for="clib-audience">Who can see this</label>
+        <select class="form-input" id="clib-audience">
+          <option value="everyone">Everyone</option>
+          <option value="agents">Agents</option>
+          <option value="leadership">Leadership</option>
+        </select>
+        <div class="form-hint">Agents means the agent, specialist and executive roles. Leadership means team leader and above, including senior executives. Managers see everything either way.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Cover image <span class="form-hint" style="display:inline">(optional)</span></label>
@@ -9427,6 +9442,11 @@ function contentCardHtml(it){
     ? `<button class="clib-icon-btn" title="Edit" aria-label="Edit" onclick="openContentModal('${esc(it.type)}','${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg></button>` +
       `<button class="clib-icon-btn danger" title="Delete" aria-label="Delete" onclick="deleteContent('${id}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
     : '';
+  // Said only when it is not everyone: a card with no audience chip is for
+  // the whole company, which is the ordinary case and needs no label.
+  const audChip = (it.audience === 'agents' || it.audience === 'leadership')
+    ? `<span class="clib-aud">${it.audience === 'agents' ? 'Agents' : 'Leadership'}</span>`
+    : '';
   // An update is a dated thing, so the card says when - and whether it is
   // pinned. Every other type keeps the chip row it has always had.
   const meta = isUpdate
@@ -9434,8 +9454,9 @@ function contentCardHtml(it){
         (it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:'') +
         (it.pinned?`<span class="upd-pin"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.8-3.3V7a2 2 0 0 0-2-2h-4.4a2 2 0 0 0-2 2v6.7z"/></svg>Pinned</span>`:'') +
         (it.created_at?`<span class="clib-date">${esc(fmtDate(it.created_at))}</span>`:'') +
+        audChip +
       `</div>`
-    : (it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:'');
+    : ((it.category?`<span class="clib-chip">${esc(dashFix(it.category))}</span>`:'') + audChip);
   return `<div class="clib-card">
     ${cover}
     <div class="clib-body">
@@ -9736,6 +9757,10 @@ function openContentModal(type, id){
   document.getElementById('clib-cover-input').value = '';
   document.getElementById('clib-file-input').value = '';
   document.getElementById('clib-link-input').value = it ? (it.link_url||'') : '';
+  // A saved item reopens on what it was set to; a new one starts at
+  // everyone, which is what every item was before this existed.
+  document.getElementById('clib-audience').value =
+    (it && ['everyone','agents','leadership'].indexOf(it.audience) >= 0) ? it.audience : 'everyone';
   // Say what is already attached, so "leave it alone" is an obvious option
   // rather than something the person has to guess at.
   document.getElementById('clib-cover-current').textContent =
@@ -9828,6 +9853,9 @@ async function saveContent(){
         : document.getElementById('clib-cat').value.trim(),
       // Always sent, so emptying the field clears the column on an edit.
       link_url: link,
+      // The gateway coerces anything it does not recognise to everyone, so
+      // a stale page cannot hide an item by accident.
+      audience: document.getElementById('clib-audience').value,
       // A course, material or tool says so outright. The gateway pins these
       // columns regardless of what any client sends, so this is a statement
       // of intent rather than the thing being relied on.
