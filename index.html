@@ -1386,6 +1386,36 @@ a.clib-open{text-decoration:none}
 .clib-test-chip.todo{background:var(--light-blue);color:var(--blue);border-color:var(--border2)}
 .clib-test-chip.tried{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
 .clib-test-chip.done{background:var(--success-bg);color:var(--success);border-color:var(--success-border)}
+/* ── lessons: the author's list, and the learner's player ──── */
+.les-wrap{border-top:1px solid var(--border);margin-top:18px;padding-top:16px}
+.les-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.les-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--manager)}
+.les-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:7px}
+.les-n{font-size:11px;font-weight:700;color:var(--muted);min-width:18px}
+.les-name{font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.les-kind{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 7px}
+.les-btn{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;color:var(--muted);padding:4px 9px;cursor:pointer}
+.les-btn:hover{border-color:var(--manager);color:var(--manager)}
+.les-btn.danger:hover{border-color:var(--danger);color:var(--danger)}
+.les-btn[disabled]{opacity:.4;cursor:not-allowed}
+.les-empty{font-size:12.5px;color:var(--muted);padding:6px 0 10px}
+.les-add{background:var(--bg);border:1px dashed var(--border2);border-radius:11px;padding:13px 15px;margin-top:4px}
+.ply-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.ply-count{font-size:12px;font-weight:600;color:var(--muted)}
+.ply-bar{height:6px;border-radius:999px;background:var(--border);overflow:hidden;margin-bottom:14px}
+.ply-bar>span{display:block;height:100%;background:var(--blue);border-radius:999px;transition:width .25s}
+.ply-stage{background:#000;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:220px}
+.ply-stage video,.ply-stage img{width:100%;max-height:52vh;display:block;object-fit:contain;background:#000}
+.ply-piece-title{font-size:14px;font-weight:600;color:var(--text);margin-top:13px}
+.ply-caption{font-size:13px;color:var(--muted);line-height:1.6;margin-top:6px;white-space:pre-wrap}
+.ply-hint{font-size:11.5px;color:var(--muted);margin-top:9px}
+/* A Next that cannot be pressed has to look like one: solid blue invites
+   a click the page will ignore. */
+#ply-footer button[disabled]{opacity:.45;cursor:not-allowed}
+.ply-steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.ply-step{font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);padding:3px 9px;cursor:pointer}
+.ply-step.on{border-color:var(--blue);color:var(--blue)}
+.ply-step.done{background:var(--success-bg);border-color:var(--success-border);color:var(--success)}
 .clib-test-btn{font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--blue);color:#fff;border:1px solid var(--blue);border-radius:9px;padding:9px 12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;flex-shrink:0}
 .clib-test-btn:hover{background:var(--blue-dark)}
 .clib-test-btn.done{background:transparent;color:var(--blue)}
@@ -3451,6 +3481,31 @@ a.clib-open{text-decoration:none}
         <input class="form-input" type="url" id="clib-link-input" placeholder="https://... (optional)">
         <div class="form-hint">Optional - a website this item opens, e.g. immigration or QQI updates. Leave blank for a file-only item.</div>
       </div>
+      <!-- Trainings only: the lessons a learner walks before the test.
+           A training with none of these behaves as it always did. -->
+      <div class="les-wrap" id="clib-lessons-wrap" style="display:none">
+        <div class="les-head">
+          <span class="les-title">Lessons</span>
+          <button type="button" class="les-btn" id="les-add-toggle" onclick="lessonAddToggle()">Add piece</button>
+        </div>
+        <div id="les-list"></div>
+        <div class="les-add" id="les-add-form" style="display:none">
+          <div class="form-group"><label class="form-label" for="les-title">Title</label>
+            <input class="form-input" type="text" id="les-title" placeholder="e.g. Lesson 1 - the first call"></div>
+          <div class="form-group"><label class="form-label" for="les-kind">Media</label>
+            <select class="form-input" id="les-kind" onchange="lessonKindChanged()">
+              <option value="video">Video</option>
+              <option value="image">Image or slide</option>
+            </select></div>
+          <div class="form-group"><label class="form-label" for="les-file">File</label>
+            <input class="form-input" type="file" id="les-file" accept="video/mp4,video/*">
+            <div class="form-hint" id="les-file-hint">An mp4 the learner watches to the end.</div></div>
+          <div class="form-group"><label class="form-label" for="les-caption">Caption <span class="form-hint" style="display:inline">(optional)</span></label>
+            <textarea class="form-input" id="les-caption" rows="2" placeholder="What this piece is about"></textarea></div>
+          <div class="login-error" id="les-error" style="margin:0 0 10px"></div>
+          <button type="button" class="les-btn" id="les-save" onclick="lessonAdd()">Add this piece</button>
+        </div>
+      </div>
       <!-- Trainings only. Hidden for course/material/tool, and saveContent
            sends has_test:false and no questions for those types. -->
       <div class="tq-wrap" id="clib-test-wrap" style="display:none">
@@ -3486,6 +3541,14 @@ a.clib-open{text-decoration:none}
 <!-- Taking a test. The questions arrive from get_test, which never carries
      correct_index; nothing here could reveal an answer because nothing here
      has ever been told one. Grading happens in submit_test. -->
+<div class="modal-backdrop" id="modal-player">
+  <div class="modal modal-apr">
+    <div class="modal-header"><div class="modal-title" id="ply-title">Lessons</div><button class="modal-close" onclick="closePlayer()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="ply-body"></div>
+    <div class="modal-footer" id="ply-footer"></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-test">
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modal-test-title">Test</div><button class="modal-close" onclick="closeTest()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -9422,9 +9485,25 @@ function contentCardHtml(it){
   // every other type, by the gateway and not by this check.
   const hasTest = it.type === 'training' && !!it.has_test;
   const stt = hasTest ? statusOf(it.id) : null;
+  // A training with lessons is walked before it is tested. The count comes
+  // from the gateway; everything else in the library reports zero.
+  const pieces = (it.type === 'training' && Number(it.piece_count) > 0) ? Number(it.piece_count) : 0;
+  const pStt = pieces ? statusOf(it.id) : null;
+  const pDone = pStt ? Number(pStt.pieces_done || 0) : 0;
+  const lessonsDoneHere = pieces === 0 || (pStt && Number(pStt.pieces_total||0) > 0
+    && pDone >= Number(pStt.pieces_total));
+  const lessonsBtn = pieces
+    ? `<button class="clib-open" onclick="openPlayer('${id}','${esc(dashFix(it.title||''))}')">` +
+      `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>` +
+      `${pDone > 0 && !lessonsDoneHere ? 'Continue lessons' : 'Lessons'} (${pDone}/${pieces})</button>`
+    : '';
   const mark = it.pass_threshold ? it.pass_threshold + '%' : '';
   let chip = '', testBtn = '';
-  if(hasTest){
+  // Where there are lessons, the test is the end of them: the gateway
+  // refuses it before that, so the card does not offer it either.
+  if(hasTest && !lessonsDoneHere){
+    chip = `<span class="clib-test-chip todo">Test after the lessons</span>`;
+  } else if(hasTest){
     if(stt && stt.passed){
       chip = `<span class="clib-test-chip done"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>Passed${stt.best_score!=null?' '+stt.best_score+'%':''}</span>`;
       testBtn = stt.completion_id
@@ -9465,7 +9544,7 @@ function contentCardHtml(it){
       ${it.description?`<div class="clib-desc">${esc(dashFix(it.description))}</div>`:''}
       ${chip}
     </div>
-    <div class="clib-foot">${open}${linkBtn}${testBtn}${tools}</div>
+    <div class="clib-foot">${lessonsBtn}${open}${linkBtn}${testBtn}${tools}</div>
   </div>`;
 }
 
@@ -9507,6 +9586,251 @@ async function openContentFile(id){
   const r = await callDb('get_content_file_url', { id });
   if(!r || !r.ok || !r.url){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this file','error'); return; }
   window.open(r.url, '_blank', 'noopener');
+}
+
+
+// ═══════════════════════════════════════
+// TRAINING LESSONS - the author's list and the learner's player
+// ═══════════════════════════════════════
+// A training with no pieces is the single file and the test it has always
+// been; one with pieces is walked here first. Both halves read the same
+// list, so the author sees exactly what the learner will get.
+const LESSON_ERRORS = {
+  forbidden:'You do not have permission for this',
+  out_of_scope:'That training is not available to you',
+  not_found:'That lesson is no longer there',
+  not_a_training:'Lessons belong to trainings only',
+  missing_title:'Give the piece a title',
+  lessons_incomplete:'Finish the lessons first',
+  sign_failed:'The upload could not be started',
+  save_failed:'That could not be saved'
+};
+function lessonFail(r, fallback){
+  showToast(LESSON_ERRORS[r && r.error] || fallback, 'error');
+}
+// ── the author's side ───────────────────────────
+let lessonEditing = { training_id:null, pieces:[] };
+function lessonAddToggle(){
+  const f = document.getElementById('les-add-form');
+  if(!f) return;
+  const open = f.style.display !== 'none';
+  f.style.display = open ? 'none' : '';
+  document.getElementById('les-add-toggle').textContent = open ? 'Add piece' : 'Close';
+}
+// The accept filter and the hint follow the kind, so nobody picks a PNG
+// for a piece the player will try to play.
+function lessonKindChanged(){
+  const kind = document.getElementById('les-kind').value;
+  const file = document.getElementById('les-file');
+  const hint = document.getElementById('les-file-hint');
+  if(file) file.setAttribute('accept', kind === 'image' ? 'image/*' : 'video/mp4,video/*');
+  if(hint) hint.textContent = kind === 'image'
+    ? 'A slide or picture the learner reads, then moves on.'
+    : 'An mp4 the learner watches to the end.';
+}
+async function lessonLoad(trainingId){
+  const host = document.getElementById('les-list');
+  if(!host) return;
+  lessonEditing = { training_id:trainingId, pieces:[] };
+  if(!trainingId){
+    host.innerHTML = '<div class="les-empty">Save this training first, then reopen it to add lessons.</div>';
+    const t = document.getElementById('les-add-toggle'); if(t) t.style.display = 'none';
+    return;
+  }
+  const t = document.getElementById('les-add-toggle'); if(t) t.style.display = '';
+  const r = await callDb('list_training_pieces', { training_id: trainingId });
+  lessonEditing.pieces = (r && r.ok && r.pieces) ? r.pieces : [];
+  lessonRender();
+}
+function lessonRender(){
+  const host = document.getElementById('les-list');
+  if(!host) return;
+  const ps = lessonEditing.pieces;
+  if(!ps.length){
+    host.innerHTML = '<div class="les-empty">No lessons yet. This training opens its file and its test, as it always has.</div>';
+    return;
+  }
+  host.innerHTML = ps.map((x,i)=>'<div class="les-row"><span class="les-n">'+(i+1)+'</span>'+
+    '<span class="les-name">'+esc(dashFix(x.title||''))+'</span>'+
+    '<span class="les-kind">'+(x.media_type==='image'?'Image':'Video')+'</span>'+
+    '<button type="button" class="les-btn" title="Move up" aria-label="Move up"'+
+      (i===0?' disabled':'')+' onclick="lessonMove('+i+',-1)">Up</button>'+
+    '<button type="button" class="les-btn" title="Move down" aria-label="Move down"'+
+      (i===ps.length-1?' disabled':'')+' onclick="lessonMove('+i+',1)">Down</button>'+
+    '<button type="button" class="les-btn danger" onclick="lessonDelete(\''+esc(String(x.id))+'\')">Remove</button>'+
+    '</div>').join('');
+}
+async function lessonMove(i, delta){
+  const ps = lessonEditing.pieces, j = i + delta;
+  if(j < 0 || j >= ps.length) return;
+  const next = ps.slice();
+  next.splice(j, 0, next.splice(i, 1)[0]);
+  // Drawn at once, then confirmed: the list is the author's own order and
+  // waiting on the round trip to see it move reads as a dead button.
+  lessonEditing.pieces = next;
+  lessonRender();
+  const r = await callDb('reorder_training_pieces', { training_id: lessonEditing.training_id,
+    ordered_ids: next.map(x=>x.id) });
+  if(!r || !r.ok){ lessonFail(r, 'Could not reorder the lessons'); }
+  await lessonLoad(lessonEditing.training_id);
+}
+async function lessonDelete(id){
+  if(!confirm('Remove this lesson? Anyone part way through will lose their progress on it.')) return;
+  const r = await callDb('delete_training_piece', { id: lessonNumId(id) });
+  if(!r || !r.ok){ lessonFail(r, 'Could not remove that lesson'); return; }
+  showToast('Lesson removed','warning');
+  await lessonLoad(lessonEditing.training_id);
+}
+// The ids are bigints; a numeric string from an attribute goes back as a
+// number, and anything else goes back as it came.
+function lessonNumId(v){
+  const n = Number(v);
+  return (v !== '' && Number.isFinite(n)) ? n : v;
+}
+async function lessonAdd(){
+  const err = document.getElementById('les-error');
+  const fail = m => { if(err){ err.textContent = m; err.style.display = 'block'; } };
+  if(err){ err.textContent=''; err.style.display='none'; }
+  const title = document.getElementById('les-title').value.trim();
+  const kind = document.getElementById('les-kind').value;
+  const caption = document.getElementById('les-caption').value.trim();
+  const file = (document.getElementById('les-file').files||[])[0];
+  if(!title){ fail('Give the piece a title'); return; }
+  if(!file){ fail('Choose a file for this piece'); return; }
+  const btn = document.getElementById('les-save');
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  try {
+    // The same two-step upload the library uses: a signed URL from the
+    // gateway, then the bytes straight to storage.
+    const su = await callDb('training_piece_upload_url', { training_id: lessonEditing.training_id,
+      file_name: file.name || 'lesson', file_type: file.type || '' });
+    if(!su || !su.ok){ lessonFail(su, 'The upload could not be started'); return; }
+    const up = await sb.storage.from(su.bucket).uploadToSignedUrl(su.path, su.token, file, {
+      contentType: file.type || 'application/octet-stream' });
+    if(up && up.error){ fail('That file could not be uploaded'); return; }
+    const r = await callDb('create_training_piece', { training_id: lessonEditing.training_id,
+      title, media_type: kind, caption,
+      file_path: su.path, file_name: file.name || 'lesson', file_type: file.type || '' });
+    if(!r || !r.ok){ lessonFail(r, 'Could not add that piece'); return; }
+    document.getElementById('les-title').value = '';
+    document.getElementById('les-caption').value = '';
+    document.getElementById('les-file').value = '';
+    showToast('Lesson added','success');
+    await lessonLoad(lessonEditing.training_id);
+  } finally { btn.disabled = false; btn.textContent = 'Add this piece'; }
+}
+
+// ── the learner's side ─────────────────────────
+// A video is finished by being watched: the ended event, or close enough
+// to the end that the last second is not worth arguing about. A slide is
+// finished by being looked at. Nothing here decides anything - the
+// gateway records it, and the gateway is what the test asks.
+const PLAYER_VIDEO_DONE = 0.95;
+let player = null;
+async function openPlayer(trainingId, title){
+  player = { training_id: trainingId, title: title || 'Lessons', pieces: [],
+             done: new Set(), i: 0, has_test: false };
+  document.getElementById('ply-title').textContent = dashFix(player.title);
+  document.getElementById('ply-body').innerHTML = '<div class="les-empty">Loading...</div>';
+  document.getElementById('ply-footer').innerHTML = '';
+  openBackdrop('modal-player');
+  const r = await callDb('list_training_pieces', { training_id: trainingId });
+  if(!r || !r.ok){ lessonFail(r, 'Those lessons could not be opened'); closePlayer(); return; }
+  player.pieces = r.pieces || [];
+  const pr = await callDb('get_training_progress', { training_id: trainingId });
+  if(pr && pr.ok) player.done = new Set((pr.completed_ids||[]).map(String));
+  const item = (contentCache['training']||[]).find(x=>String(x.id)===String(trainingId));
+  player.has_test = !!(item && item.has_test);
+  // Open on the first unfinished piece: somebody coming back should not
+  // have to click past what they have already watched.
+  const firstOpen = player.pieces.findIndex(x=>!player.done.has(String(x.id)));
+  player.i = firstOpen < 0 ? 0 : firstOpen;
+  playerRender();
+}
+// The card behind this modal is now out of date: a lesson finished here
+// changes what it may offer, and closing is the moment it is looked at.
+async function closePlayer(){
+  closeModal('modal-player');
+  player = null;
+  await loadTrainingStatus();
+  renderContentSection('training');
+}
+function playerComplete(){
+  return player && player.pieces.length > 0 && player.done.size >= player.pieces.length;
+}
+function playerRender(){
+  if(!player) return;
+  const body = document.getElementById('ply-body');
+  const foot = document.getElementById('ply-footer');
+  const ps = player.pieces;
+  if(!ps.length){ body.innerHTML = '<div class="les-empty">This training has no lessons.</div>'; return; }
+  const cur = ps[player.i];
+  const isVideo = cur.media_type !== 'image';
+  const doneNow = player.done.has(String(cur.id));
+  const pct = Math.round((player.done.size / ps.length) * 100);
+  const stage = isVideo
+    ? '<video id="ply-media" controls preload="metadata" src="'+esc(cur.media_url||'')+'"></video>'
+    : '<img id="ply-media" src="'+esc(cur.media_url||'')+'" alt="'+esc(dashFix(cur.title||''))+'">';
+  body.innerHTML =
+    '<div class="ply-top"><span class="ply-count" id="ply-count">'+(player.i+1)+' of '+ps.length+'</span>'+
+      '<span class="ply-count" id="ply-pct">'+pct+'% complete</span></div>'+
+    '<div class="ply-bar"><span id="ply-fill" style="width:'+pct+'%"></span></div>'+
+    '<div class="ply-stage">'+stage+'</div>'+
+    '<div class="ply-piece-title" id="ply-piece-title">'+esc(dashFix(cur.title||''))+'</div>'+
+    (cur.caption?'<div class="ply-caption">'+esc(dashFix(cur.caption))+'</div>':'')+
+    '<div class="ply-hint" id="ply-hint">'+
+      (isVideo
+        ? (doneNow ? 'Watched. Move on whenever you like.' : 'Watch to the end to move on.')
+        : 'Read it, then move on.')+'</div>'+
+    '<div class="ply-steps">'+ps.map((x,i)=>'<button type="button" class="ply-step'+
+      (i===player.i?' on':'')+(player.done.has(String(x.id))?' done':'')+
+      '" onclick="playerGo('+i+')">'+(player.done.has(String(x.id))?'\u2713 ':'')+(i+1)+'</button>').join('')+'</div>';
+  const canNext = !isVideo || doneNow;
+  const last = player.i >= ps.length - 1;
+  foot.innerHTML =
+    '<button class="btn-cancel" id="ply-prev"'+(player.i===0?' disabled':'')+
+      ' onclick="playerGo('+(player.i-1)+')">Previous</button>'+
+    (last ? '' : '<button class="btn-save" id="ply-next"'+(canNext?'':' disabled')+
+      ' onclick="playerGo('+(player.i+1)+')">Next</button>')+
+    ((last && playerComplete() && player.has_test)
+      ? '<button class="btn-save" id="ply-test" onclick="playerTakeTest()">Take the test</button>' : '');
+  if(isVideo){
+    const v = document.getElementById('ply-media');
+    if(v && !doneNow){
+      v.addEventListener('ended', ()=>playerFinish(cur.id));
+      // Some browsers never fire ended when the last frames are skipped,
+      // so close enough to the end counts as the end.
+      v.addEventListener('timeupdate', ()=>{
+        if(v.duration && v.currentTime / v.duration >= PLAYER_VIDEO_DONE) playerFinish(cur.id);
+      });
+    }
+  } else if(!doneNow){
+    // A slide is finished by being shown.
+    playerFinish(cur.id);
+  }
+}
+async function playerFinish(pieceId){
+  if(!player || player.done.has(String(pieceId))) return;
+  const r = await callDb('mark_piece_complete', { piece_id: lessonNumId(pieceId) });
+  if(!r || !r.ok){ lessonFail(r, 'That lesson could not be marked as done'); return; }
+  if(!player) return;
+  player.done = new Set((r.completed_ids||[]).map(String));
+  playerRender();
+  // The card behind the modal has a test button to reveal, and a status
+  // feed that now says something different.
+  if(playerComplete()) await loadTrainingStatus();
+}
+function playerGo(i){
+  if(!player) return;
+  if(i < 0 || i >= player.pieces.length) return;
+  player.i = i;
+  playerRender();
+}
+async function playerTakeTest(){
+  const id = player && player.training_id;
+  closePlayer();
+  renderContentSection('training');
+  if(id) openTest(id);
 }
 
 // ── TAKING A TEST ──────────────────────────────────────────────
@@ -9771,6 +10095,15 @@ function openContentModal(type, id){
   // The test section exists for trainings and nothing else.
   const wrap = document.getElementById('clib-test-wrap');
   if(wrap) wrap.style.display = (type === 'training') ? '' : 'none';
+  // So does the lessons list. A training being created has no id yet, so it
+  // says so rather than offering an upload with nowhere to go.
+  const lw = document.getElementById('clib-lessons-wrap');
+  if(lw) lw.style.display = (type === 'training') ? '' : 'none';
+  const laf = document.getElementById('les-add-form');
+  if(laf) laf.style.display = 'none';
+  const lat = document.getElementById('les-add-toggle');
+  if(lat) lat.textContent = 'Add piece';
+  if(type === 'training') lessonLoad(it ? it.id : null);
   // Updates swap the free-text category for a fixed list, and gain a pin.
   // Exactly one of the two category rows is ever visible.
   const isUpdateType = (type === 'update');

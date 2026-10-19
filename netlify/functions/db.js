@@ -530,6 +530,68 @@ function audienceAllows(me, audience){
 }
 exports.__audience = { AUDIENCES, AUDIENCE_LEADERSHIP, audienceTierFor, audienceOf, audienceAllows };
 const CONTENT_BUCKETS = { cover:'content-covers', file:'content-files' };
+// ── TRAINING PIECES ────────────────────────────────────
+// A training may now be a sequence of lessons: one media file each, video
+// or slide, walked in order. A training with NO pieces is untouched by any
+// of this - it is the single file and the test it has always been, which
+// is why every piece path starts by asking how many there are.
+const PIECE_MEDIA = ['video','image'];
+// Same private bucket as any other content file, under its own prefix so
+// the lessons are recognisable in it.
+const PIECE_PREFIX = 'training-pieces/';
+// A lesson is watched, not downloaded. Sixty seconds is right for handing
+// somebody a PDF and wrong for a video they are halfway through, so these
+// URLs live an hour.
+const PIECE_URL_TTL = 3600;
+function pieceMedia(v){ return PIECE_MEDIA.includes(v) ? v : 'video'; }
+// The training, if this caller may see it at all. The audience rule is the
+// library's, applied again here: a training somebody is never shown does
+// not get to hand them its lessons through a side door.
+async function visibleTraining(me, id){
+  const { data: row } = await admin.from('content_items')
+    .select('id,type,title,has_test,pass_threshold,audience').eq('id', id).single();
+  if(!row) return { ok:false, status:404, error:'not_found' };
+  if(row.type !== 'training') return { ok:false, status:400, error:'not_a_training' };
+  if(!audienceAllows(me, row.audience)) return { ok:false, status:403, error:'out_of_scope' };
+  return { ok:true, row };
+}
+async function trainingPieces(trainingId){
+  const { data } = await admin.from('training_pieces')
+    .select('id,training_id,sort_order,title,media_type,file_path,file_name,file_type,caption,created_at')
+    .eq('training_id', trainingId)
+    .order('sort_order',{ascending:true}).order('id',{ascending:true});
+  return data || [];
+}
+// What this person - and only this person - has finished. A training with
+// no pieces is never complete, because there is nothing to complete: that
+// is what keeps the old single-file trainings out of the new gate.
+async function pieceProgress(userId, trainingId){
+  const pieces = await trainingPieces(trainingId);
+  const ids = pieces.map(x => x.id);
+  if(!ids.length) return { total:0, completed_ids:[], complete:false };
+  const { data } = await admin.from('training_piece_progress')
+    .select('piece_id').eq('user_id', userId).in('piece_id', ids);
+  const done = new Set((data||[]).map(r => String(r.piece_id)));
+  const completed_ids = ids.filter(i => done.has(String(i)));
+  return { total: ids.length, completed_ids, complete: completed_ids.length >= ids.length };
+}
+// How many lessons each of these trainings has, in one query rather than
+// one per card.
+async function pieceCounts(trainingIds){
+  const out = {};
+  if(!trainingIds.length) return out;
+  const { data } = await admin.from('training_pieces')
+    .select('id,training_id').in('training_id', trainingIds);
+  (data||[]).forEach(r => { const k = String(r.training_id); out[k] = (out[k]||0) + 1; });
+  return out;
+}
+// The test is gated on the lessons only where there ARE lessons. Zero
+// pieces means the old behaviour, exactly.
+async function lessonsDone(userId, trainingId){
+  const pr = await pieceProgress(userId, trainingId);
+  return pr.total === 0 || pr.complete;
+}
+exports.__pieces = { PIECE_MEDIA, PIECE_PREFIX, PIECE_URL_TTL, pieceMedia };
 // A cover is stored as its public URL, because that is what a page needs. To
 // delete the object later the path has to be recovered from it; anything that
 // is not recognisably this bucket's public URL is left alone rather than
@@ -2780,6 +2842,9 @@ exports.handler = async (event) => {
         // out, so no caller can ask for a shelf and be handed somebody
         // else's.
         const visible = (data||[]).filter(r => audienceAllows(me, r.audience));
+        // Only the trainings, and only the ones this caller can see: a card
+        // has to know whether it opens a file or a course.
+        const counts = await pieceCounts(visible.filter(r => r.type === 'training').map(r => r.id));
         // Field by field. file_path is the key to a private bucket and must
         // never reach a browser - and that must not depend on somebody
         // remembering to prune the select above.
@@ -2800,6 +2865,9 @@ exports.handler = async (event) => {
           pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold),
           // Who it is for, so the card can say so to the people who manage it.
           audience: audienceOf(r.audience),
+          // Lessons, if it has any. Zero for everything else, which is every
+          // type but training and every training written before this.
+          piece_count: counts[String(r.id)] || 0,
           sort_order: r.sort_order, created_at: r.created_at
         })) });
       }
@@ -2921,6 +2989,165 @@ exports.handler = async (event) => {
         if(error) return json(500,{error:'delete_failed', detail:error.message});
         return json(200,{ ok:true });
       }
+      // ── TRAINING PIECES ─────────────────────────────
+      case 'list_training_pieces': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.training_id) return json(400,{error:'missing_id'});
+        const t = await visibleTraining(me, p.training_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const rows = await trainingPieces(t.row.id);
+        // Field by field, and the path is not one of the fields: what goes
+        // out is a URL that stops working, never the key to the bucket.
+        const pieces = [];
+        for(const r of rows){
+          let media_url = null;
+          if(r.file_path){
+            const { data } = await admin.storage.from(CONTENT_BUCKETS.file)
+              .createSignedUrl(r.file_path, PIECE_URL_TTL);
+            media_url = (data && data.signedUrl) || null;
+          }
+          pieces.push({ id: r.id, training_id: r.training_id, sort_order: r.sort_order,
+            title: r.title || '', media_type: pieceMedia(r.media_type),
+            caption: r.caption || '', file_name: r.file_name || null,
+            file_type: r.file_type || null, media_url });
+        }
+        return json(200,{ ok:true, training_id: t.row.id, title: t.row.title, pieces });
+      }
+      case 'training_piece_upload_url': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.training_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.training_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        // Same bucket and the same sanitising as any other content file,
+        // under a prefix that says what it is.
+        const path = PIECE_PREFIX + require('crypto').randomUUID() + '_' + safeFileName(p.file_name);
+        const { data, error } = await admin.storage.from(CONTENT_BUCKETS.file)
+          .createSignedUploadUrl(path);
+        if(error || !data) return json(500,{error:'sign_failed', detail:error && error.message});
+        return json(200,{ ok:true, bucket: CONTENT_BUCKETS.file, path: data.path || path,
+          token: data.token, signed_url: data.signedUrl });
+      }
+      case 'create_training_piece': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.training_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.training_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const title = (p.title||'').toString().trim();
+        if(!title) return json(400,{error:'missing_title'});
+        // A new lesson goes last unless it is told otherwise, so adding one
+        // never reshuffles what somebody is part way through.
+        let sort_order = Number(p.sort_order);
+        if(!Number.isFinite(sort_order)) sort_order = (await trainingPieces(t.row.id)).length;
+        const { data, error } = await admin.from('training_pieces').insert({
+          training_id: t.row.id, sort_order, title,
+          media_type: pieceMedia(p.media_type),
+          file_path: p.file_path || null,
+          file_name: p.file_name || null,
+          file_type: p.file_type || null,
+          caption: (p.caption||'').toString(),
+          created_at: new Date().toISOString()
+        }).select('id').single();
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, id: data && data.id });
+      }
+      case 'update_training_piece': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('training_pieces')
+          .select('id,training_id,file_path').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const patch = {};
+        if(p.title !== undefined){
+          const t2 = (p.title||'').toString().trim();
+          if(!t2) return json(400,{error:'missing_title'});
+          patch.title = t2;
+        }
+        if(p.media_type !== undefined) patch.media_type = pieceMedia(p.media_type);
+        if(p.caption !== undefined) patch.caption = (p.caption||'').toString();
+        if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order))) patch.sort_order = Number(p.sort_order);
+        // A replaced file leaves its predecessor in the bucket unless it is
+        // removed here, exactly as a replaced content file does.
+        let stale = null;
+        if(p.file_path !== undefined){
+          patch.file_path = p.file_path || null;
+          patch.file_name = p.file_name || null;
+          patch.file_type = p.file_type || null;
+          if(row.file_path && row.file_path !== patch.file_path) stale = row.file_path;
+        }
+        if(!Object.keys(patch).length) return json(400,{error:'nothing_to_update'});
+        const { error } = await admin.from('training_pieces').update(patch).eq('id',p.id);
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        if(stale) await admin.storage.from(CONTENT_BUCKETS.file).remove([stale]);
+        return json(200,{ ok:true });
+      }
+      case 'delete_training_piece': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('training_pieces')
+          .select('id,training_id,file_path').eq('id',p.id).single();
+        if(!row) return json(404,{error:'not_found'});
+        // The object first: a row deleted while its file survives leaves
+        // something nothing can ever reach again. The progress rows go with
+        // the row, by the cascade on the table.
+        if(row.file_path) await admin.storage.from(CONTENT_BUCKETS.file).remove([row.file_path]);
+        const { error } = await admin.from('training_pieces').delete().eq('id',p.id);
+        if(error) return json(500,{error:'delete_failed', detail:error.message});
+        return json(200,{ ok:true });
+      }
+      case 'reorder_training_pieces': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        if(!p.training_id) return json(400,{error:'missing_id'});
+        const t = await trainingRow(p.training_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const ids = Array.isArray(p.ordered_ids) ? p.ordered_ids : null;
+        if(!ids) return json(400,{error:'bad_order'});
+        // Only this training's own pieces are moved. An id from somewhere
+        // else is ignored rather than renumbered into this list.
+        const mine = new Set((await trainingPieces(t.row.id)).map(x => String(x.id)));
+        let n = 0;
+        for(const id of ids){
+          if(!mine.has(String(id))) continue;
+          await admin.from('training_pieces').update({ sort_order: n }).eq('id', id);
+          n++;
+        }
+        return json(200,{ ok:true, moved: n });
+      }
+      case 'mark_piece_complete': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.piece_id) return json(400,{error:'missing_id'});
+        const { data: piece } = await admin.from('training_pieces')
+          .select('id,training_id').eq('id',p.piece_id).single();
+        if(!piece) return json(404,{error:'not_found'});
+        // The training comes from the piece, never from the request: a
+        // payload cannot credit somebody for a course they are not on.
+        const t = await visibleTraining(me, piece.training_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const { error } = await admin.from('training_piece_progress').insert({
+          user_id: me.id, piece_id: piece.id, training_id: piece.training_id,
+          completed_at: new Date().toISOString()
+        });
+        // unique(user_id,piece_id): finishing a lesson twice is finishing it
+        // once, so the duplicate is the success case rather than an error.
+        if(error && error.code !== '23505') return json(500,{error:'save_failed', detail:error.message});
+        const pr = await pieceProgress(me.id, piece.training_id);
+        return json(200,{ ok:true, piece_id: piece.id, training_id: piece.training_id,
+          total: pr.total, completed_ids: pr.completed_ids, complete: pr.complete });
+      }
+      case 'get_training_progress': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        if(!p.training_id) return json(400,{error:'missing_id'});
+        const t = await visibleTraining(me, p.training_id);
+        if(!t.ok) return json(t.status,{error:t.error});
+        // The caller's own standing and nobody else's.
+        const pr = await pieceProgress(me.id, t.row.id);
+        return json(200,{ ok:true, training_id: t.row.id,
+          total: pr.total, completed_ids: pr.completed_ids, complete: pr.complete });
+      }
       case 'get_content_file_url': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         if(!p.id) return json(400,{error:'missing_id'});
@@ -3001,6 +3228,9 @@ exports.handler = async (event) => {
         const t = await trainingRow(p.content_id);
         if(!t.ok) return json(t.status,{error:t.error});
         if(!t.row.has_test) return json(404,{error:'no_test'});
+        // Where a training has lessons, the test is the end of them. Where
+        // it has none, this is the behaviour it always had.
+        if(!(await lessonsDone(me.id, t.row.id))) return json(409,{error:'lessons_incomplete'});
         // correct_index is NOT in this select. Not fetched, so not forgotten.
         const { data: qs, error } = await admin.from('training_questions')
           .select('id,question,options,sort_order')
@@ -3024,6 +3254,9 @@ exports.handler = async (event) => {
         const t = await trainingRow(p.content_id);
         if(!t.ok) return json(t.status,{error:t.error});
         if(!t.row.has_test) return json(404,{error:'no_test'});
+        // Gated here too, not only where the questions are served: a client
+        // that kept a copy of them must not be able to sit the test anyway.
+        if(!(await lessonsDone(me.id, t.row.id))) return json(409,{error:'lessons_incomplete'});
         const answers = (p.answers && typeof p.answers === 'object' && !Array.isArray(p.answers)) ? p.answers : null;
         if(!answers) return json(400,{error:'bad_answers'});
         // Grading happens here and only here. The client sent indices; it has
@@ -3098,9 +3331,11 @@ exports.handler = async (event) => {
           const t = await trainingRow(p.content_id);
           if(!t.ok) return json(t.status,{error:t.error});
           const mine = await myTrainingStatus(me.id, p.content_id);
+          const pr = await pieceProgress(me.id, t.row.id);
           return json(200,{ ok:true, items:[ Object.assign({ content_id: t.row.id,
             has_test: !!t.row.has_test,
-            pass_threshold: (t.row.pass_threshold===null||t.row.pass_threshold===undefined) ? null : Number(t.row.pass_threshold)
+            pass_threshold: (t.row.pass_threshold===null||t.row.pass_threshold===undefined) ? null : Number(t.row.pass_threshold),
+            pieces_total: pr.total, pieces_done: pr.completed_ids.length
           }, mine) ] });
         }
         const { data: rows } = await admin.from('content_items')
@@ -3112,8 +3347,10 @@ exports.handler = async (event) => {
           // it, into their status list.
           if(!audienceAllows(me, r.audience)) continue;
           const mine = await myTrainingStatus(me.id, r.id);
+          const pr = await pieceProgress(me.id, r.id);
           items.push(Object.assign({ content_id: r.id, has_test: true,
-            pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold)
+            pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold),
+            pieces_total: pr.total, pieces_done: pr.completed_ids.length
           }, mine));
         }
         return json(200,{ ok:true, items });
