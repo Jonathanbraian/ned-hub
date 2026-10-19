@@ -649,6 +649,68 @@ function validateQuestions(list){
   }
   return { ok:true, value:out };
 }
+// ── A DRAW, AND A SHUFFLE ───────────────────────────
+// A test is now N questions out of a bank, drawn fresh on every attempt,
+// with the options in a fresh order too. Both are stateless: nothing is
+// written down about what was served, because the answer carries the
+// option's ORIGINAL index with it and that is what grading compares.
+function shuffleInPlace(a){
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+// How many a learner is asked. A bank smaller than N gives the whole bank,
+// and no N at all gives the whole bank - which is what every training did
+// before this column existed.
+function testDrawCount(n, bankSize){
+  return (Number.isInteger(n) && n > 0) ? Math.min(n, bankSize) : bankSize;
+}
+function drawQuestions(list, n){
+  const all = (list || []).slice();
+  const take = testDrawCount(n, all.length);
+  if(take >= all.length) return all;
+  return shuffleInPlace(all).slice(0, take);
+}
+// The option's stored index travels with it as an opaque id. The learner
+// sees a shuffled list; what comes back is the id, so where it was shown
+// never enters into it.
+function shuffleOptions(options){
+  return shuffleInPlace((options || []).map((text, oid) => ({
+    oid, text: (text === undefined || text === null) ? '' : String(text) })));
+}
+// Either shape: the [{question_id, oid}] this client sends, or the
+// {question_id: index} the one before it sent - where the index WAS the
+// stored index, so the two mean the same thing and grade the same way.
+function normalizeAnswers(answers){
+  const out = new Map();
+  if(Array.isArray(answers)){
+    answers.forEach(a => {
+      if(!a || a.question_id === undefined || a.question_id === null) return;
+      const oid = Number(a.oid);
+      if(Number.isInteger(oid)) out.set(String(a.question_id), oid);
+    });
+    return out;
+  }
+  if(answers && typeof answers === 'object'){
+    Object.keys(answers).forEach(k => {
+      const v = Number(answers[k]);
+      if(Number.isInteger(v)) out.set(String(k), v);
+    });
+  }
+  return out;
+}
+// N per attempt: a positive whole number, or nothing at all.
+function testNumQuestions(raw){
+  if(raw === undefined || raw === null || String(raw).trim() === '') return { ok:true, value:null };
+  const n = Number(raw);
+  if(!Number.isInteger(n) || n < 1) return { ok:false };
+  return { ok:true, value:n };
+}
+exports.__test = { shuffleInPlace, testDrawCount, drawQuestions, shuffleOptions,
+  normalizeAnswers, testNumQuestions };
+
 // 'TRN-<year>-0001', counting only this year's certificates so the series
 // restarts each January. Not atomic, which is why the caller retries on the
 // unique violation rather than trusting the count it just read.
@@ -697,7 +759,7 @@ async function myTrainingStatus(userId, contentId){
 // the type gate is written once.
 async function trainingRow(id){
   const { data: row } = await admin.from('content_items')
-    .select('id,type,title,has_test,pass_threshold').eq('id',id).single();
+    .select('id,type,title,has_test,pass_threshold,test_num_questions').eq('id',id).single();
   if(!row) return { ok:false, status:404, error:'not_found' };
   if(row.type !== 'training') return { ok:false, status:400, error:'not_a_training' };
   return { ok:true, row };
@@ -3170,11 +3232,14 @@ exports.handler = async (event) => {
         const t = await trainingRow(p.content_id);
         if(!t.ok) return json(t.status,{error:t.error});
         const hasTest = !!p.has_test;
-        let threshold = null, questions = null;
+        let threshold = null, questions = null, numQ = null;
         if(hasTest){
           threshold = Number(p.pass_threshold);
           if(!Number.isInteger(threshold) || threshold < 1 || threshold > 100)
             return json(400,{error:'bad_threshold'});
+          const nq = testNumQuestions(p.test_num_questions);
+          if(!nq.ok) return json(400,{error:'bad_num_questions'});
+          numQ = nq.value;
           const v = validateQuestions(p.questions);
           if(!v.ok) return json(400,{error:v.error});
           questions = v.value;
@@ -3183,7 +3248,8 @@ exports.handler = async (event) => {
           questions = [];
         }
         const { error: upErr } = await admin.from('content_items')
-          .update({ has_test: hasTest, pass_threshold: hasTest ? threshold : null })
+          .update({ has_test: hasTest, pass_threshold: hasTest ? threshold : null,
+            test_num_questions: hasTest ? numQ : null })
           .eq('id', p.content_id);
         if(upErr) return json(500,{error:'save_failed', detail:upErr.message});
         // Replace wholesale. Editing in place would have to match rows up by
@@ -3199,6 +3265,7 @@ exports.handler = async (event) => {
           }
         }
         return json(200,{ ok:true, has_test: hasTest, pass_threshold: hasTest ? threshold : null,
+          test_num_questions: hasTest ? numQ : null,
           question_count: questions === null ? null : questions.length });
       }
       case 'get_training_admin': {
@@ -3217,6 +3284,8 @@ exports.handler = async (event) => {
         return json(200,{ ok:true, content_id: t.row.id, title: t.row.title,
           has_test: !!t.row.has_test,
           pass_threshold: (t.row.pass_threshold===null||t.row.pass_threshold===undefined) ? null : Number(t.row.pass_threshold),
+          test_num_questions: (t.row.test_num_questions===null||t.row.test_num_questions===undefined)
+            ? null : Number(t.row.test_num_questions),
           questions: (qs||[]).map(q=>({ id:q.id, question:q.question,
             options: Array.isArray(q.options) ? q.options : [],
             correct_index: q.correct_index, sort_order: q.sort_order })) });
@@ -3238,12 +3307,18 @@ exports.handler = async (event) => {
           .order('sort_order',{ascending:true}).order('id',{ascending:true});
         if(error) return json(500,{error:'load_failed', detail:error.message});
         if(!(qs||[]).length) return json(404,{error:'no_questions'});
+        // A fresh draw and a fresh shuffle, every attempt. Nothing about
+        // either is written down: the oid each option carries is its stored
+        // index, which is what grading will compare, so a retake needs no
+        // memory of what this one served.
+        const drawn = drawQuestions(qs, t.row.test_num_questions);
         const mine = await myTrainingStatus(me.id, p.content_id);
         return json(200,{ ok:true, content_id: t.row.id, title: t.row.title,
           pass_threshold: Number(t.row.pass_threshold),
-          question_count: qs.length,
-          questions: qs.map(q=>({ id:q.id, question:q.question,
-            options: Array.isArray(q.options) ? q.options : [] })),
+          question_count: drawn.length,
+          bank_size: qs.length,
+          questions: drawn.map(q=>({ question_id:q.id, prompt:q.question,
+            options: shuffleOptions(Array.isArray(q.options) ? q.options : []) })),
           best_score: mine.best_score, attempts: mine.attempts,
           passed: mine.passed, cert_number: mine.cert_number,
           completion_id: mine.completion_id, completed_at: mine.completed_at });
@@ -3257,28 +3332,37 @@ exports.handler = async (event) => {
         // Gated here too, not only where the questions are served: a client
         // that kept a copy of them must not be able to sit the test anyway.
         if(!(await lessonsDone(me.id, t.row.id))) return json(409,{error:'lessons_incomplete'});
-        const answers = (p.answers && typeof p.answers === 'object' && !Array.isArray(p.answers)) ? p.answers : null;
-        if(!answers) return json(400,{error:'bad_answers'});
-        // Grading happens here and only here. The client sent indices; it has
-        // never been told which index is right.
+        if(!p.answers || typeof p.answers !== 'object') return json(400,{error:'bad_answers'});
+        const given = normalizeAnswers(p.answers);
+        if(!given.size) return json(400,{error:'bad_answers'});
+        // Grading happens here and only here. What came back is each
+        // question's id and the opaque id of the option chosen; the client
+        // has never been told which oid is the right one.
         const { data: qs, error } = await admin.from('training_questions')
           .select('id,correct_index').eq('content_id', p.content_id);
         if(error) return json(500,{error:'load_failed', detail:error.message});
-        const total = (qs||[]).length;
-        if(!total) return json(404,{error:'no_questions'});
+        const bank = (qs||[]).length;
+        if(!bank) return json(404,{error:'no_questions'});
+        // The denominator is the number that SHOULD have been asked, not the
+        // number that came back - otherwise answering one question correctly
+        // would be a hundred per cent.
+        const total = testDrawCount(t.row.test_num_questions, bank);
         let correct = 0;
         (qs||[]).forEach(q => {
-          const given = answers[String(q.id)];
-          if(given === undefined || given === null) return;
-          if(Number(given) === Number(q.correct_index)) correct++;
+          if(!given.has(String(q.id))) return;
+          if(Number(given.get(String(q.id))) === Number(q.correct_index)) correct++;
         });
+        // An answer sheet longer than the draw cannot score above it.
+        if(correct > total) correct = total;
         const threshold = Number(t.row.pass_threshold);
         const score = Math.round(correct / total * 100);
         const passed = score >= threshold;
         // Every attempt is recorded, pass or fail - unlimited retries are the
         // decision, an unlogged attempt is not.
         const { error: aErr } = await admin.from('training_attempts').insert({
-          user_id: me.id, content_id: p.content_id, score, passed, answers });
+          user_id: me.id, content_id: p.content_id, score, passed,
+          // Stored in the one shape, whichever shape arrived.
+          answers: Array.from(given, ([question_id, oid]) => ({ question_id, oid })) });
         if(aErr) return json(500,{error:'save_failed', detail:aErr.message});
         // Score and totals only. No per-question result: with unlimited
         // retries, telling someone WHICH ones they missed hands over the
