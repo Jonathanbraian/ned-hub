@@ -41,6 +41,9 @@
 <!-- Spreadsheet export. If this CDN is blocked the page still works and the
      export falls back to CSV - see exportReportExcel(). -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
+<!-- Certificates as a file rather than a print dialogue. Pinned, like
+     every other script here. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -3522,6 +3525,11 @@ a.clib-open{text-decoration:none}
             </div>
             <div class="form-hint">Retries are unlimited - the pass mark only decides when a certificate is issued.</div>
           </div>
+          <div class="form-group">
+            <label class="form-label" for="clib-numq">Questions per attempt <span class="form-hint" style="display:inline">(leave blank for all)</span></label>
+            <input class="form-input tq-threshold" type="number" id="clib-numq" min="1" step="1" placeholder="All">
+            <div class="form-hint">Drawn at random from the bank below, in a fresh order each attempt, with the options shuffled too.</div>
+          </div>
           <label class="form-label" style="margin-bottom:6px;display:block">Questions</label>
           <div class="tq-correct-hint">Mark the correct option with the radio button on its left. Correct answers are stored on the server and are never sent to the person taking the test.</div>
           <div id="clib-q-list"></div>
@@ -3563,7 +3571,8 @@ a.clib-open{text-decoration:none}
     <div class="modal-body"><div class="tcert-sheet" id="tcert-sheet"></div></div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="closeModal('modal-cert')">Close</button>
-      <button class="btn-save" id="btn-print-cert" onclick="printCertificate()">Save as PDF / Print</button>
+      <button class="btn-cancel" id="btn-print-cert" onclick="printCertificate()">Print</button>
+      <button class="btn-save" id="btn-pdf-cert" onclick="downloadCertificatePdf()">Download certificate (PDF)</button>
     </div>
   </div>
 </div>
@@ -9631,7 +9640,7 @@ function lessonKindChanged(){
 async function lessonLoad(trainingId){
   const host = document.getElementById('les-list');
   if(!host) return;
-  lessonEditing = { training_id:trainingId, pieces:[] };
+  lessonEditing = { training_id:trainingId, pieces:[], editing:null };
   if(!trainingId){
     host.innerHTML = '<div class="les-empty">Save this training first, then reopen it to add lessons.</div>';
     const t = document.getElementById('les-add-toggle'); if(t) t.style.display = 'none';
@@ -9657,8 +9666,48 @@ function lessonRender(){
       (i===0?' disabled':'')+' onclick="lessonMove('+i+',-1)">Up</button>'+
     '<button type="button" class="les-btn" title="Move down" aria-label="Move down"'+
       (i===ps.length-1?' disabled':'')+' onclick="lessonMove('+i+',1)">Down</button>'+
+    '<button type="button" class="les-btn" onclick="lessonEdit(\''+esc(String(x.id))+'\')">Edit</button>'+
     '<button type="button" class="les-btn danger" onclick="lessonDelete(\''+esc(String(x.id))+'\')">Remove</button>'+
-    '</div>').join('');
+    '</div>'+
+    (String(lessonEditing.editing||'') === String(x.id)
+      ? '<div class="les-add" id="les-edit-form">'+
+        '<div class="form-group"><label class="form-label" for="les-edit-title">Title</label>'+
+        '<input class="form-input" type="text" id="les-edit-title" value="'+esc(dashFix(x.title||''))+'"></div>'+
+        '<div class="form-group"><label class="form-label" for="les-edit-kind">Media</label>'+
+        '<select class="form-input" id="les-edit-kind">'+
+        '<option value="video"'+(x.media_type!=='image'?' selected':'')+'>Video</option>'+
+        '<option value="image"'+(x.media_type==='image'?' selected':'')+'>Image or slide</option>'+
+        '</select><div class="form-hint">The file itself stays as it is - remove the piece and add it again to replace it.</div></div>'+
+        '<div class="form-group"><label class="form-label" for="les-edit-caption">Caption</label>'+
+        '<textarea class="form-input" id="les-edit-caption" rows="2">'+esc(dashFix(x.caption||''))+'</textarea></div>'+
+        '<button type="button" class="les-btn" id="les-edit-save" onclick="lessonEditSave(\''+esc(String(x.id))+'\')">Save changes</button> '+
+        '<button type="button" class="les-btn" onclick="lessonEdit(null)">Cancel</button>'+
+        '</div>'
+      : '')).join('');
+}
+// One piece open at a time: a second Edit closes the first rather than
+// leaving two forms claiming the same list.
+function lessonEdit(id){
+  lessonEditing.editing = (id && String(lessonEditing.editing||'') !== String(id)) ? String(id) : null;
+  lessonRender();
+}
+async function lessonEditSave(id){
+  const title = document.getElementById('les-edit-title').value.trim();
+  const caption = document.getElementById('les-edit-caption').value.trim();
+  const media_type = document.getElementById('les-edit-kind').value;
+  if(!title){ showToast('Give the piece a title','error'); return; }
+  const btn = document.getElementById('les-edit-save');
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
+  const r = await callDb('update_training_piece', { id: lessonNumId(id), title, caption, media_type });
+  if(!r || !r.ok){
+    lessonFail(r, 'Could not save that piece');
+    if(btn){ btn.disabled = false; btn.textContent = 'Save changes'; }
+    return;
+  }
+  showToast('Lesson updated','success');
+  // Reloading the list closes the form with it - lessonLoad starts the
+  // editing state over - so there is nothing to close here.
+  await lessonLoad(lessonEditing.training_id);
 }
 async function lessonMove(i, delta){
   const ps = lessonEditing.pieces, j = i + delta;
@@ -9843,6 +9892,8 @@ async function openTest(id){
   const item = (contentCache['training']||[]).find(x=>String(x.id)===String(id));
   const r = await callDb('get_test', { content_id: id });
   if(!r || !r.ok){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this test','error'); return; }
+  // Each attempt is its own draw and its own order. What is kept is the
+  // question's id and the chosen option's oid - never where it was shown.
   quizState = { content_id:id, title:r.title || (item && item.title) || 'Test',
     pass_threshold:r.pass_threshold, questions:r.questions||[], answers:{},
     attempts:r.attempts||0, best_score:r.best_score };
@@ -9861,13 +9912,15 @@ function renderQuiz(){
     `<span>·</span><span><strong>${q.pass_threshold}%</strong> to pass</span>` +
     `<span>·</span><span>Unlimited retries</span>${prev}</div>` +
     q.questions.map((qq,i)=>{
-      const qid = esc(qq.id);
+      const qid = esc(qq.question_id);
+      // The option's id, not its place in this list: the next attempt will
+      // show the same option somewhere else.
       return `<div class="quiz-q">
-        <div class="quiz-q-text"><span class="quiz-q-num">Question ${i+1}</span>${esc(dashFix(qq.question))}</div>
-        ${(qq.options||[]).map((o,j)=>`
-          <label class="quiz-opt" id="qopt-${qid}-${j}">
-            <input type="radio" name="quiz-${qid}" onchange="setQuizAnswer('${qid}',${j})">
-            <span>${esc(dashFix(o))}</span>
+        <div class="quiz-q-text"><span class="quiz-q-num">Question ${i+1}</span>${esc(dashFix(qq.prompt))}</div>
+        ${(qq.options||[]).map(o=>`
+          <label class="quiz-opt" id="qopt-${qid}-${esc(o.oid)}">
+            <input type="radio" name="quiz-${qid}" onchange="setQuizAnswer('${qid}',${Number(o.oid)})">
+            <span>${esc(dashFix(o.text))}</span>
           </label>`).join('')}
       </div>`;
     }).join('');
@@ -9883,13 +9936,13 @@ function renderQuizFooter(){
     `<button class="btn-save" id="btn-submit-quiz" onclick="submitQuiz()" ${answered<total?'disabled style="opacity:.5;cursor:not-allowed"':''}>Submit answers</button>`;
 }
 
-function setQuizAnswer(qid, idx){
+function setQuizAnswer(qid, oid){
   if(!quizState) return;
-  quizState.answers[qid] = idx;
-  (quizState.questions.find(x=>String(x.id)===String(qid))||{options:[]}).options
-    .forEach((o,j)=>{
-      const el = document.getElementById('qopt-'+qid+'-'+j);
-      if(el) el.classList.toggle('sel', j===idx);
+  quizState.answers[qid] = oid;
+  (quizState.questions.find(x=>String(x.question_id)===String(qid))||{options:[]}).options
+    .forEach(o=>{
+      const el = document.getElementById('qopt-'+qid+'-'+o.oid);
+      if(el) el.classList.toggle('sel', Number(o.oid)===Number(oid));
     });
   renderQuizFooter();
 }
@@ -9899,7 +9952,10 @@ async function submitQuiz(){
   if(Object.keys(q.answers).length < q.questions.length) return;
   const btn = document.getElementById('btn-submit-quiz');
   if(btn){ btn.disabled = true; btn.textContent = 'Grading...'; }
-  const r = await callDb('submit_test', { content_id:q.content_id, answers:q.answers });
+  // The sheet goes back as pairs: which question, and which option by its
+  // own id. Where it was shown is this attempt's business and nobody else's.
+  const sheet = Object.keys(q.answers).map(qid=>({ question_id:qid, oid:q.answers[qid] }));
+  const r = await callDb('submit_test', { content_id:q.content_id, answers:sheet });
   if(!r || !r.ok){
     showToast(CONTENT_ERRORS[r && r.error] || 'Could not submit this test','error');
     if(btn){ btn.disabled = false; btn.textContent = 'Submit answers'; }
@@ -9943,6 +9999,7 @@ function closeTest(){ quizState = null; closeModal('modal-test'); }
 async function openCertificate(completionId){
   const r = await callDb('get_certificate', { completion_id: completionId });
   if(!r || !r.ok){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this certificate','error'); return; }
+  certData = r;
   const who = [r.person && r.person.first, r.person && r.person.last].filter(Boolean).join(' ') || 'NED Sales Hub';
   const role = (r.person && r.person.job_title) || '';
   document.getElementById('tcert-sheet').innerHTML = `
@@ -9964,9 +10021,63 @@ async function openCertificate(completionId){
   openBackdrop('modal-cert');
 }
 
-// Browser print for now - a one-click PDF library is a later phase. The class
-// is what the @media print block hangs off, and it comes straight back off so
-// an ordinary Ctrl+P elsewhere in the app is unaffected.
+// The certificate as a file. Built from the same data the sheet on screen
+// is built from - which is the data the gateway handed over, not anything
+// read back out of the DOM - so the two cannot drift apart.
+let certData = null;
+function certPdfLines(c){
+  const who = [c.person && c.person.first, c.person && c.person.last]
+    .filter(Boolean).join(' ').trim() || 'NED Sales Hub';
+  return {
+    who,
+    role: (c.person && c.person.job_title) || '',
+    title: (c.training && c.training.title) || 'Training',
+    score: String(c.score) + '%',
+    when: fmtDate(c.completed_at),
+    number: c.cert_number || '',
+    file: 'NED-certificate-' + String(c.cert_number || 'training').replace(/[^A-Za-z0-9._-]+/g,'-') + '.pdf'
+  };
+}
+function downloadCertificatePdf(){
+  const c = certData;
+  if(!c){ showToast('Open a certificate first.','error'); return; }
+  const maker = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+  if(!maker){ showToast('The PDF library did not load - use Print instead.','error'); return; }
+  const L = certPdfLines(c);
+  // A4 portrait, in millimetres, which is what the measurements below are.
+  const doc = new maker({ unit:'mm', format:'a4' });
+  const W = 210, left = 24;
+  doc.setFillColor(27,156,133); doc.rect(left, 20, 162, 2.2, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(27,156,133);
+  doc.text('NED COLLEGE - SALES DEPARTMENT', left, 34);
+  doc.setFontSize(26); doc.setTextColor(15,23,42);
+  doc.text('Certificate of Completion', left, 50);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(90,100,116);
+  doc.text('This certifies that', left, 66);
+  doc.setFont('helvetica','bold'); doc.setFontSize(24); doc.setTextColor(15,23,42);
+  doc.text(L.who, left, 80);
+  if(L.role){
+    doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(90,100,116);
+    doc.text(L.role, left, 88);
+  }
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(90,100,116);
+  doc.text('has successfully completed the training', left, 102);
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.setTextColor(15,23,42);
+  doc.text(doc.splitTextToSize(L.title, W - left * 2), left, 112);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11); doc.setTextColor(90,100,116);
+  doc.text('Score: ' + L.score, left, 136);
+  doc.text('Completed: ' + L.when, left, 144);
+  doc.text('Certificate number: ' + L.number, left, 152);
+  doc.setFontSize(9);
+  doc.text('Issued by NED Sales Hub. The certificate number above is minted on the server and is unique to this completion.',
+    left, 176, { maxWidth: W - left * 2 });
+  doc.save(L.file);
+  showToast('Certificate downloaded','success');
+}
+
+// Browser print as well - a dialogue is still the quickest route to paper.
+// The class is what the @media print block hangs off, and it comes straight
+// back off so an ordinary Ctrl+P elsewhere in the app is unaffected.
 function printCertificate(){
   document.body.classList.add('printing-cert');
   try { window.print(); }
@@ -10118,6 +10229,7 @@ function openContentModal(type, id){
   if(uPin) uPin.checked = !!(it && it.pinned);
   document.getElementById('clib-has-test').checked = false;
   document.getElementById('clib-threshold').value = 70;
+  document.getElementById('clib-numq').value = '';
   testDraft = [];
   renderTestEditor();
   syncTestBody();
@@ -10136,6 +10248,8 @@ function openContentModal(type, id){
         if(document.getElementById('clib-id').value !== String(id)) return;
         document.getElementById('clib-has-test').checked = !!a.has_test;
         if(a.pass_threshold) document.getElementById('clib-threshold').value = a.pass_threshold;
+        document.getElementById('clib-numq').value =
+          (a.test_num_questions === null || a.test_num_questions === undefined) ? '' : a.test_num_questions;
         testDraft = (a.questions||[]).map(q=>({
           question: q.question||'',
           options: Array.isArray(q.options) && q.options.length ? q.options.slice() : ['',''],
@@ -10211,6 +10325,9 @@ async function saveContent(){
         const body = { content_id: cid, has_test: wantsTest };
         if(wantsTest){
           body.pass_threshold = threshold;
+          // Blank means the whole bank, which is what the gateway does with
+          // an empty string.
+          body.test_num_questions = document.getElementById('clib-numq').value.trim();
           body.questions = testDraft.map(q=>({
             question: String(q.question||'').trim(),
             options: q.options.map(o=>String(o||'').trim()),
