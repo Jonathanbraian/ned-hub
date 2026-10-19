@@ -641,6 +641,18 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    is the thing this change exists to stop showing people. */
 .apr-fixed .apr-answer{font-weight:600;padding:2px 0}
 .apr-from{font-size:11px;color:var(--muted);margin-top:5px}
+.apr-kpi{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:13px 15px;margin-top:12px}
+.apr-kpi-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.apr-kpi-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--manager)}
+.apr-kpi-btn{font-family:'Rubik',sans-serif;font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer}
+.apr-kpi-btn:hover{border-color:var(--manager);color:var(--manager)}
+.apr-kpi-row{display:flex;gap:8px;align-items:baseline;font-size:12.5px;margin-top:4px}
+.apr-kpi-k{min-width:76px;color:var(--muted)}
+.apr-kpi-v{color:var(--text);font-weight:600}
+.apr-kpi-note{font-size:11.5px;color:var(--muted);margin-top:7px}
+.apr-kpi-months{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.apr-kpi-m{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px 8px}
+.apr-kpi-m b{color:var(--text);font-weight:600}
 .apr-blank{font-size:12.5px;color:var(--muted)}
 .apr-view-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .apr-view-meta{font-size:11.5px;color:var(--muted);margin-bottom:16px}
@@ -6537,11 +6549,66 @@ function aprAutoFill(subject, cargo, saved){
 const APR_FIXED_NOTE={ s1_4:'Set when this appraisal was created' };
 function aprFixedNote(id){ return APR_FIXED_NOTE[id] || 'From the profile'; }
 
+// ── Section 2 reads from the app's own data ─────────────
+// Sales come from the sheet the Competitions page reads, matched to this
+// person by name; the work comes from their assignments. Both are context
+// rather than answers, which is why the panel is not a field - and why
+// what it says is captured into the appraisal at save, so re-opening the
+// record next year shows the figures it was written against rather than
+// today's.
+let aprKpi=null, aprKpiState='idle';
+// What the last read put into each pre-filled field. A value still equal
+// to it was never touched, so a later read may replace it; anything else
+// is the reviewer's own and is left alone.
+let aprKpiFilled={};
+function aprKpiSalesHTML(k){
+  const s=k && k.sales;
+  if(!s) return '<div class="apr-kpi-row"><span class="apr-kpi-k">Sales</span>'+
+    '<span class="apr-kpi-v">Not recorded with this appraisal</span></div>';
+  if(s.unavailable) return '<div class="apr-kpi-row"><span class="apr-kpi-k">Sales</span>'+
+    '<span class="apr-kpi-v">Rankings temporarily unavailable</span></div>';
+  if(!s.matched) return '<div class="apr-kpi-row"><span class="apr-kpi-k">Sales</span>'+
+    '<span class="apr-kpi-v">No sales record matched for this person</span></div>';
+  const pct = (s.range_pct===null||s.range_pct===undefined)
+    ? 'no target on the sheet'
+    : Math.round(s.range_pct*100)+'% of target';
+  const target = (s.target===null||s.target===undefined) ? '' : ' of '+money(s.target);
+  const months=(s.months||[]).map(m=>'<span class="apr-kpi-m">'+esc(m.label.slice(0,3))+
+    ' <b>'+esc(money(m.value))+'</b></span>').join('');
+  return '<div class="apr-kpi-row"><span class="apr-kpi-k">Sales</span><span class="apr-kpi-v">'+
+    esc(money(s.range_total))+esc(target)+' - '+esc(pct)+'</span></div>'+
+    (months?'<div class="apr-kpi-months">'+months+'</div>':'');
+}
+function aprKpiWorkHTML(k){
+  const a=k && k.assignments;
+  if(!a) return '';
+  return '<div class="apr-kpi-row"><span class="apr-kpi-k">Work</span><span class="apr-kpi-v">'+
+    a.on_time+' on time, '+a.late+' late, '+a.overdue+' overdue, '+a.pending+' pending'+
+    ' - '+a.total+' in total</span></div>';
+}
+function aprKpiPanelHTML(readonly){
+  let body;
+  if(aprKpiState==='loading') body='<div class="apr-kpi-note">Reading this person\'s numbers...</div>';
+  else if(aprKpiState==='failed') body='<div class="apr-kpi-note">Those numbers could not be read just now.</div>';
+  else body=aprKpiSalesHTML(aprKpi)+aprKpiWorkHTML(aprKpi);
+  const range=(aprKpi&&aprKpi.range&&aprKpi.range.label)?aprKpi.range.label:'';
+  const note=range
+    ? '<div class="apr-kpi-note">'+esc(range)+
+      (aprKpi.captured?' \u00b7 captured '+esc(aprKpi.captured):'')+'</div>'
+    : '';
+  const refresh = readonly ? ''
+    : '<button type="button" class="apr-kpi-btn" onclick="aprRefreshKpis()">Refresh from the system</button>';
+  return '<div class="apr-kpi" id="apr-kpi"><div class="apr-kpi-head">'+
+    '<span class="apr-kpi-title">From the system</span>'+refresh+'</div>'+
+    body+note+'</div>';
+}
+
 function aprFormHTML(t, vals, readonly){
   const answers=vals||{};
   return t.sections.map(sec=>'<div class="apr-sec"><div class="apr-sec-title">'+
     sec.n+'. '+esc(sec.title)+'</div>'+
     (sec.scale ? '<div class="apr-scale">'+esc(APR_SCALE_TEXT)+'</div>' : '')+
+    (sec.n===2 ? aprKpiPanelHTML(readonly) : '')+
     sec.groups.map(g=>aprGroupHTML(g, answers, readonly)).join('')+'</div>').join('');
 }
 
@@ -6634,6 +6701,40 @@ function aprRenderForm(){
   host.innerHTML = t ? aprFormHTML(t, aprDraft, false) : '';
 }
 function aprTemplateChanged(){ aprSyncDraft(); aprApplyAuto(); aprRenderForm(); }
+// A default, not an answer: the reviewer may overwrite any of these before
+// saving, and a field they have already filled in is never overwritten -
+// which is also what makes the refresh below safe to press twice.
+function aprPrefillFromKpi(){
+  const s=aprKpi && aprKpi.sales;
+  if(!s || !s.matched) return;
+  const put=(id,v)=>{
+    if(v===null||v===undefined||v==='') return;
+    const cur=aprDraft[id];
+    const untouched = cur===undefined || cur===null || String(cur).trim()==='' ||
+      String(cur)===String(aprKpiFilled[id]);
+    if(!untouched) return;
+    aprDraft[id]=String(v);
+    aprKpiFilled[id]=String(v);
+  };
+  put('s2_0', (s.target===null||s.target===undefined) ? '' : money(s.target));
+  put('s2_1', money(s.range_total));
+  put('s2_2', (s.range_pct===null||s.range_pct===undefined) ? '' : String(Math.round(s.range_pct*100)));
+}
+async function aprLoadKpis(uid){
+  aprSyncDraft();
+  aprKpiState='loading';
+  aprRenderForm();
+  const r=await callDb('get_appraisal_kpis',{ user_id:uid,
+    period_start: aprDraft.s1_5||'', period_end: aprDraft.s1_6||'' });
+  if(!r || !r.ok){ aprKpiState='failed'; aprRenderForm(); return; }
+  aprKpi={ sales:r.sales, assignments:r.assignments, range:r.range, captured:aprToday() };
+  aprKpiState='done';
+  aprPrefillFromKpi();
+  aprRenderForm();
+}
+// Reading again with whatever review period is on the form now. It fills
+// blanks only, so pressing it cannot undo anything the reviewer typed.
+function aprRefreshKpis(){ if(aprSubjectId) aprLoadKpis(aprSubjectId); }
 function openAppraisal(uid, aprId){
   const d=detailOf(uid)||{};
   const a=aprId?(d.appraisals||[]).find(x=>String(x.id)===String(aprId)):null;
@@ -6657,9 +6758,15 @@ function openAppraisal(uid, aprId){
   aprSubjectId = uid;
   aprSaved = (a&&a.responses) ? a.responses : null;
   aprApplyAuto();
+  // An edit shows what was captured when the appraisal was written, not
+  // today's figures; a new one reads them now.
+  aprKpi = (a&&a.responses&&a.responses._kpi) ? a.responses._kpi : null;
+  aprKpiState = aprKpi ? 'done' : 'idle';
+  aprKpiFilled = {};
   aprRenderForm();
   const e=document.getElementById('apr-error'); if(e){e.textContent='';e.style.display='none';}
   openBackdrop('modal-appraisal');
+  if(!a) aprLoadKpis(uid);
 }
 async function saveAppraisal(){
   const uid=document.getElementById('apr-uid').value;
@@ -6670,6 +6777,9 @@ async function saveAppraisal(){
   if(!t){ fail('Pick a cadence and a template'); return; }
   aprSyncDraft();
   const responses=aprResponsesFor(t);
+  // Reserved key, not a field: it is what the system said at the time, so
+  // the record can be re-read without asking today's data what it thinks.
+  if(aprKpi) responses._kpi = aprKpi;
   const period=aprPeriodLabel(t, responses);
   const overall_rating=aprOverall(t, responses);
   const btn=document.getElementById('btn-save-apr'); btn.disabled=true;
@@ -6691,6 +6801,8 @@ function openAppraisalView(uid, aprId){
   const a=(d.appraisals||[]).find(x=>String(x.id)===String(aprId));
   if(!a){ showToast('That appraisal is no longer here.','error'); return; }
   const t=a.template?aprTemplate(a.template):null;
+  aprKpi = (a.responses && a.responses._kpi) ? a.responses._kpi : null;
+  aprKpiState = aprKpi ? 'done' : 'idle';
   document.getElementById('apr-view-title').textContent = t ? t.title : 'Appraisal';
   const head='<div class="apr-view-head"><span class="apr-tpl">'+
     esc(t?t.title:aprLabel(a.template))+'</span><span class="apr-rating-text">Overall: '+

@@ -1286,8 +1286,74 @@ function appraisalRating(v){
 function isResponseMap(v){
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
+// ── the numbers the system already holds ─────────────────
+// A review period is a pair of dates; the sales sheet is one year of
+// months. The range is the overlap between them, and it carries a label
+// so a figure is never read as covering more than it does.
+function appraisalRange(start, end, year){
+  const a = ymdParts(start), b = ymdParts(end);
+  if(!a || !b || a.t > b.t) return { from:1, to:12, full:true,
+    label:'Full year ' + year };
+  const from = (a.y < year) ? 1 : (a.y > year ? 13 : a.mo);
+  const to   = (b.y > year) ? 12 : (b.y < year ? 0 : b.mo);
+  // A review period that ended before the sheet began, or begins after it
+  // ends, has no months to sum. Saying so is better than quietly handing
+  // back a year nobody asked about.
+  if(from > to) return { from:1, to:0, full:false, outside:true,
+    label:'No month of ' + year + ' falls in this review period' };
+  return { from, to, full:false,
+    label: COMP_MONTHS[from-1] + ' to ' + COMP_MONTHS[to-1] + ' ' + year };
+}
+// The sheet is maintained by hand, so the match is by cleaned name and
+// nothing else: the campus suffix comes off, case and spacing stop
+// mattering, and a person the sheet does not carry is simply unmatched.
+// No figure is ever invented for them.
+function appraisalSales(rows, person, range){
+  const want = cleanAgent(person).toLowerCase();
+  if(!want) return { matched:false };
+  const row = (rows || []).find(r => cleanAgent(r.agent).toLowerCase() === want);
+  if(!row) return { matched:false };
+  const months = [];
+  let total = 0;
+  for(let m = range.from; m <= range.to; m++){
+    const value = Number((row.months || [])[m-1] || 0);
+    months.push({ month:m, label:COMP_MONTHS[m-1], value });
+    total += value;
+  }
+  const target = Number(row.target) > 0 ? Number(row.target) : null;
+  return { matched:true, campus: row.campus || null, team: row.team || '',
+    target, months, range_total: total,
+    range_pct: target ? total / target : null, range_label: range.label };
+}
+// What the person's assignments amount to over the same period. A finished
+// item belongs to the period it was finished in; an unfinished one to the
+// period it was due in, or to any period at all while it has no due date,
+// because open work is open now whatever month you ask about.
+function appraisalAssignmentSummary(rows, passes, today, start, end){
+  const out = { total:0, on_time:0, late:0, overdue:0, pending:0, done:0 };
+  const a = ymdParts(start), b = ymdParts(end);
+  const bounded = !!(a && b && a.t <= b.t);
+  (rows || []).forEach(r => {
+    if(r.status === 'cancelled') return;
+    const eff = assignmentEffective(r, passes, today);
+    if(bounded){
+      const when = eff.done
+        ? (eff.completed_at ? String(eff.completed_at).slice(0,10) : null)
+        : (r.due_date ? String(r.due_date).slice(0,10) : null);
+      if(when !== null && (when < start || when > end)) return;
+    }
+    out.total++;
+    if(eff.done) out.done++;
+    if(eff.label === 'on_time') out.on_time++;
+    else if(eff.label === 'late') out.late++;
+    else if(eff.label === 'overdue') out.overdue++;
+    else if(eff.label === 'pending') out.pending++;
+  });
+  return out;
+}
 exports.__appraisals = { APPRAISAL_TEMPLATES, APPRAISAL_CADENCES, APPRAISAL_CARGOS,
-  appraisalRating, isResponseMap };
+  appraisalRating, isResponseMap, appraisalRange, appraisalSales,
+  appraisalAssignmentSummary };
 
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
@@ -2524,6 +2590,38 @@ exports.handler = async (event) => {
         }).select('id').single();
         if(error) return json(500,{error:'save_failed', detail:error.message});
         return json(200,{ ok:true, id:data && data.id });
+      }
+      case 'get_appraisal_kpis': {
+        // Read-only, and behind the appraisal gate like everything else
+        // about an appraisal: these are somebody's numbers, and the person
+        // they are about does not see them here.
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,first,last,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
+        const start = (p.period_start||'').toString().trim();
+        const end = (p.period_end||'').toString().trim();
+        const src = await competitionSource();
+        const year = sheetYear(src);
+        const range = appraisalRange(start, end, year);
+        const sheet = await loadCompetition(src);
+        const person = [tgt.first, tgt.last].filter(Boolean).join(' ').trim();
+        // A sheet that cannot be read is a state, not a failure: the rest
+        // of the panel still has something to say.
+        const sales = sheet.error ? { matched:false, unavailable:true }
+                                  : appraisalSales(sheet.rows, person, range);
+        const { data: asgRows } = await admin.from('assignments')
+          .select('id,user_id,type,content_id,due_date,status,completed_at')
+          .eq('user_id', uid);
+        const passes = await assignmentPasses((asgRows||[]).filter(r => r.status !== 'cancelled'));
+        const assignments = appraisalAssignmentSummary(asgRows, passes,
+          dublinYMD(new Date()), start, end);
+        return json(200,{ ok:true, sales, assignments, year,
+          range: { start: start || null, end: end || null,
+            label: range.label, full: !!range.full } });
       }
       case 'update_appraisal': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
