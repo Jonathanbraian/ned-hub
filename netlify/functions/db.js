@@ -1074,6 +1074,97 @@ exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
 exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
 exports.__clearCompetitionCache = () => { __compCache.clear(); };
 
+// ── HALL OF FAME ─────────────────────────────────────────────────
+// The ranking is live from the sheet, and the sheet is per YEAR: next
+// January the tabs become "Dublin 2027" and 2026's figures stop being
+// reachable. So each month is frozen into hof_winners once it closes, and
+// from then on the archive - not the sheet - is what the past means.
+//
+// There is no scheduler. Archiving happens lazily, whenever anybody opens
+// Competitions or the Hall of Fame, which is the moment with the best
+// chance of catching a month before the year rolls over.
+const HOF_SCOPES = ['company','dublin','limerick'];
+const HOF_AWARDS = ['staff_of_month','sales_star'];
+
+// Which year the configured sheet is about, read from the tab name. A tab
+// nobody has renamed yet falls back to the year we are in, which is the
+// only honest guess available.
+function sheetYear(src, now){
+  const m = /(\d{4})/.exec(String((src && src.dublin_tab) || ''));
+  if(m){
+    const y = Number(m[1]);
+    if(y >= 2000 && y <= 2100) return y;
+  }
+  return Number(dublinYMD(now || new Date()).slice(0,4));
+}
+// A month is complete when it is wholly in the past, in Dublin. The month
+// we are in is NOT complete - its winner can still change - and a sheet for
+// a year that has not started has no complete months at all.
+function completedMonths(year, now){
+  const today = dublinYMD(now || new Date());
+  const curY = Number(today.slice(0,4)), curM = Number(today.slice(5,7));
+  if(year < curY) return [1,2,3,4,5,6,7,8,9,10,11,12];
+  if(year > curY) return [];
+  const out = [];
+  for(let m = 1; m < curM; m++) out.push(m);
+  return out;
+}
+// Freeze every completed month that is not already in the archive.
+//
+// A month that already has ANY row is left strictly alone: the archive is
+// the source of truth for the past, so a figure corrected in the sheet
+// afterwards must not rewrite a prize that was already awarded. The unique
+// index is belt and braces behind that, for two readers arriving at once.
+async function archiveCompletedMonths(src, data, now){
+  // No sheet, no archiving. Silently: what is already archived stays, and
+  // the caller has its own way of saying the sheet is unreadable.
+  if(!src || !data || data.error || !Array.isArray(data.rows)) return { skipped:true };
+  const year = sheetYear(src, now);
+  const months = completedMonths(year, now);
+  if(!months.length) return { archived:0, months:[] };
+  const { data: existing } = await admin.from('hof_winners')
+    .select('year,month,scope,award').eq('year', year);
+  const seen = new Set();
+  (existing || []).forEach(r => { seen.add(Number(r.month)); });
+  const captured_at = new Date().toISOString();
+  let archived = 0;
+  const done = [];
+  for(const month of months){
+    if(seen.has(month)) continue;             // already frozen; never redone
+    const hi = competitionHighlights(data.rows, month - 1);
+    const rows = [];
+    HOF_AWARDS.forEach(award => {
+      const group = award === 'staff_of_month' ? hi.staff_of_month : hi.sales_star;
+      HOF_SCOPES.forEach(scope => {
+        const w = group[scope];
+        if(!w) return;                        // nobody qualified; nothing to freeze
+        rows.push({ year, month, scope, award,
+          agent_name: w.name, team: w.team || '',
+          value: w.value, target: w.target, pct: w.pct, captured_at });
+      });
+    });
+    if(!rows.length) continue;                // a month nobody sold in archives nothing
+    // One at a time, tolerating the unique violation: in Postgres a batch
+    // where one row conflicts fails the whole batch, and "do nothing" is
+    // exactly what a conflict should mean here.
+    for(const row of rows){
+      const { error } = await admin.from('hof_winners').insert(row);
+      if(error && error.code !== '23505') return { error:'archive_failed', detail:error.message };
+      if(!error) archived++;
+    }
+    done.push(month);
+  }
+  return { archived, months: done };
+}
+function hofWinnerOut(r){
+  if(!r) return null;
+  return { agent_name: r.agent_name || '', team: r.team || '',
+    value: Number(r.value || 0),
+    target: (r.target === null || r.target === undefined) ? null : Number(r.target),
+    pct: (r.pct === null || r.pct === undefined) ? null : Number(r.pct) };
+}
+exports.__hof = { sheetYear, completedMonths, archiveCompletedMonths, hofWinnerOut };
+
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -3197,6 +3288,11 @@ exports.handler = async (event) => {
         // A sheet that cannot be read is a state, not a failure: the page
         // says so quietly and the rest of the app carries on.
         if(data.error) return json(200,{ ok:false, error:'sheet_unavailable' });
+        // Freeze anything that has closed since the last time somebody
+        // looked. Opening this page is the commonest moment to be reading
+        // the sheet, so it is the best chance of catching a month before
+        // the tabs roll over to next year.
+        await archiveCompletedMonths(src, data);
         // The current month in Dublin, which is the month the office is in.
         const nowMonth = Number(dublinYMD(new Date()).slice(5,7));
         let month = Number(p.month);
@@ -3254,6 +3350,40 @@ exports.handler = async (event) => {
         // keep serving the old sheet for up to five minutes.
         __compCache.clear();
         return json(200,{ ok:true, source:{ sheet_id, dublin_tab, limerick_tab } });
+      }
+      case 'get_hall_of_fame': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Archive first, so a month that closed since the last visit is in
+        // the hall by the time it is drawn. A sheet that cannot be read is
+        // not an error here: the hall is about the past, and the past is
+        // already in the table.
+        const src = await competitionSource();
+        const data = await loadCompetition(src);
+        await archiveCompletedMonths(src, data);
+        const { data: rows } = await admin.from('hof_winners')
+          .select('year,month,scope,award,agent_name,team,value,target,pct');
+        // Group into one entry per month, newest first, built field by
+        // field so a column added to the table later cannot leak out.
+        const byMonth = new Map();
+        (rows || []).forEach(r => {
+          const y = Number(r.year), m = Number(r.month);
+          if(!Number.isFinite(y) || !Number.isFinite(m)) return;
+          const key = y + '-' + String(m).padStart(2,'0');
+          if(!byMonth.has(key)) byMonth.set(key, { year:y, month:m,
+            staff_of_month: { company:null, dublin:null, limerick:null },
+            sales_star: { company:null, dublin:null, limerick:null } });
+          const entry = byMonth.get(key);
+          const group = r.award === 'sales_star' ? entry.sales_star
+            : r.award === 'staff_of_month' ? entry.staff_of_month : null;
+          if(!group) return;
+          if(!HOF_SCOPES.includes(r.scope)) return;
+          group[r.scope] = hofWinnerOut(r);
+        });
+        const months = Array.from(byMonth.values())
+          .sort((a,b) => b.year - a.year || b.month - a.month);
+        return json(200,{ ok:true, months,
+          month_names: COMP_MONTHS.map((label,i) => ({ value:i+1, label })),
+          sheet_unavailable: !!data.error });
       }
       default: return json(400, { error:'unknown_action' });
     }

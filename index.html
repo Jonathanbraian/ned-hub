@@ -1721,6 +1721,41 @@ a.clib-open{text-decoration:none}
   .comp-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .comp-tbl{min-width:580px}
 }
+/* ── HALL OF FAME ──────────────────────────────────────────────
+   The permanent half of Competitions. The board above is live and will be
+   gone when the sheet rolls over to next year; this is what survives, so
+   it is deliberately warmer than the table - a shelf of trophies rather
+   than another grid. */
+.hof-sec{margin-top:34px;padding-top:30px;border-top:1px solid var(--border)}
+.hof-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.hof-icon{width:38px;height:38px;border-radius:11px;background:linear-gradient(-25deg,#F59E0B,#FDE68A);color:#7C2D12;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hof-title{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.hof-sub{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+.hof-list{display:flex;flex-direction:column;gap:14px}
+.hof-month{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-card)}
+.hof-month-k{font-size:13px;font-weight:700;letter-spacing:.3px;margin-bottom:13px;display:flex;align-items:center;gap:9px}
+.hof-month-k i{flex:1;height:1px;background:var(--border);display:block}
+.hof-awards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px}
+.hof-award{position:relative;overflow:hidden;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+.hof-award::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.hof-award.trophy::before{background:linear-gradient(-25deg,#F59E0B,#FDE68A)}
+.hof-award.star::before{background:linear-gradient(-25deg,#7C3AED,#22D3EE)}
+.hof-award-k{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+.hof-award.trophy .hof-award-k svg{color:#B45309}
+.hof-award.star .hof-award-k svg{color:#7C3AED}
+.hof-win{display:flex;align-items:baseline;gap:9px;margin-top:9px;flex-wrap:wrap}
+.hof-win-n{font-size:15.5px;font-weight:700;letter-spacing:-.25px}
+.hof-win-v{margin-left:auto;font-size:15px;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hof-win-t{font-size:11.5px;color:var(--muted);flex-basis:100%}
+.hof-split{display:flex;gap:10px;flex-wrap:wrap;margin-top:11px;padding-top:9px;border-top:1px solid var(--border)}
+.hof-split-c{flex:1;min-width:116px}
+.hof-split-k{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.hof-split-n{font-size:12.5px;font-weight:600;margin-top:2px;letter-spacing:-.1px}
+.hof-split-n.none{color:var(--muted);font-weight:500}
+.hof-split-v{font-size:11px;color:var(--muted);margin-top:1px;font-variant-numeric:tabular-nums}
+.hof-none{font-size:12.5px;color:var(--muted);margin-top:9px}
+.hof-empty{padding:30px 18px;text-align:center;font-size:13px;color:var(--muted);background:var(--bg);border:1px dashed var(--border2);border-radius:12px;line-height:1.7}
+@media(max-width:900px){ .hof-awards{grid-template-columns:1fr} }
 /* ── LATEST UPDATES (home band + the Updates page cards) ───────
    The band borrows the birthday band's shell so the two read as one
    column, but its rows are a feed: chip, title, date, action. */
@@ -2896,6 +2931,20 @@ a.clib-open{text-decoration:none}
         <div class="comp-board">
           <div class="comp-scroll" id="comp-board-host"></div>
         </div>
+      </div>
+
+      <!-- Deliberately OUTSIDE #comp-main: when the sheet cannot be read the
+           live board is replaced by a notice, and the hall - which does not
+           come from the sheet at all - must still be standing. -->
+      <div class="hof-sec" id="comp-hof">
+        <div class="hof-head">
+          <div class="hof-icon"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2"/><path d="M7 5H5a2 2 0 0 0 0 4h2"/></svg></div>
+          <div>
+            <div class="hof-title">Hall of Fame</div>
+            <div class="hof-sub">Every month, once it has closed. The sheet starts again each year; this does not.</div>
+          </div>
+        </div>
+        <div id="comp-hof-host"></div>
       </div>
     </div>
   </div>
@@ -7361,9 +7410,78 @@ function renderCompetitionPage(){
   if(starHost) starHost.innerHTML = compWinnerBlock('star', hi.sales_star);
   renderCompetitionBoard();
 }
+// ── THE HALL OF FAME ────────────────────────────────────────────
+// The permanent half of this page. The board above is read live from a
+// sheet that starts again every January; these months were frozen when
+// they closed, and nothing in the sheet can change them afterwards.
+let compHof = null;
+
+const HOF_TROPHY = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2a2 2 0 0 1 0 4h-2"/><path d="M7 5H5a2 2 0 0 0 0 4h2"/></svg>';
+const HOF_STAR = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.1 8.6 22 9.6 17 14.5 18.2 21.5 12 18.2 5.8 21.5 7 14.5 2 9.6 8.9 8.6 12 2"/></svg>';
+
+async function loadHallOfFame(){
+  const r = await callDb('get_hall_of_fame');
+  compHof = (r && r.ok && Array.isArray(r.months)) ? r : null;
+}
+function hofMonthName(n){
+  const list = (compHof && compHof.month_names) || [];
+  const hit = list.find(m => Number(m.value) === Number(n));
+  return hit ? hit.label : String(n);
+}
+// One prize for one month: the company winner large, the two campuses
+// under it. A campus nobody won is shown as absent rather than skipped -
+// the shape of the month is part of the record.
+function hofAward(kind, group){
+  const isStar = kind === 'star';
+  const label = isStar ? 'Sales Star' : 'Staff of the Month';
+  const icon = isStar ? HOF_STAR : HOF_TROPHY;
+  const big = w => isStar ? compPct(w.pct) : money(w.value);
+  const head = '<div class="hof-award-k">' + icon + ' ' + esc(label) + '</div>';
+  const w = group && group.company;
+  if(!w) return '<div class="hof-award ' + (isStar ? 'star' : 'trophy') + '">' + head +
+    '<div class="hof-none">No winner that month.</div></div>';
+  const sub = isStar
+    ? (w.target ? 'of ' + money(w.target) : '')
+    : (w.pct === null ? 'no target set' : compPct(w.pct) + ' of target');
+  const split = ['dublin','limerick'].map(c => {
+    const x = group[c];
+    return '<div class="hof-split-c"><div class="hof-split-k">' + esc(compCampusLabel(c)) + '</div>' +
+      (x ? '<div class="hof-split-n">' + esc(x.agent_name) + '</div>' +
+           '<div class="hof-split-v">' + esc(big(x)) + '</div>'
+         : '<div class="hof-split-n none">No winner</div>') +
+      '</div>';
+  }).join('');
+  return '<div class="hof-award ' + (isStar ? 'star' : 'trophy') + '">' + head +
+    '<div class="hof-win"><span class="hof-win-n">' + esc(w.agent_name) + '</span>' +
+      '<span class="hof-win-v">' + esc(big(w)) + '</span>' +
+      '<span class="hof-win-t">' + esc([w.team, sub].filter(Boolean).join(' · ')) + '</span></div>' +
+    '<div class="hof-split">' + split + '</div></div>';
+}
+function renderHallOfFame(){
+  const host = document.getElementById('comp-hof-host');
+  if(!host) return;
+  const months = (compHof && compHof.months) || [];
+  if(!months.length){
+    host.innerHTML = '<div class="hof-empty">No past winners yet - the hall fills as each month closes.</div>';
+    return;
+  }
+  host.innerHTML = '<div class="hof-list">' + months.map(m =>
+    '<div class="hof-month">' +
+      '<div class="hof-month-k">' + esc(hofMonthName(m.month)) + ' ' + esc(m.year) + '<i></i></div>' +
+      '<div class="hof-awards">' +
+        hofAward('trophy', m.staff_of_month) +
+        hofAward('star', m.sales_star) +
+      '</div>' +
+    '</div>').join('') + '</div>';
+}
+
 async function openCompetitionsPage(){
   await softLoad('competitions', () => loadCompetitionBoard());
   renderCompetitionPage();
+  // Loaded after the board so the live half paints first, and separately
+  // from it so an unreadable sheet still leaves the hall standing.
+  await softLoad('hall-of-fame', loadHallOfFame);
+  renderHallOfFame();
 }
 
 // ── The admin config ────────────────────────────────────────────
