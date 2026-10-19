@@ -3481,6 +3481,7 @@ a.clib-open{text-decoration:none}
       <div class="form-group">
         <label class="form-label">File</label>
         <input class="form-input" type="file" id="clib-file-input">
+        <div class="form-hint" id="clib-file-hint"></div>
         <div class="clib-filename" id="clib-file-current"></div>
       </div>
       <!-- Every type, not just materials and tools: anything in the library
@@ -10376,6 +10377,14 @@ function openContentModal(type, id){
   // calling a course a training.
   const tl = document.getElementById('clib-has-test-label');
   if(tl) tl.textContent = 'This ' + (CONTENT_LABEL[type] || 'item') + ' has a test';
+  // What the File field is for depends on the type, and so does whether it
+  // is needed at all: a training or a course carries its content in its
+  // lessons and its test, so a file is extra reading and nothing more.
+  const fh = document.getElementById('clib-file-hint');
+  if(fh) fh.textContent = isLesson
+    ? ('Optional - this ' + (CONTENT_LABEL[type] || 'item') +
+       ' gets its content from Lessons and its test. A file is extra reading.')
+    : (type === 'update' ? '' : 'Attach a file, or give a link below - a new item needs one of the two.');
   // So does the lessons list. Something being created has no id yet, so it
   // says so rather than offering an upload with nowhere to go.
   const lw = document.getElementById('clib-lessons-wrap');
@@ -10442,18 +10451,23 @@ async function saveContent(){
   const file = (document.getElementById('clib-file-input').files||[])[0];
   const link = document.getElementById('clib-link-input').value.trim();
   const isUpdate = (type === 'update');
+  const isLesson = isLessonType(type);
   // A new item needs somewhere to go: a file, a link, or both. It used to
-  // need a file, which is what made a link-only item impossible. An update
-  // is the exception - a text-only announcement is the whole point of one,
-  // so a title is all it needs.
-  if(!id && !file && !link && !isUpdate){ contentError('Add a file or a link'); return; }
+  // need a file, which is what made a link-only item impossible. Two
+  // exceptions: an update, because a text-only announcement is the whole
+  // point of one; and a training or a course, whose content is its lessons
+  // and its test. Demanding a file of those was a catch-22 - the lessons
+  // cannot be added until the thing is saved, and it could not be saved
+  // without a file to stand in for them.
+  if(!id && !file && !link && !isUpdate && !isLesson){
+    contentError('Add a file or a link'); return; }
   if(link && !/^https?:\/\//i.test(link)){
     contentError('Links must start with http:// or https://'); return;
   }
   contentError('');
   setContentBusy(true, 'Saving...');
   try {
-    const isTraining = isLessonType(type);
+    const isTraining = isLesson;
     const wantsTest = isTraining && !!document.getElementById('clib-has-test').checked;
     const threshold = Number(document.getElementById('clib-threshold').value);
     if(wantsTest){
@@ -10520,6 +10534,12 @@ async function saveContent(){
     if(isUpdate) renderHomeUpdates();
     if(isTraining) await loadTrainingStatus();
     if(isTraining) renderContentSection(type);
+    // A training or course that has just been created has an id for the
+    // first time, which is the only thing the Lessons list was waiting for.
+    // Reopen it on itself rather than making somebody find it again. The
+    // refresh above has already put it in the cache, so the modal opens on
+    // the saved row and not on a blank.
+    if(!id && isTraining && r.id) openContentModal(type, r.id);
   } catch(e){
     contentError(CONTENT_ERRORS[e && e.message] || 'Could not save this item');
   } finally {
