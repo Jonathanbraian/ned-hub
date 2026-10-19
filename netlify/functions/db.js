@@ -507,6 +507,28 @@ const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Ot
 // markup. They are ordinary library items in every respect - same table,
 // same gates, same uploads - and need nothing of their own here.
 const CONTENT_TYPES = ['training','course','material','tool','update','procedure','handbook'];
+// Who an item is for. Every type shares one selector, because the modal is
+// shared and the question is the same whatever the item happens to be.
+const AUDIENCES = ['everyone','agents','leadership'];
+// Deliberately NOT the rank table. senior_exec sits at rank 0 because it
+// acts on nobody, but it is leadership for the purpose of what it is SHOWN -
+// the two questions are different, and answering this one with rank would
+// hand a senior executive the agents' shelf.
+const AUDIENCE_LEADERSHIP = ['senior_exec','leader','supervisor','manager','director','admin'];
+function audienceTierFor(me){
+  return AUDIENCE_LEADERSHIP.includes(me && me.role) ? 'leadership' : 'agents';
+}
+// Anything unrecognised is 'everyone': a row written before this column
+// existed, or a payload that invents a value, is visible rather than hidden.
+function audienceOf(v){ return AUDIENCES.includes(v) ? v : 'everyone'; }
+// Managers see every item whoever it is for, because they are the ones who
+// have to manage it - the same gate that lets them publish.
+function audienceAllows(me, audience){
+  if(isMgr(me && me.role)) return true;
+  const a = audienceOf(audience);
+  return a === 'everyone' || a === audienceTierFor(me);
+}
+exports.__audience = { AUDIENCES, AUDIENCE_LEADERSHIP, audienceTierFor, audienceOf, audienceAllows };
 const CONTENT_BUCKETS = { cover:'content-covers', file:'content-files' };
 // A cover is stored as its public URL, because that is what a page needs. To
 // delete the object later the path has to be recovered from it; anything that
@@ -2734,7 +2756,7 @@ exports.handler = async (event) => {
       case 'get_content': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         let q = admin.from('content_items')
-          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,pinned,has_test,pass_threshold,sort_order,created_at')
+          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,pinned,has_test,pass_threshold,sort_order,created_at,audience')
           .eq('active', true);
         // A library is browsed; a news feed is read. Updates therefore order
         // pinned-first then newest-first, and every other type keeps the
@@ -2753,10 +2775,15 @@ exports.handler = async (event) => {
         }
         const { data, error } = await q;
         if(error) return json(500,{error:'content_failed', detail:error.message});
+        // An item aimed at the other tier is not listed at all: not greyed
+        // out, not a card that says no. The filter runs here, on the way
+        // out, so no caller can ask for a shelf and be handed somebody
+        // else's.
+        const visible = (data||[]).filter(r => audienceAllows(me, r.audience));
         // Field by field. file_path is the key to a private bucket and must
         // never reach a browser - and that must not depend on somebody
         // remembering to prune the select above.
-        return json(200,{ items:(data||[]).map(r=>({
+        return json(200,{ items:visible.map(r=>({
           id: r.id, type: r.type, title: r.title,
           description: r.description, category: r.category,
           cover_url: r.cover_url, file_name: r.file_name, file_type: r.file_type,
@@ -2771,6 +2798,8 @@ exports.handler = async (event) => {
           // required, 70% to pass". Neither says anything about the answers.
           has_test: !!r.has_test,
           pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold),
+          // Who it is for, so the card can say so to the people who manage it.
+          audience: audienceOf(r.audience),
           sort_order: r.sort_order, created_at: r.created_at
         })) });
       }
@@ -2812,6 +2841,7 @@ exports.handler = async (event) => {
           // Sanitised here rather than trusted: whatever the client sends,
           // what lands on the row is an http(s) URL or nothing at all.
           link_url: safeHttpUrl(p.link_url),
+          audience: audienceOf(p.audience),
           pinned: !!p.pinned,
           sort_order: Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0,
           // Never from the request. A test is attached afterwards, by
@@ -2845,6 +2875,7 @@ exports.handler = async (event) => {
         // safeHttpUrl('') is null, so clearing the field clears the column.
         if(p.link_url !== undefined) patch.link_url = safeHttpUrl(p.link_url);
         if(p.pinned !== undefined) patch.pinned = !!p.pinned;
+        if(p.audience !== undefined) patch.audience = audienceOf(p.audience);
         if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order))) patch.sort_order = Number(p.sort_order);
         if(p.active !== undefined) patch.active = !!p.active;
         // A replaced cover or file leaves its predecessor in the bucket unless
@@ -3073,9 +3104,13 @@ exports.handler = async (event) => {
           }, mine) ] });
         }
         const { data: rows } = await admin.from('content_items')
-          .select('id,has_test,pass_threshold').eq('type','training').eq('has_test', true);
+          .select('id,has_test,pass_threshold,audience').eq('type','training').eq('has_test', true);
         const items = [];
         for(const r of (rows||[])){
+          // The same rule as the library itself: a training this person is
+          // never shown does not get to put its id, or their standing on
+          // it, into their status list.
+          if(!audienceAllows(me, r.audience)) continue;
           const mine = await myTrainingStatus(me.id, r.id);
           items.push(Object.assign({ content_id: r.id, has_test: true,
             pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold)
