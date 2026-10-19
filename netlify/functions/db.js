@@ -503,7 +503,10 @@ const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Ot
 // 'update' is a news item: same table, same gates, same upload. It differs
 // only in how it is ordered (pinned first, newest first) and in needing
 // nothing but a title - a text-only announcement is a valid item.
-const CONTENT_TYPES = ['training','course','material','tool','update'];
+// 'procedure' and 'handbook' are the two pages that used to be hand-written
+// markup. They are ordinary library items in every respect - same table,
+// same gates, same uploads - and need nothing of their own here.
+const CONTENT_TYPES = ['training','course','material','tool','update','procedure','handbook'];
 const CONTENT_BUCKETS = { cover:'content-covers', file:'content-files' };
 // A cover is stored as its public URL, because that is what a page needs. To
 // delete the object later the path has to be recovered from it; anything that
