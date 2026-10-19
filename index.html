@@ -637,6 +637,10 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .apr-ev{margin-top:10px}
 .apr-ev-label{font-size:11.5px;color:var(--muted);margin-bottom:5px}
 .apr-answer{font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap}
+/* A fact, not a field: no box, because a box that cannot be typed into
+   is the thing this change exists to stop showing people. */
+.apr-fixed .apr-answer{font-weight:600;padding:2px 0}
+.apr-from{font-size:11px;color:var(--muted);margin-top:5px}
 .apr-blank{font-size:12.5px;color:var(--muted)}
 .apr-view-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .apr-view-meta{font-size:11.5px;color:var(--muted);margin-bottom:16px}
@@ -6444,10 +6448,24 @@ function aprShown(it, v){
   return v==='' ? '<div class="apr-blank">Not answered</div>'
     : '<div class="apr-answer">'+esc(dashFix(v))+'</div>';
 }
+// A field the system filled in is shown as the value it resolved to -
+// not as a disabled input, which reads as something broken - and carries
+// that value in a hidden input so it is saved like any other answer.
+function aprHiddenInput(it, v){
+  return '<input type="hidden" id="apr-f-'+esc(it.id)+'" data-apr-id="'+esc(it.id)+
+    '" data-apr-type="'+esc(it.type)+'" value="'+esc(v)+'">';
+}
 function aprFieldHTML(it, vals, readonly){
   const v=aprNorm(it, vals[it.id]);
-  return '<div class="apr-field"><label class="form-label" for="apr-f-'+esc(it.id)+'">'+
-    esc(it.q)+'</label>'+(readonly ? aprShown(it,v) : aprInput(it,v))+'</div>';
+  const fixed = !readonly && aprFixed[it.id]!==undefined;
+  const label = (readonly||fixed)
+    ? '<div class="form-label">'+esc(it.q)+'</div>'
+    : '<label class="form-label" for="apr-f-'+esc(it.id)+'">'+esc(it.q)+'</label>';
+  const body = readonly ? aprShown(it,v)
+    : fixed ? aprShown(it,v)+'<div class="apr-from">'+esc(aprFixedNote(it.id))+'</div>'+
+              aprHiddenInput(it,v)
+    : aprInput(it,v);
+  return '<div class="apr-field'+(fixed?' apr-fixed':'')+'">'+label+body+'</div>';
 }
 function aprCompHTML(pair, vals, readonly){
   const rv=aprNorm(pair.rating, vals[pair.rating.id]);
@@ -6467,6 +6485,58 @@ function aprGroupHTML(group, vals, readonly){
   }
   return out;
 }
+// ── Section 1 comes from the system, not from typing ────────
+// Who the appraisal is about, who is writing it and when: the page knows
+// all three already, so they are resolved once and stored with the
+// answers. The stored copy is the record - a job title edited next year
+// does not quietly rewrite an appraisal written this one, which is also
+// why an edit keeps what was stored rather than resolving again.
+function aprToday(){
+  return new Intl.DateTimeFormat('en-CA',{ timeZone:'Europe/Dublin',
+    year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+}
+function aprWhoName(u){
+  return u ? String((u.first||'')+' '+(u.last||'')).trim() : '';
+}
+// Campus, and the team as well when they are on one.
+function aprWhere(u){
+  if(!u) return '';
+  const campus=CAMPUS_LABELS[u.campus]||u.campus||'', team=teamNameOf(u);
+  if(team) return campus ? campus+' - '+team : team;
+  return campus;
+}
+function aprReviewerName(u){
+  const name=aprWhoName(u), title=(u&&u.jobTitle)?u.jobTitle:'';
+  return title ? (name+', '+title) : name;
+}
+// The fields the system owns, resolved for this subject and this
+// reviewer. saved is the appraisal being edited, if there is one.
+function aprAutoFill(subject, cargo, saved){
+  const me=users.find(x=>String(x.id)===String(currentUserId));
+  const out={};
+  const put=(id, value)=>{
+    const was = saved ? saved[id] : undefined;
+    const kept = (was===undefined||was===null||String(was).trim()==='')
+      ? String(value==null?'':value).trim()
+      : String(was).trim();
+    if(kept!=='') out[id]=kept;
+  };
+  put('s1_0', aprWhoName(subject));
+  // A job title is the employee's own; where there is none, the template
+  // they are being reviewed against is the honest answer.
+  put('s1_1', (subject&&subject.jobTitle) ? subject.jobTitle : (APR_CARGO_LABEL[cargo]||''));
+  put('s1_2', aprWhere(subject));
+  put('s1_3', aprReviewerName(me));
+  // The day it was written, and it stays that day however often it is
+  // reopened. The review PERIOD is the reviewer's to set, so s1_5 and
+  // s1_6 are left alone.
+  put('s1_4', aprToday());
+  if(subject && subject.start_date) put('s1_7', String(subject.start_date).slice(0,10));
+  return out;
+}
+const APR_FIXED_NOTE={ s1_4:'Set when this appraisal was created' };
+function aprFixedNote(id){ return APR_FIXED_NOTE[id] || 'From the profile'; }
+
 function aprFormHTML(t, vals, readonly){
   const answers=vals||{};
   return t.sections.map(sec=>'<div class="apr-sec"><div class="apr-sec-title">'+
@@ -6480,6 +6550,17 @@ function aprFormHTML(t, vals, readonly){
 // overlap almost entirely, and making somebody retype the first half of a
 // form is the fastest way to make them leave a mistake uncorrected.
 let aprDraft={};
+// What the system resolved for the form currently open, and the record it
+// was resolved against: the subject, and the answers as they were saved.
+let aprFixed={}, aprSubjectId=null, aprSaved=null;
+// Resolve again for the template now chosen - only the fallback job title
+// depends on it, and only when the person has no title of their own.
+function aprApplyAuto(){
+  const subject=users.find(x=>String(x.id)===String(aprSubjectId));
+  const cargo=(document.getElementById('apr-cargo')||{}).value||'';
+  aprFixed=aprAutoFill(subject, cargo, aprSaved);
+  Object.assign(aprDraft, aprFixed);
+}
 function aprKey(){
   const c=document.getElementById('apr-cadence'), g=document.getElementById('apr-cargo');
   return (c?c.value:'')+'_'+(g?g.value:'');
@@ -6552,7 +6633,7 @@ function aprRenderForm(){
   const t=aprTemplate(aprKey());
   host.innerHTML = t ? aprFormHTML(t, aprDraft, false) : '';
 }
-function aprTemplateChanged(){ aprSyncDraft(); aprRenderForm(); }
+function aprTemplateChanged(){ aprSyncDraft(); aprApplyAuto(); aprRenderForm(); }
 function openAppraisal(uid, aprId){
   const d=detailOf(uid)||{};
   const a=aprId?(d.appraisals||[]).find(x=>String(x.id)===String(aprId)):null;
@@ -6573,6 +6654,9 @@ function openAppraisal(uid, aprId){
     ? 'The template this appraisal was written with.'
     : "Taken from this person's role - change it if the review should follow another one.";
   aprDraft = (a&&a.responses) ? Object.assign({}, a.responses) : {};
+  aprSubjectId = uid;
+  aprSaved = (a&&a.responses) ? a.responses : null;
+  aprApplyAuto();
   aprRenderForm();
   const e=document.getElementById('apr-error'); if(e){e.textContent='';e.style.display='none';}
   openBackdrop('modal-appraisal');
