@@ -1445,6 +1445,8 @@ a.clib-open{text-decoration:none}
 .tq-add{font-family:'Rubik',sans-serif;font-size:12.5px;font-weight:600;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;cursor:pointer;transition:all .15s}
 .tq-add:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
 .tq-correct-hint{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.tq-xl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.tq-xl .form-hint{flex:1 1 100%;margin:0}
 /* ── TRAINING TESTS: taking one ─────────────────────────────── */
 .quiz-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
 .quiz-meta strong{color:var(--text)}
@@ -3514,7 +3516,7 @@ a.clib-open{text-decoration:none}
       <div class="tq-wrap" id="clib-test-wrap" style="display:none">
         <div class="tq-toggle-row">
           <input type="checkbox" id="clib-has-test" onchange="syncTestBody()">
-          <label for="clib-has-test">This training has a test</label>
+          <label for="clib-has-test" id="clib-has-test-label">This training has a test</label>
         </div>
         <div class="tq-body" id="clib-test-body">
           <div class="form-group">
@@ -3534,6 +3536,12 @@ a.clib-open{text-decoration:none}
           <div class="tq-correct-hint">Mark the correct option with the radio button on its left. Correct answers are stored on the server and are never sent to the person taking the test.</div>
           <div id="clib-q-list"></div>
           <button type="button" class="tq-add" id="clib-q-add" onclick="addTestQuestion()">+ Add question</button>
+          <div class="tq-xl">
+            <button type="button" class="tq-add" id="clib-xl-template" onclick="downloadTestTemplate()">Download template (Excel)</button>
+            <button type="button" class="tq-add" id="clib-xl-import" onclick="document.getElementById('clib-xl-file').click()">Import from Excel</button>
+            <input type="file" id="clib-xl-file" accept=".xlsx,.xls" style="display:none" onchange="importTestXlsx(this)">
+            <div class="form-hint">One question per row: Question, Option A to D, and Correct as the letter A to D. Leave an option blank to ask fewer than four. An import replaces the list above - nothing is written until you save.</div>
+          </div>
         </div>
       </div>
       <div class="login-error" id="clib-error" style="margin-top:10px;margin-bottom:0"></div>
@@ -9357,6 +9365,32 @@ let toastTimer;
 // to the company, not to a reporting line, so Manager = LOCAL does not apply.
 const CONTENT_LABEL = { training:'training', course:'course', material:'material', tool:'tool', update:'update',
   procedure:'procedure', handbook:'handbook item' };
+// A training and a course are the same thing to the lessons, the test and
+// the certificate. The gateway says so in its own isLessonType; this is the
+// client's half of the same answer, and the two must not drift apart.
+const LESSON_TYPES = ['training','course'];
+function isLessonType(type){ return LESSON_TYPES.indexOf(type) !== -1; }
+// The item behind an id, whichever of the two shelves it is sitting on.
+function lessonItem(id){
+  for(const t of LESSON_TYPES){
+    const hit = (contentCache[t]||[]).find(x=>String(x.id)===String(id));
+    if(hit) return hit;
+  }
+  return null;
+}
+// What to call the thing on screen. The modal is open on a type, so ask the
+// type field; elsewhere an id is all there is, so ask the library.
+function lessonNoun(id){
+  if(id){ const it = lessonItem(id); if(it && CONTENT_LABEL[it.type]) return CONTENT_LABEL[it.type]; }
+  const t = (document.getElementById('clib-type')||{}).value;
+  return CONTENT_LABEL[t] || 'training';
+}
+// Redraw the shelf an item actually belongs to. Redrawing 'training' when a
+// course changed leaves the course card showing yesterday's standing.
+function renderLessonSection(id, fallback){
+  const it = lessonItem(id);
+  renderContentSection((it && it.type) || fallback || 'training');
+}
 const CONTENT_PLURAL = { training:'trainings', course:'courses', material:'materials', tool:'tools', update:'updates',
   procedure:'procedures', handbook:'handbook items' };
 // Updates pick from a fixed list rather than typing a category, so the feed
@@ -9376,7 +9410,7 @@ const CONTENT_ERRORS = {
   sign_failed:'Storage would not accept the upload - try again',
   upload_failed:'The upload did not finish - check the connection and retry',
   too_large:'That file is over ' + CONTENT_MAX_MB + 'MB - please upload a smaller one',
-  not_a_training:'Only trainings can have a test',
+  not_a_training:'Only trainings and courses can have a test',
   no_test:'This training has no test',
   no_questions:'This test has no questions yet',
   bad_threshold:'The pass mark must be a whole number between 1 and 100',
@@ -9490,13 +9524,13 @@ function contentCardHtml(it){
     ? `<button class="clib-open" onclick="openContentFile('${id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open</button>`
     : ((isHttp || isUpdate) ? '' : `<span class="clib-nofile">No file attached</span>`);
   // Study first, then test: the Open button keeps its place and the test sits
-  // beside it. Only a training can get here - has_test is pinned false for
-  // every other type, by the gateway and not by this check.
-  const hasTest = it.type === 'training' && !!it.has_test;
+  // beside it. Only a training or a course can get here - has_test is pinned
+  // false for every other type, by the gateway and not by this check.
+  const hasTest = isLessonType(it.type) && !!it.has_test;
   const stt = hasTest ? statusOf(it.id) : null;
-  // A training with lessons is walked before it is tested. The count comes
+  // Something with lessons is walked before it is tested. The count comes
   // from the gateway; everything else in the library reports zero.
-  const pieces = (it.type === 'training' && Number(it.piece_count) > 0) ? Number(it.piece_count) : 0;
+  const pieces = (isLessonType(it.type) && Number(it.piece_count) > 0) ? Number(it.piece_count) : 0;
   const pStt = pieces ? statusOf(it.id) : null;
   const pDone = pStt ? Number(pStt.pieces_done || 0) : 0;
   const lessonsDoneHere = pieces === 0 || (pStt && Number(pStt.pieces_total||0) > 0
@@ -9608,7 +9642,7 @@ const LESSON_ERRORS = {
   forbidden:'You do not have permission for this',
   out_of_scope:'That training is not available to you',
   not_found:'That lesson is no longer there',
-  not_a_training:'Lessons belong to trainings only',
+  not_a_training:'Lessons belong to trainings and courses only',
   missing_title:'Give the piece a title',
   lessons_incomplete:'Finish the lessons first',
   sign_failed:'The upload could not be started',
@@ -9642,7 +9676,7 @@ async function lessonLoad(trainingId){
   if(!host) return;
   lessonEditing = { training_id:trainingId, pieces:[], editing:null };
   if(!trainingId){
-    host.innerHTML = '<div class="les-empty">Save this training first, then reopen it to add lessons.</div>';
+    host.innerHTML = '<div class="les-empty">Save this ' + lessonNoun() + ' first, then reopen it to add lessons.</div>';
     const t = document.getElementById('les-add-toggle'); if(t) t.style.display = 'none';
     return;
   }
@@ -9656,7 +9690,7 @@ function lessonRender(){
   if(!host) return;
   const ps = lessonEditing.pieces;
   if(!ps.length){
-    host.innerHTML = '<div class="les-empty">No lessons yet. This training opens its file and its test, as it always has.</div>';
+    host.innerHTML = '<div class="les-empty">No lessons yet. This ' + lessonNoun() + ' opens its file and its test, as it always has.</div>';
     return;
   }
   host.innerHTML = ps.map((x,i)=>'<div class="les-row"><span class="les-n">'+(i+1)+'</span>'+
@@ -9788,7 +9822,7 @@ async function openPlayer(trainingId, title){
   player.pieces = r.pieces || [];
   const pr = await callDb('get_training_progress', { training_id: trainingId });
   if(pr && pr.ok) player.done = new Set((pr.completed_ids||[]).map(String));
-  const item = (contentCache['training']||[]).find(x=>String(x.id)===String(trainingId));
+  const item = lessonItem(trainingId);
   player.has_test = !!(item && item.has_test);
   // Open on the first unfinished piece: somebody coming back should not
   // have to click past what they have already watched.
@@ -9799,10 +9833,11 @@ async function openPlayer(trainingId, title){
 // The card behind this modal is now out of date: a lesson finished here
 // changes what it may offer, and closing is the moment it is looked at.
 async function closePlayer(){
+  const id = player && player.training_id;
   closeModal('modal-player');
   player = null;
   await loadTrainingStatus();
-  renderContentSection('training');
+  renderLessonSection(id);
 }
 function playerComplete(){
   return player && player.pieces.length > 0 && player.done.size >= player.pieces.length;
@@ -9812,7 +9847,7 @@ function playerRender(){
   const body = document.getElementById('ply-body');
   const foot = document.getElementById('ply-footer');
   const ps = player.pieces;
-  if(!ps.length){ body.innerHTML = '<div class="les-empty">This training has no lessons.</div>'; return; }
+  if(!ps.length){ body.innerHTML = '<div class="les-empty">This ' + lessonNoun(player && player.training_id) + ' has no lessons.</div>'; return; }
   const cur = ps[player.i];
   const isVideo = cur.media_type !== 'image';
   const doneNow = player.done.has(String(cur.id));
@@ -9878,7 +9913,7 @@ function playerGo(i){
 async function playerTakeTest(){
   const id = player && player.training_id;
   closePlayer();
-  renderContentSection('training');
+  renderLessonSection(id);
   if(id) openTest(id);
 }
 
@@ -9889,7 +9924,7 @@ async function playerTakeTest(){
 let quizState = null;
 
 async function openTest(id){
-  const item = (contentCache['training']||[]).find(x=>String(x.id)===String(id));
+  const item = lessonItem(id);
   const r = await callDb('get_test', { content_id: id });
   if(!r || !r.ok){ showToast(CONTENT_ERRORS[r && r.error] || 'Could not open this test','error'); return; }
   // Each attempt is its own draw and its own order. What is kept is the
@@ -9964,7 +9999,7 @@ async function submitQuiz(){
   renderQuizResult(r);
   // The card behind the modal has to agree with what just happened.
   await loadTrainingStatus();
-  renderContentSection('training');
+  renderLessonSection(q.content_id);
 }
 
 function renderQuizResult(r){
@@ -10161,6 +10196,101 @@ function syncTestBody(){
   if(body) body.classList.toggle('on', on);
   if(on && !testDraft.length){ testDraft = [blankQuestion()]; renderTestEditor(); }
 }
+// ── THE BANK AS A SPREADSHEET ──────────────────────────────────
+// Authors write banks in Excel long before they get here, so the editor
+// reads one. What comes out of a file goes INTO the draft list for review:
+// saving is still a separate decision, and save_training_test validates the
+// whole set again on its own terms.
+const TEST_XL_HEADERS = ['Question','Option A','Option B','Option C','Option D','Correct'];
+const TEST_XL_LETTERS = ['A','B','C','D'];
+function testTemplateRows(){
+  return [TEST_XL_HEADERS.slice(),
+    ['In which year was NED College originally established?',
+     '2008','2010','2012','2015','B'],
+    ['What does ILEP stand for?',
+     'Irish Language Education Programme','International Learning and Education Partnership',
+     'Interim List of Eligible Programmes','Irish List of English Providers','C']];
+}
+function downloadTestTemplate(){
+  if(typeof XLSX === 'undefined' || !XLSX.utils){
+    showToast('The spreadsheet library did not load','error'); return; }
+  const ws = XLSX.utils.aoa_to_sheet(testTemplateRows());
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+  XLSX.writeFile(wb, 'test-template.xlsx');
+  showToast('Template downloaded','success');
+}
+// One row, read the way the gateway will read it. Empty option cells are
+// DROPPED rather than carried through as blanks: validateQuestions refuses a
+// blank option outright, so a three-option row has to arrive as three.
+function testRowToQuestion(row){
+  const cell = i => (row && row[i] !== undefined && row[i] !== null) ? String(row[i]).trim() : '';
+  const question = cell(0);
+  if(!question) return { ok:false, why:'the question is empty' };
+  const options = [1,2,3,4].map(cell).filter(Boolean);
+  if(options.length < TQ_MIN_OPTIONS) return { ok:false, why:'it has fewer than two options' };
+  const at = TEST_XL_LETTERS.indexOf(cell(5).toUpperCase());
+  if(at < 0) return { ok:false, why:'Correct must be A, B, C or D' };
+  // The letter points at a column, and a column left blank is not an option
+  // any more - so it cannot be the right one either.
+  if(!cell(at + 1)) return { ok:false, why:'Correct points at an empty option' };
+  // Counted rather than searched: two options can read the same, and
+  // indexOf would hand back the first of them.
+  let correct_index = 0;
+  for(let c = 1; c < at + 1; c++) if(cell(c)) correct_index++;
+  return { ok:true, value:{ question, options, correct_index } };
+}
+// All or nothing. A half-imported bank would leave the author to work out
+// which rows made it, and the gateway replaces the bank wholesale anyway -
+// so a bad row stops the whole import and says which row it was.
+function testRowsToDraft(rows){
+  const out = [], bad = [];
+  (rows || []).forEach((row, i) => {
+    const first = (row && row[0] !== undefined && row[0] !== null) ? String(row[0]).trim() : '';
+    // The header row, if there is one. A sheet without one is read whole.
+    if(i === 0 && first.toLowerCase() === 'question') return;
+    // A blank line between blocks is not a mistake, it is just blank.
+    if(!(row || []).some(c => c !== undefined && c !== null && String(c).trim() !== '')) return;
+    const r = testRowToQuestion(row);
+    if(r.ok) out.push(r.value); else bad.push('Row ' + (i + 1) + ' - ' + r.why);
+  });
+  if(bad.length) return { ok:false, bad };
+  if(!out.length) return { ok:false, bad:['There are no question rows in that file'] };
+  return { ok:true, value:out };
+}
+function importTestXlsx(input){
+  const file = input && input.files && input.files[0];
+  if(input) input.value = '';
+  if(!file) return;
+  if(typeof XLSX === 'undefined' || !XLSX.utils){
+    contentError('The spreadsheet library did not load'); return; }
+  const rd = new FileReader();
+  rd.onerror = () => contentError('That file could not be read');
+  rd.onload = () => {
+    let rows;
+    try {
+      const wb = XLSX.read(new Uint8Array(rd.result), { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, defval:'' });
+    } catch(e){ contentError('That file is not a spreadsheet this can read'); return; }
+    const parsed = testRowsToDraft(rows);
+    if(!parsed.ok){
+      contentError('Nothing was imported. ' + parsed.bad.slice(0,5).join('. ') +
+        (parsed.bad.length > 5 ? '. And ' + (parsed.bad.length - 5) + ' more.' : '.'));
+      showToast('Nothing was imported - check the rows named above','error');
+      return;
+    }
+    testDraft = parsed.value;
+    const cb = document.getElementById('clib-has-test');
+    if(cb && !cb.checked){ cb.checked = true; syncTestBody(); }
+    renderTestEditor();
+    contentError('');
+    showToast(parsed.value.length + (parsed.value.length === 1 ? ' question' : ' questions') +
+      ' loaded - review them, then save','success');
+  };
+  rd.readAsArrayBuffer(file);
+}
+
 // Say exactly what is wrong rather than letting the gateway's error code be
 // the whole message - the gateway still validates all of it, independently.
 function validateTestDraft(threshold){
@@ -10203,18 +10333,23 @@ function openContentModal(type, id){
   document.getElementById('clib-file-current').textContent =
     it && it.has_file ? ('Current file: ' + (it.file_name || 'attached') + ' - choose a file only to replace it') : '';
   document.getElementById('btn-save-content').textContent = it ? 'Save changes' : 'Add to library';
-  // The test section exists for trainings and nothing else.
+  // The test section exists for trainings and courses and nothing else.
+  const isLesson = isLessonType(type);
   const wrap = document.getElementById('clib-test-wrap');
-  if(wrap) wrap.style.display = (type === 'training') ? '' : 'none';
-  // So does the lessons list. A training being created has no id yet, so it
+  if(wrap) wrap.style.display = isLesson ? '' : 'none';
+  // The checkbox says which of the two it is talking about, rather than
+  // calling a course a training.
+  const tl = document.getElementById('clib-has-test-label');
+  if(tl) tl.textContent = 'This ' + (CONTENT_LABEL[type] || 'item') + ' has a test';
+  // So does the lessons list. Something being created has no id yet, so it
   // says so rather than offering an upload with nowhere to go.
   const lw = document.getElementById('clib-lessons-wrap');
-  if(lw) lw.style.display = (type === 'training') ? '' : 'none';
+  if(lw) lw.style.display = isLesson ? '' : 'none';
   const laf = document.getElementById('les-add-form');
   if(laf) laf.style.display = 'none';
   const lat = document.getElementById('les-add-toggle');
   if(lat) lat.textContent = 'Add piece';
-  if(type === 'training') lessonLoad(it ? it.id : null);
+  if(isLesson) lessonLoad(it ? it.id : null);
   // Updates swap the free-text category for a fixed list, and gain a pin.
   // Exactly one of the two category rows is ever visible.
   const isUpdateType = (type === 'update');
@@ -10236,10 +10371,10 @@ function openContentModal(type, id){
   contentError('');
   setContentBusy(false);
   openBackdrop('modal-content');
-  // Only an existing training can have a key to load, and get_training_admin
-  // is the one action allowed to hand over correct_index - behind isMgr, which
-  // openContentModal has already required.
-  if(type === 'training' && it && id){
+  // Only an existing training or course can have a key to load, and
+  // get_training_admin is the one action allowed to hand over correct_index -
+  // behind isMgr, which openContentModal has already required.
+  if(isLesson && it && id){
     (async()=>{
       try {
         const a = await callDb('get_training_admin', { content_id: id });
@@ -10283,7 +10418,7 @@ async function saveContent(){
   contentError('');
   setContentBusy(true, 'Saving...');
   try {
-    const isTraining = (type === 'training');
+    const isTraining = isLessonType(type);
     const wantsTest = isTraining && !!document.getElementById('clib-has-test').checked;
     const threshold = Number(document.getElementById('clib-threshold').value);
     if(wantsTest){
@@ -10349,7 +10484,7 @@ async function saveContent(){
     // changed - including a pin that reorders the feed.
     if(isUpdate) renderHomeUpdates();
     if(isTraining) await loadTrainingStatus();
-    if(isTraining) renderContentSection('training');
+    if(isTraining) renderContentSection(type);
   } catch(e){
     contentError(CONTENT_ERRORS[e && e.message] || 'Could not save this item');
   } finally {

@@ -507,6 +507,12 @@ const DOC_CATEGORIES = ['Contract','Certificate','Appraisal','Training','ID','Ot
 // markup. They are ordinary library items in every respect - same table,
 // same gates, same uploads - and need nothing of their own here.
 const CONTENT_TYPES = ['training','course','material','tool','update','procedure','handbook'];
+// The two types that carry lessons, a test and a certificate. Everything in
+// this file that used to ask "is it a training" asks this instead, so the
+// answer is written once. It is NOT the assignment enum, which has a
+// 'training' of its own and means something else entirely.
+const LESSON_TYPES = ['training','course'];
+function isLessonType(type){ return LESSON_TYPES.indexOf(type) !== -1; }
 // Who an item is for. Every type shares one selector, because the modal is
 // shared and the question is the same whatever the item happens to be.
 const AUDIENCES = ['everyone','agents','leadership'];
@@ -544,14 +550,14 @@ const PIECE_PREFIX = 'training-pieces/';
 // URLs live an hour.
 const PIECE_URL_TTL = 3600;
 function pieceMedia(v){ return PIECE_MEDIA.includes(v) ? v : 'video'; }
-// The training, if this caller may see it at all. The audience rule is the
-// library's, applied again here: a training somebody is never shown does
-// not get to hand them its lessons through a side door.
+// The training or course, if this caller may see it at all. The audience
+// rule is the library's, applied again here: something somebody is never
+// shown does not get to hand them its lessons through a side door.
 async function visibleTraining(me, id){
   const { data: row } = await admin.from('content_items')
     .select('id,type,title,has_test,pass_threshold,audience').eq('id', id).single();
   if(!row) return { ok:false, status:404, error:'not_found' };
-  if(row.type !== 'training') return { ok:false, status:400, error:'not_a_training' };
+  if(!isLessonType(row.type)) return { ok:false, status:400, error:'not_a_training' };
   if(!audienceAllows(me, row.audience)) return { ok:false, status:403, error:'out_of_scope' };
   return { ok:true, row };
 }
@@ -616,11 +622,11 @@ function safeHttpUrl(v){
   return s;
 }
 // ── TRAINING TESTS ───────────────────────────────────────────────
-// Only type='training' carries a test. has_test and pass_threshold are owned
-// EXCLUSIVELY by save_training_test, which refuses every other type, so a
-// course, material or tool cannot acquire a test through any client or any
-// other action - create_content writes them false/null and update_content
-// never touches them.
+// Only a LESSON_TYPES row - a training or a course - carries a test. has_test
+// and pass_threshold are owned EXCLUSIVELY by save_training_test, which
+// refuses every other type, so a material or a tool cannot acquire a test
+// through any client or any other action - create_content writes them
+// false/null and update_content never touches them.
 //
 // THE RULE THAT MATTERS: correct_index appears in exactly one response on this
 // whole gateway - get_training_admin, behind isMgr. Every test-taker payload
@@ -709,7 +715,7 @@ function testNumQuestions(raw){
   return { ok:true, value:n };
 }
 exports.__test = { shuffleInPlace, testDrawCount, drawQuestions, shuffleOptions,
-  normalizeAnswers, testNumQuestions };
+  normalizeAnswers, testNumQuestions, isLessonType, LESSON_TYPES };
 
 // 'TRN-<year>-0001', counting only this year's certificates so the series
 // restarts each January. Not atomic, which is why the caller retries on the
@@ -755,13 +761,15 @@ async function myTrainingStatus(userId, contentId){
     completed_at: done ? done.completed_at : null
   };
 }
-// A training row, confirmed to be a training. Used by every action below so
-// the type gate is written once.
+// A row confirmed to carry lessons and a test - a training or a course. Used
+// by every action below so the type gate is written once. The row's own type
+// comes back with it, because create_assignment needs to be narrower than
+// this and says so for itself.
 async function trainingRow(id){
   const { data: row } = await admin.from('content_items')
     .select('id,type,title,has_test,pass_threshold,test_num_questions').eq('id',id).single();
   if(!row) return { ok:false, status:404, error:'not_found' };
-  if(row.type !== 'training') return { ok:false, status:400, error:'not_a_training' };
+  if(!isLessonType(row.type)) return { ok:false, status:400, error:'not_a_training' };
   return { ok:true, row };
 }
 // job_title stays here so an old client cannot be broken by its removal, but
@@ -2906,7 +2914,7 @@ exports.handler = async (event) => {
         const visible = (data||[]).filter(r => audienceAllows(me, r.audience));
         // Only the trainings, and only the ones this caller can see: a card
         // has to know whether it opens a file or a course.
-        const counts = await pieceCounts(visible.filter(r => r.type === 'training').map(r => r.id));
+        const counts = await pieceCounts(visible.filter(r => isLessonType(r.type)).map(r => r.id));
         // Field by field. file_path is the key to a private bucket and must
         // never reach a browser - and that must not depend on somebody
         // remembering to prune the select above.
@@ -3423,7 +3431,7 @@ exports.handler = async (event) => {
           }, mine) ] });
         }
         const { data: rows } = await admin.from('content_items')
-          .select('id,has_test,pass_threshold,audience').eq('type','training').eq('has_test', true);
+          .select('id,has_test,pass_threshold,audience').in('type', LESSON_TYPES).eq('has_test', true);
         const items = [];
         for(const r of (rows||[])){
           // The same rule as the library itself: a training this person is
@@ -4048,6 +4056,13 @@ exports.handler = async (event) => {
           // could never complete - the pass it waits for would never exist.
           const t = await trainingRow(p.content_id);
           if(!t.ok) return json(t.status,{error: t.error === 'not_found' ? 'training_not_found' : t.error});
+          // Narrower than trainingRow on purpose. A course carries lessons,
+          // a test and a certificate, but an assignment of type 'training'
+          // is counted by assignmentPasses, which get_appraisal_kpis,
+          // get_my_assignments and get_team_assignments all read. Letting a
+          // course in here would change what those count, which is a
+          // separate decision from whether a course can be studied.
+          if(t.row.type !== 'training') return json(400,{error:'training_not_found'});
           content_id = t.row.id;
         }
         const now = new Date().toISOString();
