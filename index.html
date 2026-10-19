@@ -3548,7 +3548,7 @@ a.clib-open{text-decoration:none}
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Start date</label><input class="form-input" type="date" id="u-start-date"><div class="form-hint">Targets before this month are not charged</div></div>
         <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="u-status"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-        <div class="form-group"><label class="form-label">Reports to</label><select class="form-select" id="au-reports-to"><option value="">&mdash; None (top level) &mdash;</option></select></div>
+        <div class="form-group"><label class="form-label">Reports to</label><select class="form-select" id="au-reports-to"><option value="">- None (top level) -</option></select></div>
       </div>
       <div class="login-error" id="u-error" style="margin-top:4px;margin-bottom:0"></div>
     </div>
@@ -7283,7 +7283,7 @@ function renderCompetitionBoard(){
       const pctNum = (r.pct === null || r.pct === undefined) ? null : Number(r.pct);
       const barW = pctNum === null ? 0 : Math.max(0, Math.min(100, Math.round(pctNum * 100)));
       const bar = pctNum === null
-        ? '<span class="comp-pct-n">&mdash;</span>'
+        ? '<span class="comp-pct-n">-</span>'
         : '<span class="comp-pct-n">' + esc(compPct(pctNum)) + '</span>' +
           '<span class="comp-bar"><i class="' + (pctNum >= 1 ? 'over' : '') +
           '" style="width:' + barW + '%"></i></span>';
@@ -7313,7 +7313,7 @@ function compWinnerBlock(kind, hi){
     return '<div class="comp-split-c"><div class="comp-split-k">' + esc(compCampusLabel(c)) + '</div>' +
       (x ? '<div class="comp-split-n">' + esc(x.name) + '</div><div class="comp-split-v">' +
             esc(kind === 'star' ? compPct(x.pct) : money(x.value)) + '</div>'
-         : '<div class="comp-split-n" style="color:var(--muted);font-weight:500">&mdash;</div>') +
+         : '<div class="comp-split-n" style="color:var(--muted);font-weight:500">-</div>') +
       '</div>';
   }).join('');
   return out + '<div class="comp-split">' + split + '</div>';
@@ -7472,7 +7472,7 @@ function holDate(ymd){
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return (+m[3]) + ' ' + MONTHS[(+m[2]) - 1] + ' ' + m[1];
 }
-function holRange(a, b){ return a === b ? holDate(a) : holDate(a) + ' &ndash; ' + holDate(b); }
+function holRange(a, b){ return a === b ? holDate(a) : holDate(a) + ' - ' + holDate(b); }
 
 // Who is offered what. The inbox and the balances belong to anyone who leads
 // or oversees a branch; the buttons on them belong only to people the gateway
@@ -7934,9 +7934,9 @@ function fillReportsTo(){
   const sel=document.getElementById('au-reports-to');
   if(!sel) return;
   const opts=dbUsers.filter(u=>rank(u.role) >= ROLE_RANK.leader)
-    .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} &mdash; ${esc(displayRole(u))}</option>`)
+    .map(u=>`<option value="${esc(u.id)}">${esc(u.first+' '+u.last)} - ${esc(displayRole(u))}</option>`)
     .join('');
-  sel.innerHTML='<option value="">&mdash; None (top level) &mdash;</option>'+opts;
+  sel.innerHTML='<option value="">- None (top level) -</option>'+opts;
   sel.value='';
 }
 
