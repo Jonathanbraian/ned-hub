@@ -38,9 +38,13 @@
 <title>NED Sales Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
-<!-- Spreadsheet export. If this CDN is blocked the page still works and the
-     export falls back to CSV - see exportReportExcel(). -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.3/dist/xlsx.full.min.js"></script>
+<!-- Spreadsheet export and the question-bank template. Served from this
+     repo rather than a CDN: the npm xlsx package stops at 0.18.5, so the
+     jsdelivr URL this used to point at (xlsx@0.20.3) was a 404 and the
+     library never loaded anywhere. Vendored from the npm tarball, checksum
+     matched. If the file is ever missing, ensureXlsx() fetches it on
+     demand and says so when even that fails. -->
+<script src="vendor/xlsx-0.18.5.full.min.js"></script>
 <!-- Certificates as a file rather than a print dialogue. Pinned, like
      every other script here. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -10201,6 +10205,37 @@ function syncTestBody(){
 // reads one. What comes out of a file goes INTO the draft list for review:
 // saving is still a separate decision, and save_training_test validates the
 // whole set again on its own terms.
+// Where the library comes from. One constant, because the tag in the head
+// and the load below have to agree - a second copy from somewhere else
+// would be a second library.
+const XLSX_SRC = 'vendor/xlsx-0.18.5.full.min.js';
+function xlsxReady(){ return typeof XLSX !== 'undefined' && !!XLSX.utils; }
+// The tag in the head is synchronous, so this normally answers at once. It
+// earns its keep when that tag did not arrive - a blocked file, a cache
+// miss - and somebody presses the button anyway: one more attempt before
+// telling them it is not there. A failed load is not remembered, so the
+// next press tries again.
+let xlsxLoading = null;
+function ensureXlsx(){
+  if(xlsxReady()) return Promise.resolve(true);
+  if(!xlsxLoading){
+    xlsxLoading = new Promise(resolve => {
+      // The promise is shared only while the fetch is in flight, so two
+      // presses in a row do not start two of them. Once it settles it is
+      // forgotten: a later press asks xlsxReady() again, which is the only
+      // thing that actually knows. Remembering an answer would turn one
+      // bad fetch - a 404 page served as 200, say - into a button that
+      // never works again.
+      const done = ok => { xlsxLoading = null; resolve(ok); };
+      const s = document.createElement('script');
+      s.src = XLSX_SRC;
+      s.onload = () => done(xlsxReady());
+      s.onerror = () => done(false);
+      document.head.appendChild(s);
+    });
+  }
+  return xlsxLoading;
+}
 const TEST_XL_HEADERS = ['Question','Option A','Option B','Option C','Option D','Correct'];
 const TEST_XL_LETTERS = ['A','B','C','D'];
 function testTemplateRows(){
@@ -10211,8 +10246,8 @@ function testTemplateRows(){
      'Irish Language Education Programme','International Learning and Education Partnership',
      'Interim List of Eligible Programmes','Irish List of English Providers','C']];
 }
-function downloadTestTemplate(){
-  if(typeof XLSX === 'undefined' || !XLSX.utils){
+async function downloadTestTemplate(){
+  if(!(await ensureXlsx())){
     showToast('The spreadsheet library did not load','error'); return; }
   const ws = XLSX.utils.aoa_to_sheet(testTemplateRows());
   const wb = XLSX.utils.book_new();
@@ -10258,11 +10293,11 @@ function testRowsToDraft(rows){
   if(!out.length) return { ok:false, bad:['There are no question rows in that file'] };
   return { ok:true, value:out };
 }
-function importTestXlsx(input){
+async function importTestXlsx(input){
   const file = input && input.files && input.files[0];
   if(input) input.value = '';
   if(!file) return;
-  if(typeof XLSX === 'undefined' || !XLSX.utils){
+  if(!(await ensureXlsx())){
     contentError('The spreadsheet library did not load'); return; }
   const rd = new FileReader();
   rd.onerror = () => contentError('That file could not be read');
@@ -12666,10 +12701,14 @@ function exportFileBase(){
   const safe=t=>String(t||'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
   return (safe(lastReportTitle)||'Report')+'_'+(safe(lastReportPeriod||getPeriodLabel())||'period');
 }
-// Excel is nicer, but a blocked CDN must never cost the user their export.
-function exportReportExcel(){
+// Excel is nicer, but a library that will not load must never cost the user
+// their export: CSV still carries the day. The difference now is that the
+// silent fallback is the LAST resort rather than the first - this one asking
+// for the file before giving up is how the missing library stayed invisible
+// for as long as it did.
+async function exportReportExcel(){
   if(!lastReportData||!lastReportData.length){showToast('Generate a report first.','warning');return;}
-  if(typeof XLSX==='undefined' || !XLSX.utils){ exportReportCsv(); return; }
+  if(!(await ensureXlsx())){ exportReportCsv(); return; }
   try {
     const rows=lastReportData;
     const headers=Object.keys(rows[0]);
