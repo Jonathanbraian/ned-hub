@@ -1261,6 +1261,34 @@ async function assignmentForManager(me, id){
 }
 exports.__assignments = { assignmentEffective, assignmentPassKey, ASSIGNMENT_TYPES };
 
+// ── APPRAISALS ───────────────────────────────────────────────────
+// The template content itself lives in the client, assembled from
+// building blocks per cadence and cargo. What the gateway needs is the
+// set of keys that assembly can produce, so nothing is ever stored
+// under a template name that no reader will be able to render it with.
+const APPRAISAL_CADENCES = ['Annual','Semi-Annual','Quarterly','Probation'];
+const APPRAISAL_CARGOS = ['Sales_Agent','Team_Leader','Sales_Supervisor','Sales_Manager'];
+const APPRAISAL_TEMPLATES = APPRAISAL_CADENCES.reduce(
+  (keys, cadence) => keys.concat(APPRAISAL_CARGOS.map(cargo => cadence + '_' + cargo)), []);
+// Not Observed is an answer, and it is stored as null - the rating
+// column is nullable now precisely so that "not rated" and "rated a 1"
+// stop being the same row. Anything that is neither 1-5 nor N/A is a bad
+// request rather than a quiet zero.
+function appraisalRating(v){
+  if(v === null || v === undefined || v === '' || v === 'NA' || v === 'N/A') return { ok:true, value:null };
+  const n = Number(v);
+  if(Number.isInteger(n) && n >= 1 && n <= 5) return { ok:true, value:n };
+  return { ok:false, value:null };
+}
+// responses IS the appraisal. An array or a string would store happily in
+// a jsonb column and then render as nothing at all, so the shape is
+// settled here rather than discovered by whoever opens the record next.
+function isResponseMap(v){
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+exports.__appraisals = { APPRAISAL_TEMPLATES, APPRAISAL_CADENCES, APPRAISAL_CARGOS,
+  appraisalRating, isResponseMap };
+
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
   let p; try { p = JSON.parse(event.body || '{}'); } catch { return json(400,{error:'bad_json'}); }
@@ -2302,7 +2330,7 @@ exports.handler = async (event) => {
         // Appraisals are never shown to their subject, director or not.
         const { data: aps } = gates.appraisal
           ? await admin.from('appraisals')
-              .select('id,period,rating,notes,tags,created_by,created_at')
+              .select('id,period,rating,notes,tags,template,responses,created_by,created_at')
               .eq('user_id',uid).order('created_at',{ascending:false})
           : { data: [] };
         const authorIds = [...new Set((aps||[]).map(a=>a.created_by).filter(Boolean))];
@@ -2311,7 +2339,17 @@ exports.handler = async (event) => {
           const { data: who } = await admin.from('profiles').select('id,first,last').in('id',authorIds);
           (who||[]).forEach(w=>{ authors[w.id] = (w.first||'')+' '+(w.last||''); });
         }
-        const appraisals = (aps||[]).map(a=>Object.assign({}, a, { created_by_name: authors[a.created_by] || null }));
+        // Field by field, like everything else that leaves here: the
+        // template and the answers, and nothing a wider select might pick
+        // up later.
+        const appraisals = (aps||[]).map(a=>({
+          id: a.id, period: a.period, rating: a.rating,
+          notes: a.notes, tags: a.tags || [],
+          template: a.template || null,
+          responses: isResponseMap(a.responses) ? a.responses : null,
+          created_by: a.created_by, created_at: a.created_at,
+          created_by_name: authors[a.created_by] || null
+        }));
 
         const { data: docs } = gates.doc
           ? await admin.from('user_documents')
@@ -2472,11 +2510,15 @@ exports.handler = async (event) => {
         if(!tgt) return json(404,{error:'not_found'});
         if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
         const period = (p.period||'').toString().trim();
-        const rating = Number(p.rating);
+        const template = (p.template||'').toString();
         if(!period) return json(400,{error:'missing_period'});
-        if(!(rating >= 1 && rating <= 5)) return json(400,{error:'bad_rating'});
+        if(!APPRAISAL_TEMPLATES.includes(template)) return json(400,{error:'bad_template'});
+        if(!isResponseMap(p.responses)) return json(400,{error:'bad_responses'});
+        const rating = appraisalRating(p.overall_rating);
+        if(!rating.ok) return json(400,{error:'bad_rating'});
         const { data, error } = await admin.from('appraisals').insert({
-          user_id: uid, period, rating, notes: (p.notes||'').toString(),
+          user_id: uid, template, period, rating: rating.value, responses: p.responses,
+          notes: (p.notes||'').toString(),
           tags: Array.isArray(p.tags) ? p.tags : [],
           created_by: me.id, created_at: new Date().toISOString()
         }).select('id').single();
@@ -2492,12 +2534,17 @@ exports.handler = async (event) => {
         if(!tgt) return json(404,{error:'not_found'});
         if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
         const period = (p.period||'').toString().trim();
-        const rating = Number(p.rating);
+        const template = (p.template||'').toString();
         if(!period) return json(400,{error:'missing_period'});
-        if(!(rating >= 1 && rating <= 5)) return json(400,{error:'bad_rating'});
+        if(!APPRAISAL_TEMPLATES.includes(template)) return json(400,{error:'bad_template'});
+        if(!isResponseMap(p.responses)) return json(400,{error:'bad_responses'});
+        const rating = appraisalRating(p.overall_rating);
+        if(!rating.ok) return json(400,{error:'bad_rating'});
+        // Only what the form owns. An appraisal written before templates
+        // existed keeps its notes and tags rather than losing them to a
+        // form that has nowhere to show them.
         const { error } = await admin.from('appraisals').update({
-          period, rating, notes: (p.notes||'').toString(),
-          tags: Array.isArray(p.tags) ? p.tags : []
+          template, period, rating: rating.value, responses: p.responses
         }).eq('id',p.id);
         if(error) return json(500,{error:'save_failed', detail:error.message});
         return json(200,{ ok:true });

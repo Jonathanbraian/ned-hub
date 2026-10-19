@@ -612,6 +612,36 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .appraisal-body{font-size:13px;color:var(--muted);line-height:1.6}
 .appraisal-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .appraisal-tag{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--success-bg);color:var(--success);border:1px solid var(--success-border)}
+/* ── templated appraisals ──────────────────────────────────────── */
+/* An appraisal is a long form, so it gets a wider modal than the rest
+   and its own rhythm inside: one band per section, competencies boxed
+   with their evidence, and the rating scale stated where it is used. */
+/* Specific enough to win against .modal, which is declared further down
+   the sheet: an equal-specificity rule here would simply lose. */
+.modal.modal-apr{max-width:760px}
+.apr-pick{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:4px}
+.apr-tpl{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--manager-bg);color:var(--manager);border:1px solid var(--manager-border)}
+.apr-sec{border-top:1px solid var(--border);margin-top:20px;padding-top:17px}
+.apr-sec:first-child{border-top:none;margin-top:0;padding-top:0}
+.apr-sec-title{font-size:13.5px;font-weight:700;color:var(--text);letter-spacing:.2px}
+.apr-scale{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+.apr-group{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--manager);margin:17px 0 9px}
+.apr-field{margin-top:13px}
+.apr-field .form-label{display:block;margin-bottom:6px}
+.apr-comp{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:13px 15px;margin-top:11px}
+.apr-comp-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:9px}
+.apr-rate{display:flex;flex-wrap:wrap;gap:6px}
+.apr-chip{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;min-width:36px;padding:6px 10px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.apr-chip:hover{border-color:var(--manager)}
+.apr-chip.on{background:var(--manager);border-color:var(--manager);color:var(--on-brand)}
+.apr-ev{margin-top:10px}
+.apr-ev-label{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.apr-answer{font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap}
+.apr-blank{font-size:12.5px;color:var(--muted)}
+.apr-view-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.apr-view-meta{font-size:11.5px;color:var(--muted);margin-bottom:16px}
+.apr-rating-text{font-size:13px;font-weight:600;color:var(--text)}
+@media(max-width:620px){.apr-pick{grid-template-columns:1fr}}
 .doc-list{display:flex;flex-direction:column;gap:8px}
 .doc-item{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:12px;transition:all .15s}
 .doc-item:hover{background:var(--surface);border-color:var(--border2)}
@@ -668,9 +698,6 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .alert-info{background:var(--light-blue);border:1px solid var(--border2);color:var(--blue)}
 .modal-section-title{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--border)}
 .modal-section-title:first-child{margin-top:0;padding-top:0;border-top:none}
-.star-input{display:flex;gap:4px;margin-top:4px}
-.star-input span{font-size:22px;cursor:pointer;color:var(--border);transition:color .1s}
-.star-input span.lit{color:var(--star)}
 
 /* Toast */
 .toast{position:fixed;bottom:28px;right:28px;z-index:600;background:var(--chip-bg);color:var(--chip-text);padding:12px 18px;border-radius:10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:9px;box-shadow:0 8px 24px rgba(0,0,0,.2);transform:translateY(80px);opacity:0;transition:all .25s}
@@ -3840,21 +3867,32 @@ a.clib-open{text-decoration:none}
 
 <!-- Add Document -->
 <div class="modal-backdrop" id="modal-appraisal">
-  <div class="modal">
+  <div class="modal modal-apr">
     <div class="modal-header"><div class="modal-title" id="apr-title">New Appraisal</div><button class="modal-close" onclick="closeModal('modal-appraisal')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="modal-body">
       <input type="hidden" id="apr-uid"><input type="hidden" id="apr-id">
       <div class="modal-alert alert-info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Appraisals are visible to the person's managers, never to the person themselves.</span></div>
-      <div class="form-group"><label class="form-label">Period</label><input class="form-input" type="text" id="apr-period" placeholder="e.g. Q1 2026 / Annual 2025"></div>
-      <div class="form-group"><label class="form-label">Rating</label>
-        <div class="star-input" id="apr-star-input"><span onclick="setAprStars(1)">★</span><span onclick="setAprStars(2)">★</span><span onclick="setAprStars(3)">★</span><span onclick="setAprStars(4)">★</span><span onclick="setAprStars(5)">★</span></div>
-        <input type="hidden" id="apr-rating" value="0">
+      <div class="apr-pick">
+        <div class="form-group"><label class="form-label">Cadence</label>
+          <select class="form-input" id="apr-cadence" onchange="aprTemplateChanged()"></select>
+          <div class="form-hint">Which review this is. Probation asks a different closing section.</div>
+        </div>
+        <div class="form-group"><label class="form-label">Template</label>
+          <select class="form-input" id="apr-cargo" onchange="aprTemplateChanged()"></select>
+          <div class="form-hint" id="apr-cargo-hint">Taken from this person's role - change it if the review should follow another one.</div>
+        </div>
       </div>
-      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="apr-notes" placeholder="Key feedback, highlights, areas for improvement..."></textarea></div>
-      <div class="form-group"><label class="form-label">Tags</label><input class="form-input" type="text" id="apr-tags" placeholder="Comma separated, e.g. closing, coaching"></div>
-      <div class="login-error" id="apr-error" style="margin-top:10px;margin-bottom:0"></div>
+      <div id="apr-form"></div>
+      <div class="login-error" id="apr-error" style="margin-top:14px;margin-bottom:0"></div>
     </div>
-    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-appraisal')">Cancel</button><button class="btn-save mgr-save" id="btn-save-apr" onclick="saveAppraisal()">Save Appraisal</button></div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-appraisal')">Cancel</button><button class="btn-save mgr-save" id="btn-save-apr" onclick="saveAppraisal()">Save appraisal</button></div>
+  </div>
+</div>
+<div class="modal-backdrop" id="modal-appraisal-view">
+  <div class="modal modal-apr">
+    <div class="modal-header"><div class="modal-title" id="apr-view-title">Appraisal</div><button class="modal-close" onclick="closeModal('modal-appraisal-view')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body" id="apr-view-body"></div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-appraisal-view')">Close</button></div>
   </div>
 </div>
 
@@ -4580,7 +4618,7 @@ function dashFix(s){ return s==null?s:String(s).replace(/[\u2014\u2013]/g,'-'); 
 let users = [];  // filled from Supabase by loadDirectory()
 let currentRole=null, currentUserId=null;
 let deactTargetId=null, editingId=null, editingProfileUserId=null;
-let currentStars=0, currentPerfPeriod='monthly', pendingLoginUserId=null;
+let currentPerfPeriod='monthly', pendingLoginUserId=null;
 let pendingLoginProfile=null; // Supabase profile awaiting a password change
 // Real profiles behind the User Management page (the demo `users` array above
 // still backs every other page until it is migrated).
@@ -5509,7 +5547,20 @@ function buildProfileHTML(u,isMyProfile){
 
   const appraisalHTML=dAppraisals.length===0
     ?`<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No appraisals recorded yet.</div>`
-    :dAppraisals.map(a=>`<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${esc(dashFix(a.period||''))}</div><div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=(a.rating||0)?'':'empty'}">★</span>`).join('')}</div></div><div class="appraisal-body">${esc(dashFix(a.notes||'No notes.'))}</div>${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(t=>`<span class="appraisal-tag">${esc(dashFix(t))}</span>`).join('')}</div>`:''}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:8px"><span>${a.created_by_name?'By '+esc(a.created_by_name):''}${a.created_at?' · '+esc(fmtDate(a.created_at)):''}</span><button class="doc-btn" style="margin-left:auto" onclick="openAppraisal('${esc(u.id)}','${esc(a.id)}')">Edit</button><button class="doc-btn danger" onclick="deleteAppraisal('${esc(u.id)}','${esc(a.id)}')">Delete</button></div></div>`).join('');
+    :dAppraisals.map(a=>{
+      // A templated appraisal is summarised by how much of it is filled
+      // in; one from before the templates still shows its notes.
+      const t=a.template?aprTemplate(a.template):null;
+      const items=t?aprItems(t):[];
+      const answered=items.filter(it=>{
+        const v=(a.responses||{})[it.id]; return v!==undefined&&v!==null&&v!==''; }).length;
+      const rated=a.rating?`<div class="appraisal-rating">${[1,2,3,4,5].map(s=>`<span class="rating-star ${s<=a.rating?'':'empty'}">★</span>`).join('')}<span class="apr-rating-text" style="margin-left:7px">${esc(aprRatingText(a.rating))}</span></div>`
+        :`<div class="apr-rating-text">N/A</div>`;
+      const body=t
+        ?`<div class="appraisal-body">${answered} of ${items.length} fields answered</div>`
+        :`<div class="appraisal-body">${esc(dashFix(a.notes||'No notes.'))}</div>`;
+      return `<div class="appraisal-item"><div class="appraisal-header"><div class="appraisal-period">${esc(dashFix(a.period||''))}</div>${rated}</div><div style="margin-bottom:9px"><span class="apr-tpl">${esc(aprLabel(a.template))}</span></div>${body}${a.tags&&a.tags.length?`<div class="appraisal-tags">${a.tags.map(x=>`<span class="appraisal-tag">${esc(dashFix(x))}</span>`).join('')}</div>`:''}<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:8px"><span>${a.created_by_name?'By '+esc(a.created_by_name):''}${a.created_at?' · '+esc(fmtDate(a.created_at)):''}</span><button class="doc-btn" style="margin-left:auto" onclick="openAppraisalView('${esc(u.id)}','${esc(a.id)}')">Open</button><button class="doc-btn" onclick="openAppraisal('${esc(u.id)}','${esc(a.id)}')">Edit</button><button class="doc-btn danger" onclick="deleteAppraisal('${esc(u.id)}','${esc(a.id)}')">Delete</button></div></div>`;
+    }).join('');
 
   const trainHTML=dTrain.length===0
     ?`<div style="padding:16px 0;text-align:center;color:var(--muted);font-size:13px">No training tests completed yet.</div>`
@@ -5892,13 +5943,6 @@ function openEditProfile(uid){
   openBackdrop('modal-edit-profile');
 }
 
-// Star widget for the appraisal editor.
-function setAprStars(n){ currentStars=n; document.getElementById('apr-rating').value=n; updateAprStarUI(n); }
-function updateAprStarUI(n){
-  const s=document.getElementById('apr-star-input'); if(!s) return;
-  s.querySelectorAll('span').forEach((sp,i)=>{ sp.style.color = i<n ? 'var(--star)' : 'var(--border)'; });
-}
-
 const PROFILE_SAVE_ERRORS={
   out_of_scope:"You can't edit this person's profile",
   forbidden:"You can't edit this person's profile",
@@ -6075,6 +6119,8 @@ const SUBREC_ERRORS={
   out_of_scope:"You don't have permission for this",
   forbidden:"You don't have permission for this",
   bad_rating:'Pick a rating from 1 to 5',
+  bad_template:'That appraisal template is not one of the sixteen - reopen the form and pick again',
+  bad_responses:'Those answers could not be read - reopen the form and try again',
   missing_period:'Give the appraisal a period',
   missing_name:'Give it a name',
   name_exists:'A course with that name already exists',
@@ -6124,43 +6170,463 @@ async function addCatalogCourse(uid){
   await refreshProfile(uid,'certificates');
 }
 
+
+// ═══════════════════════════════════════
+// APPRAISAL TEMPLATES
+// ═══════════════════════════════════════
+// Sixteen appraisals - one per cadence and cargo - assembled from the
+// blocks below. Every section that depends on neither is shared; the two
+// that do are the goals section (an agent answers for themselves, anyone
+// with a team answers for the team as well) and the core skills, which
+// are a different list of competencies per cargo.
+//
+// The field ids ARE the stored appraisal: responses is a map keyed by
+// them, so a saved record is only readable through the same ids. They are
+// never renumbered. A competency is two of them - the rating and the
+// evidence behind it - shown as one block.
+const APR_CADENCES=['Annual','Semi-Annual','Quarterly','Probation'];
+const APR_CARGOS=['Sales_Agent','Team_Leader','Sales_Supervisor','Sales_Manager'];
+const APR_CARGO_LABEL={Sales_Agent:'Sales Agent',Team_Leader:'Team Leader',
+  Sales_Supervisor:'Sales Supervisor',Sales_Manager:'Sales Manager'};
+// The template follows the subject's base role; the reviewer may override
+// it. Anything unmapped falls back to the agent form, which is the
+// shortest one and the only one that asks nothing about a team.
+const APR_CARGO_BY_ROLE={agent:'Sales_Agent',specialist:'Sales_Agent',executive:'Sales_Agent',
+  senior_exec:'Sales_Agent',leader:'Team_Leader',supervisor:'Sales_Supervisor',
+  manager:'Sales_Manager',director:'Sales_Manager',admin:'Sales_Manager'};
+const APR_SCALE=[[1,'Unsatisfactory'],[2,'Below Expectations'],[3,'Meets Expectations'],
+  [4,'Exceeds Expectations'],[5,'Outstanding']];
+const APR_NA='Not Observed';
+const APR_SCALE_TEXT='1 Unsatisfactory, 2 Below Expectations, 3 Meets Expectations, '+
+  '4 Exceeds Expectations, 5 Outstanding, N/A Not Observed';
+const aprShort=(id,q)=>({id:id,q:q,type:'short'});
+const aprPara=(id,q)=>({id:id,q:q,type:'para'});
+const aprDate=(id,q)=>({id:id,q:q,type:'date'});
+const aprRate=(id,q)=>({id:id,q:q,type:'rating'});
+const aprChoice=(id,q,options)=>({id:id,q:q,type:'choice',options:options});
+// One competency, two consecutive ids: the rating and its evidence.
+const aprComp=(prefix,i,name,evidence)=>[
+  aprRate(prefix+'_'+(i*2), name+' - rating'),
+  aprPara(prefix+'_'+(i*2+1), name+' - '+evidence)];
+
+const APR_S1=[
+  aprShort('s1_0','Employee full name'),
+  aprShort('s1_1','Role / job title'),
+  aprShort('s1_2','Campus / market / team'),
+  aprShort('s1_3','Reviewer name and title'),
+  aprShort('s1_4','Review date'),
+  aprShort('s1_5','Review period start date'),
+  aprShort('s1_6','Review period end date')];
+// Probation asks one thing more, and it is a real date rather than a line
+// of text: how long the person has been here is the whole question.
+const APR_S1_PROBATION=aprDate('s1_7','Employment start date');
+
+const APR_S2=[
+  aprPara('s2_0','Agreed revenue / enrolment target for the review period (€ / number)'),
+  aprPara('s2_1','Actual revenue / enrolments for the review period (€ / number)'),
+  aprShort('s2_2','Target achievement (%)'),
+  aprPara('s2_3','Lead-to-enrolment conversion rate (%) where available'),
+  aprPara('s2_4','CRM / pipeline quality and follow-up completion (evidence)'),
+  aprPara('s2_5','List up to three agreed objectives and mark each Achieved / Partially Achieved / Not Achieved / Not Applicable, with evidence')];
+const APR_S2_TEAM=[
+  aprPara('s2_6','Team revenue / enrolment target and actual result'),
+  aprPara('s2_7','Team productivity, coaching or retention indicators relevant to the role')];
+
+// Eight competencies per cargo, in two named groups. The groups are
+// headings only - the ids run straight through the section in order.
+const APR_S3={
+  Sales_Agent:[
+    ['Sales Execution',[
+      'Lead ownership and timely follow-up',
+      'Consultative selling and objection handling',
+      'Sales conversion and target achievement',
+      'Accurate quotations and enrolment information',
+      'CRM pipeline accuracy and data protection']],
+    ['Student Experience',[
+      'Clear communication and student-centred service',
+      'Visa/programme information accuracy and appropriate escalation',
+      'Collaboration with colleagues and service teams']]],
+  Team_Leader:[
+    ['Team Delivery',[
+      'Daily team coordination and task allocation',
+      'Coaching peers and onboarding support',
+      'Monitoring follow-ups and CRM quality',
+      'Escalation and resolution of team issues']],
+    ['Team Culture',[
+      'Individual and team sales contribution',
+      'Constructive feedback and communication',
+      'Leading by example and student experience',
+      'Sharing market intelligence and best practices']]],
+  Sales_Supervisor:[
+    ['People Management',[
+      'Performance coaching and one-to-ones',
+      'Team targets, forecasting and corrective action',
+      'Workload and lead distribution',
+      'Quality assurance, compliance and escalations',
+      'Recruitment/onboarding and skills development']],
+    ['Market & Partnerships',[
+      'Agency/partner relationship development',
+      'Market campaigns and sales strategy execution',
+      'Cross-campus coordination and operational reliability']]],
+  Sales_Manager:[
+    ['Commercial Leadership',[
+      'Department revenue, budget and forecast accuracy',
+      'Market strategy, channel mix and growth initiatives',
+      'Supervisor leadership and succession planning',
+      'Agency network performance and commercial partnerships']],
+    ['Organisational Impact',[
+      'Process governance, risk and compliance',
+      'Resource planning and team productivity',
+      'Cross-functional stakeholder management',
+      'Data-led decisions and continuous improvement']]]};
+
+const APR_S4_VALUES=[
+  'Protecting the college reputation and student-centred service',
+  'Professionalism, inclusion and mutual respect',
+  'Continuous improvement and operational efficiency'];
+
+const APR_S5=[
+  aprPara('s5_0','What went particularly well during this review period? Include what, how and why.'),
+  aprPara('s5_1','Which targets or behaviours fell short, and what factors contributed?'),
+  aprPara('s5_2',"What are the employee's strongest capabilities?"),
+  aprPara('s5_3','What barriers or support needs affected performance?')];
+
+const APR_S6=[
+  aprRate('s6_0','Overall performance rating'),
+  aprPara('s6_1','Overall assessment and evidence'),
+  aprPara('s6_2',"What does the employee's ideal role look like in the next 1-3 years?"),
+  aprPara('s6_3','Potential career progression or additional responsibilities (not a promise of promotion)'),
+  aprChoice('s6_4','Is a compensation or progression discussion recommended?',
+    ['Yes','No','Not assessed'])];
+// Probation ends in a decision, not a score - which is why the overall
+// rating is nullable: s6_0 is a question here, not a 1-5.
+const APR_S6_PROBATION=[
+  aprPara('s6_0','Has mandatory training and onboarding been completed?'),
+  aprPara('s6_1','Has the employee demonstrated the required level of independence for this role?'),
+  aprPara('s6_2','What performance concerns were raised and when were they communicated?'),
+  aprPara('s6_3','What support, coaching and opportunity to improve were provided?'),
+  aprChoice('s6_4','Recommended outcome',
+    ['Confirm employment','Consider extension subject to policy and contract',
+     'Do not confirm employment','Refer to HR for review']),
+  aprPara('s6_5','Rationale and HR review / approval status')];
+
+const APR_S7=[
+  aprPara('s7_0','Which skills should the employee develop next?'),
+  aprPara('s7_1','What training, coaching or resources are required?'),
+  aprPara('s7_2','SMART Objective 1: action, measure, owner and deadline'),
+  aprPara('s7_3','SMART Objective 2: action, measure, owner and deadline'),
+  aprDate('s7_4','Next review or check-in date')];
+
+const APR_S8=[
+  aprPara('s8_0','Additional reviewer comments'),
+  aprPara('s8_1','Employee comments or response (collected separately or added after the review meeting)'),
+  aprChoice('s8_2','Has the appraisal been discussed with the employee?',
+    ['Yes','No','Meeting scheduled']),
+  aprShort('s8_3','Reviewer acknowledgement and date')];
+
+// A key is <Cadence>_<Cargo>. No cadence token contains an underscore and
+// every cargo token does, so the first underscore is the boundary.
+function aprSplitTemplate(key){
+  const k=String(key==null?'':key), i=k.indexOf('_');
+  if(i<=0) return null;
+  const cadence=k.slice(0,i), cargo=k.slice(i+1);
+  if(APR_CADENCES.indexOf(cadence)<0 || APR_CARGOS.indexOf(cargo)<0) return null;
+  return { cadence:cadence, cargo:cargo };
+}
+function aprLabel(key){
+  const p=aprSplitTemplate(key);
+  return p ? p.cadence+' - '+APR_CARGO_LABEL[p.cargo] : 'Earlier format';
+}
+function aprCargoFor(role){ return APR_CARGO_BY_ROLE[String(role==null?'':role)]||'Sales_Agent'; }
+function aprCompGroups(prefix, groups, evidence){
+  let i=0;
+  return groups.map(g=>({ name:g[0],
+    items:g[1].reduce((out,name)=>out.concat(aprComp(prefix,i++,name,evidence)),[]) }));
+}
+const APR_CACHE={};
+// Assembled once per key and kept: the form re-renders on every keystroke
+// that changes the cadence, and nothing in a template ever varies.
+function aprTemplate(key){
+  if(APR_CACHE[key]) return APR_CACHE[key];
+  const p=aprSplitTemplate(key);
+  if(!p) return null;
+  const probation = p.cadence==='Probation';
+  const one=(items)=>[{ name:null, items:items }];
+  const sec=(n,title,groups,scale)=>({ n:n, title:title, groups:groups, scale:!!scale });
+  const t={ key:key, cadence:p.cadence, cargo:p.cargo,
+    title: p.cadence+' - '+APR_CARGO_LABEL[p.cargo],
+    sections:[
+      sec(1,'Employee & Review Information',
+          one(probation ? APR_S1.concat([APR_S1_PROBATION]) : APR_S1)),
+      sec(2,'Goals & KPIs',
+          one(p.cargo==='Sales_Agent' ? APR_S2 : APR_S2.concat(APR_S2_TEAM))),
+      sec(3,'Role-Specific Core Skills',
+          aprCompGroups('s3', APR_S3[p.cargo]||[], 'evidence / reviewer comments'), true),
+      sec(4,'Company Values',
+          aprCompGroups('s4', [[null, APR_S4_VALUES]], 'supporting example'), true),
+      sec(5,'Summary of Performance', one(APR_S5)),
+      probation
+        ? sec(6,'Probation Readiness & Decision', one(APR_S6_PROBATION))
+        : sec(6,'Review Outcome & Development', one(APR_S6), true),
+      sec(7,'Professional Development & Action Plan', one(APR_S7)),
+      sec(8,'Closing & Acknowledgement', one(APR_S8))
+    ]};
+  APR_CACHE[key]=t;
+  return t;
+}
+function aprItems(t){
+  return t.sections.reduce((out,s)=>out.concat(
+    s.groups.reduce((a,g)=>a.concat(g.items),[])),[]);
+}
+
+// ── rendering, one function for the form and the read-only view ──
+// A rating whose question ends in " - rating" belongs with the paragraph
+// right after it: the same competency, asked twice. They are rendered as
+// one block with the name said once, which is the only reason the two
+// halves have to be adjacent.
+function aprPairAt(items, i){
+  const a=items[i], b=items[i+1];
+  if(!a || a.type!=='rating' || !b || b.type!=='para') return null;
+  const cut=/^(.*) - rating$/.exec(a.q);
+  if(!cut) return null;
+  const stem=cut[1];
+  if(b.q.indexOf(stem+' - ')!==0) return null;
+  const suffix=b.q.slice(stem.length+3);
+  return { name:stem, rating:a, evidence:b,
+           evidenceLabel: suffix ? suffix.charAt(0).toUpperCase()+suffix.slice(1) : suffix };
+}
+// An answer that does not fit its field is no answer: a rating off the
+// scale, or a choice that is not on the list, renders blank rather than
+// being shown as if somebody had chosen it.
+function aprNorm(it, v){
+  if(v===undefined || v===null) return '';
+  if(it.type==='rating'){
+    const r=String(v);
+    return (r==='NA' || APR_SCALE.some(x=>String(x[0])===r)) ? r : '';
+  }
+  if(it.type==='choice'){
+    const c=String(v);
+    return (it.options||[]).indexOf(c)>=0 ? c : '';
+  }
+  return String(v);
+}
+function aprRatingText(v){
+  const r=String(v);
+  if(r==='NA') return 'N/A - '+APR_NA;
+  const hit=APR_SCALE.find(x=>String(x[0])===r);
+  return hit ? r+' - '+hit[1] : r;
+}
+function aprRatingInput(it, v){
+  const chip=(value,label,title)=>'<button type="button" class="apr-chip'+
+    (String(v)===String(value)?' on':'')+'" data-v="'+esc(String(value))+'" title="'+esc(title)+
+    '" onclick="aprSetRating(\''+esc(it.id)+'\',\''+esc(String(value))+'\')">'+esc(label)+'</button>';
+  return '<div class="apr-rate" id="apr-rate-'+esc(it.id)+'">'+
+    APR_SCALE.map(x=>chip(x[0], String(x[0]), x[0]+' - '+x[1])).join('')+
+    chip('NA','N/A',APR_NA)+'</div>'+
+    '<input type="hidden" id="apr-f-'+esc(it.id)+'" data-apr-id="'+esc(it.id)+
+    '" data-apr-type="rating" value="'+esc(String(v))+'">';
+}
+function aprInput(it, v){
+  const attrs='id="apr-f-'+esc(it.id)+'" data-apr-id="'+esc(it.id)+
+    '" data-apr-type="'+esc(it.type)+'"';
+  if(it.type==='rating') return aprRatingInput(it, v);
+  if(it.type==='para') return '<textarea class="form-textarea" '+attrs+'>'+esc(v)+'</textarea>';
+  if(it.type==='date') return '<input class="form-input" type="date" '+attrs+' value="'+esc(v)+'">';
+  if(it.type==='choice') return '<select class="form-input" '+attrs+'>'+
+    '<option value="">Not answered</option>'+
+    (it.options||[]).map(o=>'<option value="'+esc(o)+'"'+(String(o)===String(v)?' selected':'')+
+      '>'+esc(o)+'</option>').join('')+'</select>';
+  return '<input class="form-input" type="text" '+attrs+' value="'+esc(v)+'">';
+}
+function aprShown(it, v){
+  if(it.type==='rating') return v==='' ? '<div class="apr-blank">Not rated</div>'
+    : '<div class="apr-rating-text">'+esc(aprRatingText(v))+'</div>';
+  return v==='' ? '<div class="apr-blank">Not answered</div>'
+    : '<div class="apr-answer">'+esc(dashFix(v))+'</div>';
+}
+function aprFieldHTML(it, vals, readonly){
+  const v=aprNorm(it, vals[it.id]);
+  return '<div class="apr-field"><label class="form-label" for="apr-f-'+esc(it.id)+'">'+
+    esc(it.q)+'</label>'+(readonly ? aprShown(it,v) : aprInput(it,v))+'</div>';
+}
+function aprCompHTML(pair, vals, readonly){
+  const rv=aprNorm(pair.rating, vals[pair.rating.id]);
+  const ev=aprNorm(pair.evidence, vals[pair.evidence.id]);
+  return '<div class="apr-comp"><div class="apr-comp-name">'+esc(pair.name)+'</div>'+
+    (readonly ? aprShown(pair.rating,rv) : aprRatingInput(pair.rating,rv))+
+    '<div class="apr-ev"><div class="apr-ev-label">'+esc(pair.evidenceLabel)+'</div>'+
+    (readonly ? aprShown(pair.evidence,ev) : aprInput(pair.evidence,ev))+'</div></div>';
+}
+function aprGroupHTML(group, vals, readonly){
+  let out = group.name ? '<div class="apr-group">'+esc(group.name)+'</div>' : '';
+  const items=group.items;
+  for(let i=0;i<items.length;i++){
+    const pair=aprPairAt(items,i);
+    if(pair){ out+=aprCompHTML(pair, vals, readonly); i++; continue; }
+    out+=aprFieldHTML(items[i], vals, readonly);
+  }
+  return out;
+}
+function aprFormHTML(t, vals, readonly){
+  const answers=vals||{};
+  return t.sections.map(sec=>'<div class="apr-sec"><div class="apr-sec-title">'+
+    sec.n+'. '+esc(sec.title)+'</div>'+
+    (sec.scale ? '<div class="apr-scale">'+esc(APR_SCALE_TEXT)+'</div>' : '')+
+    sec.groups.map(g=>aprGroupHTML(g, answers, readonly)).join('')+'</div>').join('');
+}
+
 // ── appraisals ──
+// The draft survives a change of cadence or template: the sections
+// overlap almost entirely, and making somebody retype the first half of a
+// form is the fastest way to make them leave a mistake uncorrected.
+let aprDraft={};
+function aprKey(){
+  const c=document.getElementById('apr-cadence'), g=document.getElementById('apr-cargo');
+  return (c?c.value:'')+'_'+(g?g.value:'');
+}
+function aprSetRating(fieldId, value){
+  const h=document.getElementById('apr-f-'+fieldId);
+  if(!h) return;
+  // Clicking the chosen one again clears it - there is no other way back
+  // to "nobody answered this", which is not the same as Not Observed.
+  h.value = (h.value===String(value)) ? '' : String(value);
+  const box=document.getElementById('apr-rate-'+fieldId);
+  if(box) box.querySelectorAll('.apr-chip').forEach(b=>{
+    b.classList.toggle('on', b.getAttribute('data-v')===h.value); });
+}
+// What is on screen, by field id. An untouched field is absent rather
+// than empty: responses records answers, not the shape of the form.
+function aprCollect(){
+  const out={}, host=document.getElementById('apr-form');
+  if(!host) return out;
+  host.querySelectorAll('[data-apr-id]').forEach(el=>{
+    const id=el.getAttribute('data-apr-id');
+    const raw=el.value==null?'':String(el.value).trim();
+    if(raw==='') return;
+    out[id] = (el.getAttribute('data-apr-type')==='rating' && raw!=='NA') ? Number(raw) : raw;
+  });
+  return out;
+}
+// Fold the screen back into the draft: a field that was cleared is
+// dropped, one that was answered is kept, and a field belonging to a
+// template we are not showing right now is left where it is.
+function aprSyncDraft(){
+  const seen=aprCollect(), t=aprTemplate(aprKey());
+  if(t) aprItems(t).forEach(it=>{ if(seen[it.id]===undefined) delete aprDraft[it.id]; });
+  aprDraft=Object.assign({}, aprDraft, seen);
+}
+// What gets saved is this template's fields and nothing else, so an
+// answer left behind by a template the reviewer tried and abandoned is
+// never stored under an appraisal that does not ask the question.
+function aprResponsesFor(t){
+  const out={};
+  aprItems(t).forEach(it=>{
+    const v=aprNorm(it, aprDraft[it.id]);
+    if(v==='') return;
+    out[it.id] = (it.type==='rating' && v!=='NA') ? Number(v) : v;
+  });
+  return out;
+}
+// Section 6 carries the overall rating on a normal review. On probation
+// s6_0 is a question about onboarding, so there is no overall score and
+// the rating column stays null - which is what N/A stores too.
+function aprOverall(t, responses){
+  const it=aprItems(t).find(x=>x.id==='s6_0');
+  if(!it || it.type!=='rating') return null;
+  const v=responses['s6_0'];
+  return (v===undefined || v===null || v==='NA') ? null : Number(v);
+}
+// The period is the label the list is read by, so it is derived rather
+// than typed: the cadence, the year the review covers, and the dates when
+// both were given.
+function aprPeriodLabel(t, responses){
+  const yr=v=>{ const m=/(\d{4})/.exec(String(v===undefined||v===null?'':v)); return m?m[1]:''; };
+  const start=String(responses.s1_5===undefined?'':responses.s1_5).trim();
+  const end=String(responses.s1_6===undefined?'':responses.s1_6).trim();
+  const year=yr(end)||yr(start)||yr(responses.s1_4)||String(new Date().getFullYear());
+  return t.cadence+' '+year+((start&&end) ? ' ('+start+' to '+end+')' : '');
+}
+function aprRenderForm(){
+  const host=document.getElementById('apr-form');
+  if(!host) return;
+  const t=aprTemplate(aprKey());
+  host.innerHTML = t ? aprFormHTML(t, aprDraft, false) : '';
+}
+function aprTemplateChanged(){ aprSyncDraft(); aprRenderForm(); }
 function openAppraisal(uid, aprId){
   const d=detailOf(uid)||{};
   const a=aprId?(d.appraisals||[]).find(x=>String(x.id)===String(aprId)):null;
+  const u=users.find(x=>String(x.id)===String(uid))||{};
   document.getElementById('apr-uid').value=uid;
   document.getElementById('apr-id').value=a?a.id:'';
-  document.getElementById('apr-title').textContent=a?'Edit Appraisal':'New Appraisal';
-  document.getElementById('apr-period').value=a?(a.period||''):'';
-  document.getElementById('apr-notes').value=a?(a.notes||''):'';
-  document.getElementById('apr-tags').value=a&&a.tags?a.tags.join(', '):'';
-  const rating=a?(a.rating||0):0;
-  document.getElementById('apr-rating').value=rating;
-  currentStars=rating; updateAprStarUI(rating);
+  document.getElementById('apr-title').textContent=a?'Edit appraisal':'New appraisal';
+  const saved=(a&&a.template)?aprSplitTemplate(a.template):null;
+  const cadence=saved?saved.cadence:APR_CADENCES[0];
+  const cargo=saved?saved.cargo:aprCargoFor(u.role);
+  document.getElementById('apr-cadence').innerHTML=APR_CADENCES.map(c=>
+    '<option value="'+esc(c)+'"'+(c===cadence?' selected':'')+'>'+esc(c)+'</option>').join('');
+  document.getElementById('apr-cargo').innerHTML=APR_CARGOS.map(g=>
+    '<option value="'+esc(g)+'"'+(g===cargo?' selected':'')+'>'+
+    esc(APR_CARGO_LABEL[g])+'</option>').join('');
+  const hint=document.getElementById('apr-cargo-hint');
+  if(hint) hint.textContent = saved
+    ? 'The template this appraisal was written with.'
+    : "Taken from this person's role - change it if the review should follow another one.";
+  aprDraft = (a&&a.responses) ? Object.assign({}, a.responses) : {};
+  aprRenderForm();
   const e=document.getElementById('apr-error'); if(e){e.textContent='';e.style.display='none';}
   openBackdrop('modal-appraisal');
 }
 async function saveAppraisal(){
   const uid=document.getElementById('apr-uid').value;
   const id=document.getElementById('apr-id').value;
-  const period=document.getElementById('apr-period').value.trim();
-  const rating=Number(document.getElementById('apr-rating').value)||0;
-  const notes=document.getElementById('apr-notes').value.trim();
-  const tags=document.getElementById('apr-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const err=document.getElementById('apr-error');
   const fail=m=>{ if(err){err.textContent=m;err.style.display='block';} };
-  if(!period){ fail('Give the appraisal a period'); return; }
-  if(!(rating>=1&&rating<=5)){ fail('Pick a rating from 1 to 5'); return; }
+  const key=aprKey(), t=aprTemplate(key);
+  if(!t){ fail('Pick a cadence and a template'); return; }
+  aprSyncDraft();
+  const responses=aprResponsesFor(t);
+  const period=aprPeriodLabel(t, responses);
+  const overall_rating=aprOverall(t, responses);
   const btn=document.getElementById('btn-save-apr'); btn.disabled=true;
   try{
     const r=id
-      ? await callDb('update_appraisal',{ id:Number(id), period, rating, notes, tags })
-      : await callDb('create_appraisal',{ user_id:uid, period, rating, notes, tags });
+      ? await callDb('update_appraisal',{ id:Number(id), template:key, period, overall_rating, responses })
+      : await callDb('create_appraisal',{ user_id:uid, template:key, period, overall_rating, responses });
     if(!r||!r.ok){ fail(SUBREC_ERRORS[r&&r.error]||'Could not save this appraisal'); return; }
     closeModal('modal-appraisal');
     showToast(id?'Appraisal updated':'Appraisal added','success');
     await refreshProfile(uid,'appraisals');
   } finally { btn.disabled=false; }
+}
+// Reading one back is the same renderer with the inputs replaced by their
+// answers, so a saved appraisal can never be shown in a shape the form
+// would not have produced.
+function openAppraisalView(uid, aprId){
+  const d=detailOf(uid)||{};
+  const a=(d.appraisals||[]).find(x=>String(x.id)===String(aprId));
+  if(!a){ showToast('That appraisal is no longer here.','error'); return; }
+  const t=a.template?aprTemplate(a.template):null;
+  document.getElementById('apr-view-title').textContent = t ? t.title : 'Appraisal';
+  const head='<div class="apr-view-head"><span class="apr-tpl">'+
+    esc(t?t.title:aprLabel(a.template))+'</span><span class="apr-rating-text">Overall: '+
+    esc(a.rating ? aprRatingText(a.rating) : 'N/A')+'</span></div>'+
+    '<div class="apr-view-meta">'+esc(dashFix(a.period||''))+
+    (a.created_by_name?' \u00b7 '+esc(a.created_by_name):'')+
+    (a.created_at?' \u00b7 '+esc(fmtDate(a.created_at)):'')+'</div>';
+  document.getElementById('apr-view-body').innerHTML =
+    head + (t ? aprFormHTML(t, a.responses||{}, true) : aprLegacyHTML(a));
+  openBackdrop('modal-appraisal-view');
+}
+// An appraisal written before the templates existed: a period, a rating
+// and free notes. It still opens, and it is not pretended to be a form.
+function aprLegacyHTML(a){
+  return '<div class="apr-sec"><div class="apr-sec-title">Notes</div>'+
+    (a.notes ? '<div class="apr-answer">'+esc(dashFix(a.notes))+'</div>'
+             : '<div class="apr-blank">No notes.</div>')+
+    (a.tags&&a.tags.length ? '<div class="appraisal-tags">'+a.tags.map(x=>
+      '<span class="appraisal-tag">'+esc(dashFix(x))+'</span>').join('')+'</div>' : '')+
+    '</div>';
 }
 async function deleteAppraisal(uid, aprId){
   if(!confirm('Delete this appraisal? This cannot be undone.')) return;
