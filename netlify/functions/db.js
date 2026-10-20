@@ -1210,6 +1210,47 @@ function competitionRanking(rows, monthIdx){
   });
   return list;
 }
+// ── A PROFILE'S RECEIVED, FROM THE RANKING ITSELF ────────────
+// The figure on a profile and the figure in the Competitions ranking are the
+// same number because they are the same call: the sheet is loaded once, the
+// ranking is computed once, and a profile reads its own row out of it.
+// Summing the months again here would be a second answer to one question,
+// and the two would drift the first time either changed.
+//
+// One snapshot per request, shared by every profile in the response.
+async function forecastSnapshot(now){
+  const src = await competitionSource();
+  const data = await loadCompetition(src);
+  if(data.error) return { ok:false, month:null, ranking:[] };
+  // The month the ranking defaults to, worked out the way get_competition
+  // works it out: the current month in Dublin, which is the month the
+  // office is in.
+  const month = Number(dublinYMD(now || new Date()).slice(5,7));
+  return { ok:true, month, ranking: competitionRanking(data.rows, month - 1) };
+}
+// The sheet is maintained by hand, so a name matches on cleanAgent and
+// nothing else - the campus suffix comes off, case and spacing stop
+// mattering. Exactly what appraisalSales does, and what the ranking's own
+// names were built with.
+function forecastKey(name){ return cleanAgent(name).toLowerCase(); }
+// results_name when somebody has set one, the profile's own full name when
+// they have not - so only a mismatch needs picking by hand. A person the
+// sheet does not carry is unmatched, which is a state and not an error: no
+// figure is ever invented for them.
+function receivedForProfile(profile, snapshot){
+  const stored = (profile && profile.results_name) ? String(profile.results_name).trim() : '';
+  const out = { results_name: stored || null, received: null, received_matched: false,
+    received_month: (snapshot && snapshot.month) || null,
+    received_month_label: (snapshot && snapshot.month) ? COMP_MONTHS[snapshot.month - 1] : null };
+  const want = forecastKey(stored ||
+    [profile && profile.first, profile && profile.last].filter(Boolean).join(' '));
+  if(!want) return out;
+  const hit = ((snapshot && snapshot.ranking) || []).find(r => forecastKey(r.name) === want);
+  if(!hit) return out;
+  out.received = Number(hit.value);
+  out.received_matched = true;
+  return out;
+}
 // Best effort, and only that: the sheet is maintained by hand and the
 // directory is not, so a winner whose name does not match a profile is still
 // a winner. Matching never decides anything - it only finds a face.
@@ -1227,7 +1268,8 @@ function attachProfile(winner, profiles){
 // Google, and a test that depends on a live sheet is not a test.
 exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
   parseCompetitionCsv, competitionWinner, competitionHighlights,
-  competitionRanking, attachProfile, competitionUrl, COMP_MONTHS };
+  competitionRanking, attachProfile, competitionUrl, COMP_MONTHS,
+  forecastKey, receivedForProfile };
 exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
 exports.__clearCompetitionCache = () => { __compCache.clear(); };
 
@@ -2606,7 +2648,19 @@ exports.handler = async (event) => {
           cert_number: c.cert_number, score: c.score, completed_at: c.completed_at
         }));
 
+        // What this person received, live from the ranking sheet. It is only
+        // ever computed after the canView gate above, so a profile somebody
+        // may not see cannot hand out its figure either. Field by field: the
+        // name that was matched on, the euros, whether anything matched at
+        // all, and which month the figure covers - a number without its
+        // month is a number nobody can check.
+        const fc = receivedForProfile(tgt, await forecastSnapshot());
         return json(200,{ profile: tgt, certs, appraisals, documents, training_completions,
+          results_name: fc.results_name,
+          received: fc.received,
+          received_matched: fc.received_matched,
+          received_month: fc.received_month,
+          received_month_label: fc.received_month_label,
           can_edit: gates.canEdit,
           can_manage_certs: gates.certManage,
           can_see_appraisals: gates.appraisal,
@@ -2629,6 +2683,15 @@ exports.handler = async (event) => {
             patch[k] = (v===null || v===undefined) ? null : String(v).trim();
           }
         });
+        // The agent's name in the ranking sheet. Its own branch rather than
+        // the generic allowlist, because a blank means "match by the profile
+        // name" and that is null, not an empty string somebody has to
+        // remember to treat as blank later.
+        if(Object.prototype.hasOwnProperty.call(fields, 'results_name')){
+          const rn = fields.results_name;
+          const v = (rn === null || rn === undefined) ? '' : String(rn).trim();
+          patch.results_name = v || null;
+        }
         if(Object.prototype.hasOwnProperty.call(fields, 'languages')){
           const ls = normLanguages(fields.languages);
           if(!ls.ok) return json(400,{error:ls.error});
@@ -3931,6 +3994,33 @@ exports.handler = async (event) => {
           highlights,
           teams: Array.from(new Set(data.rows.map(r => r.team).filter(Boolean))).sort(),
         });
+      }
+      // The names the ranking sheet carries, for the Received name selector.
+      // Gated exactly as editing the profile is, asked about the profile the
+      // selector is open on - a list action with no target could not ask that
+      // question at all.
+      case 'list_forecast_names': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await canEditProfileOf(me, tgt)) return json(403,{error:'out_of_scope'});
+        const src = await competitionSource();
+        const data = await loadCompetition(src);
+        // A sheet that cannot be read is a state, not a failure - the same
+        // answer get_competition gives, so the selector can say so quietly.
+        if(data.error) return json(200,{ ok:false, error:'sheet_unavailable', names:[] });
+        // Both campuses. The names are already normalized - cleanAgent runs
+        // in the parser, so r.agent has no campus suffix by the time it gets
+        // here and calling it again would be a guard no test could hold to
+        // account. What this line owes is the deduplication, because the
+        // same person can appear on both tabs, and the order.
+        const names = Array.from(new Set((data.rows || [])
+          .map(r => r.agent).filter(Boolean)))
+          .sort((a,b) => a.localeCompare(b));
+        return json(200,{ ok:true, names });
       }
       case 'get_competition_source': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
