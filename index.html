@@ -3964,6 +3964,10 @@ a.clib-open{text-decoration:none}
         <input class="form-input" type="text" id="ep-start-date-ro" readonly style="display:none">
         <div class="form-hint" id="ep-start-date-hint">Targets before this month are not charged</div>
       </div><div class="form-group"></div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Received name</label>
+        <select class="form-select" id="ep-results-name"></select>
+        <div class="form-hint" id="ep-results-name-hint">Nome na planilha Sales Forecast - Sales Hub</div>
+      </div><div class="form-group"></div></div>
       <div class="form-group" style="margin-top:2px"><label class="form-label">Bio</label><textarea class="form-textarea" id="ep-bio" placeholder="A short professional bio..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-edit-profile')">Cancel</button><button class="btn-save mgr-save" onclick="saveProfile()">Save Profile</button></div>
@@ -5631,6 +5635,17 @@ function buildProfileHTML(u,isMyProfile){
   // offered where create_assignment would actually go through.
   const showAssignments=canAssignTo(u.id);
   const isSelfView=u.id===currentUserId;
+  // What this person received, straight from the Competitions ranking. The
+  // gateway only sends it for a profile this viewer may see, so there is
+  // nothing to check here - and an unmatched name says so rather than
+  // showing a zero somebody would read as a bad month.
+  const recMatched=!!detail.received_matched;
+  const recMonth=detail.received_month_label?' ('+detail.received_month_label+')':'';
+  const receivedHTML=recMatched
+    ? '<div class="pf-value" id="pf-received-'+esc(u.id)+'" style="color:var(--success);font-weight:700">'+
+      fmt(Number(detail.received||0))+'<span style="font-size:11px;color:var(--muted);font-weight:400">'+
+      esc(recMonth)+'</span></div>'
+    : '<div class="pf-value empty" id="pf-received-'+esc(u.id)+'">sem match - selecione o Received name</div>';
   const catalogNames=(certCatalog.length?certCatalog.map(c=>c.name):CERT_LIST);
   const earnedByName={}; dCerts.forEach(c=>{ earnedByName[c.name]=c.date_earned; });
   const earnedIds={}; dCerts.forEach(c=>{ earnedIds[String(c.id)]=c; });
@@ -5737,6 +5752,7 @@ function buildProfileHTML(u,isMyProfile){
           <div class="profile-field"><div class="pf-label">Manager</div><div class="pf-value ${managerNameOf(u)?'':'empty'}">${esc(dashFix(managerNameOf(u)))||'Not assigned'}</div></div>
           <div class="profile-field"><div class="pf-label">Monthly Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.monthly.target)}</div></div>
           <div class="profile-field"><div class="pf-label">Annual Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.annual.target)}</div></div>
+          <div class="profile-field" id="pf-received-row-${esc(u.id)}"><div class="pf-label">Recebido (Forecast)</div>${receivedHTML}</div>
         </div>
         <div class="profile-section-card full">
           <div class="ps-title">Monthly Performance Snapshot</div>
@@ -5988,6 +6004,7 @@ function openEditProfile(uid){
   document.getElementById('ep-first').value=u.first||'';
   document.getElementById('ep-last').value=u.last||'';
   document.getElementById('ep-nickname').value=u.nickname||'';
+  fillResultsNameSelect(uid);
   // The job title is the cargo now, so it is shown rather than typed.
   document.getElementById('ep-jobtitle-ro').value=displayRole(u)||'-';
   // Managers and directors move people between teams here; everyone else sees
@@ -6086,6 +6103,38 @@ const ROLE_CHANGE_ERRORS={
   not_found:'That person no longer exists'
 };
 
+// The ranking sheet's names, for the Received name selector. The blank
+// option is not a missing value: it means "match this person by their
+// profile name", which is what everybody whose two names agree should be
+// left on.
+async function fillResultsNameSelect(uid){
+  const sel = document.getElementById('ep-results-name');
+  const hint = document.getElementById('ep-results-name-hint');
+  if(!sel) return;
+  const current = (detailOf(uid) && detailOf(uid).results_name) || '';
+  const blank = '<option value="">- Match by profile name -</option>';
+  sel.innerHTML = blank + (current
+    ? '<option value="' + esc(current) + '" selected>' + esc(dashFix(current)) + '</option>' : '');
+  if(hint) hint.textContent = 'Nome na planilha Sales Forecast - Sales Hub';
+  const r = await callDb('list_forecast_names', { user_id: uid });
+  // A stale answer landing after the modal moved on must not overwrite
+  // whoever is on screen now.
+  if(document.getElementById('ep-uid').value !== String(uid)) return;
+  if(!r || !r.ok){
+    if(hint) hint.textContent = (r && r.error === 'sheet_unavailable')
+      ? 'A planilha Sales Forecast nao pode ser lida agora - o nome atual foi mantido.'
+      : 'Nome na planilha Sales Forecast - Sales Hub';
+    return;
+  }
+  const names = r.names || [];
+  // A name already stored but no longer in the sheet stays selectable, so
+  // opening the form does not quietly unlink somebody.
+  const all = names.indexOf(current) === -1 && current ? [current].concat(names) : names;
+  sel.innerHTML = blank + all.map(n =>
+    '<option value="' + esc(n) + '"' + (n === current ? ' selected' : '') + '>' +
+    esc(dashFix(n)) + '</option>').join('');
+}
+
 async function saveProfile(){
   const uid=document.getElementById('ep-uid').value;
   const u=users.find(x=>x.id===uid); if(!u) return;
@@ -6104,7 +6153,9 @@ async function saveProfile(){
       ? Number(document.getElementById('ep-birth-day').value) : null,
     birth_month: document.getElementById('ep-birth-month').value
       ? Number(document.getElementById('ep-birth-month').value) : null,
-    bio: document.getElementById('ep-bio').value.trim()
+    bio: document.getElementById('ep-bio').value.trim(),
+    // Blank means "match by profile name", which the gateway stores as null.
+    results_name: document.getElementById('ep-results-name').value
   };
   // Omitted entirely when this person may not set it, so an ordinary self-edit
   // still saves every other field instead of being refused wholesale.
