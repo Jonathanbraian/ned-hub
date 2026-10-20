@@ -1251,6 +1251,76 @@ function receivedForProfile(profile, snapshot){
   out.received_matched = true;
   return out;
 }
+// The directory, keyed the way the sheet is read. Built once per request
+// from profiles that are already loaded, with results_name taking precedence
+// exactly as receivedForProfile reads it - one linking rule, used twice.
+function forecastNameMap(profiles){
+  const out = new Map();
+  (profiles || []).forEach(u => {
+    const shown = [u.first, u.last].filter(Boolean).join(' ').trim();
+    if(!shown) return;
+    const stored = u.results_name ? String(u.results_name).trim() : '';
+    const key = forecastKey(stored || shown);
+    // First one wins: two profiles claiming the same sheet row is a data
+    // problem for a person to sort out, not something to guess at here.
+    if(key && !out.has(key)) out.set(key, shown);
+  });
+  return out;
+}
+// The ranking says who sold what; the directory says what we call them. A row
+// the directory does not know keeps the sheet's own name, because a name
+// nobody linked is still a real person who sold something.
+//
+// sheet_name travels with it. The board re-sorts client side and breaks ties
+// on the name, so the tie-break has to keep reading the sheet's name or the
+// order would shift under a purely cosmetic change.
+function rankingWithProfileNames(ranking, nameMap){
+  return (ranking || []).map(r => {
+    const shown = nameMap.get(forecastKey(r.name));
+    return Object.assign({}, r, { name: shown || r.name, sheet_name: r.name,
+      name_linked: !!shown });
+  });
+}
+// ── WHAT A PERSON SOLD THIS MONTH ───────────────────────────
+// Three answers in order, and the order is the whole rule:
+//   1. a manual override on the profile, which is somebody's deliberate word
+//   2. the forecast sheet, through the same link the profile's Recebido uses
+//   3. what was entered by hand for the month, which is what it has always been
+// Only the CURRENT month is touched. The snapshot speaks for this month and
+// no other, so every past month keeps the number it was recorded with and no
+// report about the past moves.
+function effectiveMonthlyActual(opts){
+  const override = (opts && opts.override !== null && opts.override !== undefined)
+    ? Number(opts.override) : null;
+  if(override !== null && Number.isFinite(override))
+    return { value: override, source: 'override' };
+  if(opts && opts.received !== null && opts.received !== undefined)
+    return { value: Number(opts.received), source: 'forecast' };
+  // Not a fabricated number: whatever the month already said, which with no
+  // row of its own is the zero it has always been.
+  return { value: Number((opts && opts.entered) || 0), source: 'entered' };
+}
+// The override column is added by hand, like every other column here, and the
+// SQL is in the pull request for the owner to run. Until they do, asking for
+// it is an error rather than a null - so the answer is remembered after the
+// first ask and everything carries on behaving exactly as it did.
+let __overrideColumn = null;   // null = not asked yet
+async function monthlyOverrides(ids){
+  if(__overrideColumn === false || !(ids || []).length) return {};
+  const { data, error } = await admin.from('profiles')
+    .select('id,monthly_perf_override').in('id', ids);
+  if(error){ __overrideColumn = false; return {}; }
+  __overrideColumn = true;
+  const out = {};
+  (data || []).forEach(u => {
+    if(u.monthly_perf_override === null || u.monthly_perf_override === undefined) return;
+    const n = Number(u.monthly_perf_override);
+    if(Number.isFinite(n)) out[u.id] = n;
+  });
+  return out;
+}
+// Exported so a test can put the column back after proving the fallback.
+exports.__resetOverrideColumn = () => { __overrideColumn = null; };
 // Best effort, and only that: the sheet is maintained by hand and the
 // directory is not, so a winner whose name does not match a profile is still
 // a winner. Matching never decides anything - it only finds a face.
@@ -1269,7 +1339,8 @@ function attachProfile(winner, profiles){
 exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
   parseCompetitionCsv, competitionWinner, competitionHighlights,
   competitionRanking, attachProfile, competitionUrl, COMP_MONTHS,
-  forecastKey, receivedForProfile };
+  forecastKey, receivedForProfile, forecastNameMap, rankingWithProfileNames,
+  effectiveMonthlyActual };
 exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
 exports.__clearCompetitionCache = () => { __compCache.clear(); };
 
@@ -1812,7 +1883,7 @@ exports.handler = async (event) => {
           .select('user_id,year,month,target,actual,notes').eq('year',year).in('user_id',ids);
         if(error) return json(500,{error:'perf_failed'});
         const { data: profs } = await admin.from('profiles')
-          .select('id,role,role_id,monthly_target').in('id',ids);
+          .select('id,role,role_id,monthly_target,first,last,results_name').in('id',ids);
         const { data: roleRows } = await admin.from('roles')
           .select('id,base_level,individual_target');
         const byRole = {}; (roleRows||[]).forEach(r=>{ byRole[r.id]=r; });
@@ -1830,7 +1901,8 @@ exports.handler = async (event) => {
         // Target lives on the team; actual is the sum over its members.
         const { data: allTeams } = await admin.from('teams')
           .select('id,name,leader_id,campus,team_target,active');
-        const { data: allProfs } = await admin.from('profiles').select('id,team_id,reports_to');
+        const { data: allProfs } = await admin.from('profiles')
+          .select('id,team_id,reports_to,first,last,results_name');
         const teamIds = await accessibleTeamIds(me, allTeams||[], allProfs||[]);
         const memberIds = (allProfs||[])
           .filter(u => u.team_id!=null && teamIds.includes(u.team_id)).map(u => u.id);
@@ -1845,6 +1917,37 @@ exports.handler = async (event) => {
         }
         const now = new Date();
         const M = (year === now.getFullYear()) ? now.getMonth()+1 : 12;
+        // One sheet load for the whole response, and one for the overrides.
+        // Both only have anything to say about the month the office is in, so
+        // a year that is not this one is left exactly as it was.
+        const snap = (year === now.getFullYear()) ? await forecastSnapshot(now)
+          : { ok:false, month:null, ranking:[] };
+        // A snapshot only exists for the current year, and its month is M by
+        // construction - asking again would be a guard no test could hold to
+        // account.
+        const current = !!snap.ok;
+        // Everybody the response speaks about: the caller's own scope, plus
+        // the team members whose figures are summed below. One pass, so a
+        // person cannot be worth one thing in the list and another in the
+        // total their team shows.
+        const whoIds = Array.from(new Set((ids || []).concat(memberIds)));
+        const overrides = current ? await monthlyOverrides(whoIds) : {};
+        const monthActual = {};
+        if(current){
+          const entered = {};
+          teamRows.forEach(r => { if(r.month === M) entered[r.user_id] = Number(r.actual) || 0; });
+          const want = new Set(whoIds.map(String));
+          (allProfs || []).forEach(u => {
+            if(!want.has(String(u.id))) return;
+            const fc = receivedForProfile(u, snap);
+            const auto = fc.received_matched ? Number(fc.received) : null;
+            const got = effectiveMonthlyActual({ override: overrides[u.id],
+              received: auto, entered: entered[u.id] });
+            // auto travels with it so the editor can say what the figure
+            // would be with nobody's hand on it, even while a hand is on it.
+            monthActual[u.id] = { value: got.value, source: got.source, auto };
+          });
+        }
         const qs = Math.floor((M-1)/3)*3+1;
         const teamOf = {}; (allProfs||[]).forEach(u => { teamOf[u.id] = u.team_id; });
         const sums = {};
@@ -1853,17 +1956,55 @@ exports.handler = async (event) => {
           const tid = teamOf[r.user_id];
           if(tid==null || !sums[tid]) return;
           const a = Number(r.actual)||0;
-          if(r.month === M) sums[tid].monthly += a;
+          // This month is the effective figure, added once per member below.
+          // The quarter and the year keep adding what was recorded, because
+          // the sheet speaks for this month and no other.
           if(r.month >= qs && r.month < qs+3) sums[tid].quarterly += a;
           sums[tid].annual += a;
+          if(r.month === M && !current) sums[tid].monthly += a;
         });
+        if(current){
+          // Per member rather than per row: somebody with no row at all can
+          // still have a figure now, and somebody with one must not be
+          // counted twice.
+          (allProfs || []).forEach(u => {
+            const tid = teamOf[u.id];
+            if(tid==null || !sums[tid]) return;
+            const m = monthActual[u.id];
+            if(m) sums[tid].monthly += Number(m.value) || 0;
+          });
+          // The quarter and the year have to agree with the month they
+          // contain, so the difference the month made is carried into them.
+          (allProfs || []).forEach(u => {
+            const tid = teamOf[u.id];
+            if(tid==null || !sums[tid]) return;
+            const m = monthActual[u.id];
+            if(!m) return;
+            const was = (teamRows.find(r => String(r.user_id) === String(u.id) && r.month === M) || {}).actual;
+            const delta = (Number(m.value) || 0) - (Number(was) || 0);
+            if(M >= qs && M < qs+3) sums[tid].quarterly += delta;
+            sums[tid].annual += delta;
+          });
+        }
         const team_perf = (allTeams||[]).filter(t => teamIds.includes(t.id)).map(t => ({
           team_id: t.id, name: t.name, leader_id: t.leader_id, campus: t.campus,
           target: (t.team_target!=null) ? Number(t.team_target) : null,
           actual: sums[t.id] || { monthly:0, quarterly:0, annual:0 }
         }));
 
-        return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf });
+        // Field by field, and only for this month: the number in force, and
+        // where it came from, so the page can say so rather than leaving
+        // somebody to wonder why a figure they typed is not the one showing.
+        const monthly_actual = {};
+        Object.keys(monthActual).forEach(id => {
+          monthly_actual[id] = { value: monthActual[id].value,
+            source: monthActual[id].source, auto: monthActual[id].auto };
+        });
+        return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf,
+          monthly_actual,
+          // The page only has an override to offer where the column exists.
+          overrides_available: __overrideColumn !== false,
+          forecast_month: snap.ok ? snap.month : null });
       }
       case 'set_result': {
         const me = await callerProfile(caller);
@@ -1896,6 +2037,30 @@ exports.handler = async (event) => {
         const { error } = await admin.from('profiles').update({monthly_target:val}).eq('id',uid);
         if(error) return json(500,{error:'save_failed'});
         return json(200,{ ok:true });
+      }
+      // The manual word on this month's figure, and the way back to auto.
+      // Same gate as every other performance write.
+      case 'set_monthly_perf_override': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id;
+        if(!uid) return json(400,{error:'missing_id'});
+        const raw = p.monthly_perf_override;
+        const blank = (raw === null || raw === undefined || String(raw).trim() === '');
+        const val = blank ? null : Number(raw);
+        if(val !== null && !(Number.isFinite(val) && val >= 0)) return json(400,{error:'bad_number'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('profiles')
+          .update({ monthly_perf_override: val }).eq('id',uid);
+        // The column is created by hand, like every other column here. Until
+        // it exists, say so plainly rather than report a save that did not
+        // happen - and remember, so the rest of the app stops offering it.
+        if(error){ __overrideColumn = false; return json(400,{error:'override_column_missing'}); }
+        __overrideColumn = true;
+        return json(200,{ ok:true, monthly_perf_override: val });
       }
       case 'get_roles': {
         const { data, error } = await admin.from('roles')
@@ -3974,7 +4139,7 @@ exports.handler = async (event) => {
         // for is the current one - so the home band gets this month and the
         // page's cards follow its picker instead of contradicting it.
         const { data: profs } = await admin.from('profiles')
-          .select('id,first,last,photo,status');
+          .select('id,first,last,photo,status,results_name');
         const live = (profs || []).filter(u => u.status !== 'inactive');
         const hi = competitionHighlights(data.rows, monthIdx);
         const highlights = {
@@ -3990,7 +4155,12 @@ exports.handler = async (event) => {
         return json(200,{ ok:true,
           months: COMP_MONTHS.map((label,i) => ({ value:i+1, label })),
           selected_month: month, current_month: nowMonth,
-          ranking: competitionRanking(data.rows, monthIdx),
+          // The sheet's names are what the ranking was computed from; what
+          // goes out is what the company calls these people. Display only -
+          // the remap happens after the ranking, so no value and no position
+          // depends on it.
+          ranking: rankingWithProfileNames(
+            competitionRanking(data.rows, monthIdx), forecastNameMap(live)),
           highlights,
           teams: Array.from(new Set(data.rows.map(r => r.team).filter(Boolean))).sort(),
         });
