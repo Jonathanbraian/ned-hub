@@ -1335,6 +1335,69 @@ async function monthlyOverrides(ids){
 }
 // Exported so a test can put the column back after proving the fallback.
 exports.__resetOverrideColumn = () => { __overrideColumn = null; };
+// ── EXTRAS ──────────────────────────────────────────────────
+// Money that was earned but is not in the forecast sheet: an entry visa, an
+// extra payment, whatever somebody had to put in by hand. They sit BESIDE
+// the base figure rather than replacing it, so the base keeps saying where
+// it came from and the total still adds up.
+//
+// A kind is a free label, because the list is open by design. The two the
+// page offers have ids; anything else is kept as typed. Only a blank one is
+// coerced, to the safer of the two - an extra with no name is still money.
+const EXTRA_KINDS = ['entry_visa','extra_payment'];
+const EXTRA_KIND_FALLBACK = 'extra_payment';
+const EXTRA_MAX = 1e9;
+function safeKind(raw){
+  const k = String(raw == null ? '' : raw).trim();
+  return k ? k.slice(0, 60) : EXTRA_KIND_FALLBACK;
+}
+// An extra can be negative: a correction to one already recorded is a real
+// thing, and refusing it would push people into deleting and re-adding.
+function safeAmount(raw){
+  // Nothing is not a zero. Number(null) and Number('') are both 0, so a
+  // field that never arrived would otherwise be saved as an extra worth
+  // nothing - and an Infinity crosses the wire as null, so it lands here too.
+  if(raw === null || raw === undefined) return null;
+  if(typeof raw === 'string' && raw.trim() === '') return null;
+  const n = Number(raw);
+  return (Number.isFinite(n) && Math.abs(n) <= EXTRA_MAX) ? n : null;
+}
+function sameMonth(year, month){
+  return Number.isFinite(year) && Number.isFinite(month) &&
+    year >= 2000 && year <= 2100 && month >= 1 && month <= 12;
+}
+// One person, one month. For a single figure - the batch screens use the
+// bulk form below instead, which is one query for everybody.
+async function extrasTotal(user_id, year, month){
+  if(!user_id || !sameMonth(Number(year), Number(month))) return 0;
+  const { data, error } = await admin.from('result_extras')
+    .select('amount').eq('user_id', user_id).eq('year', year).eq('month', month);
+  if(error) return 0;
+  return (data || []).reduce((a, r) => a + (Number(r.amount) || 0), 0);
+}
+// Everybody the response speaks about, for a whole year, in ONE query - the
+// same shape monthlyOverrides uses, for the same reason: a team list must not
+// turn into a query per person.
+//   out[user_id][month] = the total of that month's extras
+async function extrasForYear(ids, year){
+  const out = {};
+  if(!(ids || []).length || !Number.isFinite(Number(year))) return out;
+  const { data, error } = await admin.from('result_extras')
+    .select('user_id,month,amount').eq('year', year).in('user_id', ids);
+  if(error) return out;
+  (data || []).forEach(r => {
+    const m = Number(r.month), v = Number(r.amount) || 0;
+    if(!(m >= 1 && m <= 12)) return;
+    const u = out[r.user_id] || (out[r.user_id] = {});
+    u[m] = (u[m] || 0) + v;
+  });
+  return out;
+}
+// What one person's month is worth in extras, read off that map.
+function extrasOf(map, uid, month){
+  const u = map && map[uid];
+  return (u && Number(u[month])) || 0;
+}
 // Best effort, and only that: the sheet is maintained by hand and the
 // directory is not, so a winner whose name does not match a profile is still
 // a winner. Matching never decides anything - it only finds a face.
@@ -1354,7 +1417,7 @@ exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
   parseCompetitionCsv, competitionWinner, competitionHighlights,
   competitionRanking, attachProfile, competitionUrl, COMP_MONTHS,
   forecastKey, receivedForProfile, forecastNameMap, rankingWithProfileNames,
-  effectiveMonthlyActual };
+  effectiveMonthlyActual, safeKind, safeAmount, extrasOf };
 exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
 exports.__clearCompetitionCache = () => { __compCache.clear(); };
 
@@ -1946,6 +2009,10 @@ exports.handler = async (event) => {
         // total their team shows.
         const whoIds = Array.from(new Set((ids || []).concat(memberIds)));
         const overrides = current ? await monthlyOverrides(whoIds) : {};
+        // One query for everybody, for the whole year - extras speak for
+        // every month, not just the one the forecast does, so this is loaded
+        // whether or not the sheet has anything to say.
+        const extras = await extrasForYear(whoIds, year);
         const monthActual = {};
         if(current){
           const entered = {};
@@ -1959,9 +2026,15 @@ exports.handler = async (event) => {
             const auto = fc.received_matched ? Number(fc.received) : null;
             const got = effectiveMonthlyActual({ override: overrides[u.id],
               received: auto, entered: entered[u.id] });
+            // The extras sit on top of whichever of the three answered, and
+            // the base travels with them so the editor can show the sum as
+            // the sum of its parts rather than one number nobody can take
+            // apart. value is what every consumer spends.
+            const x = extrasOf(extras, u.id, M);
             // auto travels with it so the editor can say what the figure
             // would be with nobody's hand on it, even while a hand is on it.
-            monthActual[u.id] = { value: got.value, source: got.source, auto };
+            monthActual[u.id] = { value: got.value + x, base: got.value,
+              extras: x, source: got.source, auto };
           });
         }
         const qs = Math.floor((M-1)/3)*3+1;
@@ -2002,6 +2075,23 @@ exports.handler = async (event) => {
             sums[tid].annual += delta;
           });
         }
+        // Extras, on every month they were recorded against. The month the
+        // forecast speaks for is SKIPPED here: its extras are already inside
+        // monthActual, which the block above put into all three sums, and
+        // adding them again is the one way these figures could disagree with
+        // the per-person ones.
+        (allProfs || []).forEach(u => {
+          const tid = teamOf[u.id];
+          if(tid == null || !sums[tid]) return;
+          const mine = extras[u.id] || {};
+          Object.keys(mine).forEach(k => {
+            const m = Number(k), x = Number(mine[k]) || 0;
+            if(current && m === M) return;
+            if(m >= qs && m < qs+3) sums[tid].quarterly += x;
+            sums[tid].annual += x;
+            if(m === M) sums[tid].monthly += x;
+          });
+        });
         const team_perf = (allTeams||[]).filter(t => teamIds.includes(t.id)).map(t => ({
           team_id: t.id, name: t.name, leader_id: t.leader_id, campus: t.campus,
           target: (t.team_target!=null) ? Number(t.team_target) : null,
@@ -2014,10 +2104,15 @@ exports.handler = async (event) => {
         const monthly_actual = {};
         Object.keys(monthActual).forEach(id => {
           monthly_actual[id] = { value: monthActual[id].value,
+            base: monthActual[id].base, extras: monthActual[id].extras,
             source: monthActual[id].source, auto: monthActual[id].auto };
         });
+        // Every month's extras, so the page can add them to the months the
+        // forecast says nothing about. The live month is in here too, and the
+        // page must NOT add it a second time - monthly_actual already carries
+        // it. One rule, and it is the client's half of the skip above.
         return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf,
-          monthly_actual,
+          monthly_actual, extras,
           // The page only has an override to offer where the column exists.
           overrides_available: __overrideColumn !== false,
           forecast_month: snap.ok ? snap.month : null });
@@ -2056,6 +2151,100 @@ exports.handler = async (event) => {
       }
       // The manual word on this month's figure, and the way back to auto.
       // Same gate as every other performance write.
+      // ── EXTRAS, the four actions ─────────────────────────────
+      // The same gate as every other performance write, asked the same way:
+      // supervisor and up, and only for somebody in your own scope. Nothing
+      // is taken from the body but the figures - who is writing comes from
+      // the token, and who they may write for is re-established here.
+      case 'list_result_extras': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id, year = Number(p.year), month = Number(p.month);
+        if(!uid) return json(400,{error:'missing_id'});
+        if(!sameMonth(year, month)) return json(400,{error:'bad_input'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { data, error } = await admin.from('result_extras')
+          .select('id,kind,amount,note,created_at').eq('user_id',uid)
+          .eq('year',year).eq('month',month).order('id',{ascending:true});
+        if(error) return json(500,{error:'list_failed'});
+        // Field by field: an id to act on, what it is, what it is worth and
+        // why. created_by is nobody's business on a list of amounts.
+        const extras = (data || []).map(r => ({ id: r.id, kind: r.kind,
+          amount: Number(r.amount) || 0, note: r.note || '',
+          created_at: r.created_at || null }));
+        return json(200,{ ok:true, extras,
+          total: extras.reduce((a,r) => a + r.amount, 0) });
+      }
+      case 'add_result_extra': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const uid = p.user_id, year = Number(p.year), month = Number(p.month);
+        if(!uid) return json(400,{error:'missing_id'});
+        if(!sameMonth(year, month)) return json(400,{error:'bad_input'});
+        const amount = safeAmount(p.amount);
+        if(amount === null) return json(400,{error:'bad_amount'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,role,reports_to').eq('id',uid).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { data, error } = await admin.from('result_extras').insert({
+          user_id: uid, year, month, kind: safeKind(p.kind), amount,
+          note: (p.note == null ? '' : String(p.note)).slice(0, 500),
+          created_by: me.id }).select('id,kind,amount,note,created_at').single();
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, extra: { id: data.id, kind: data.kind,
+          amount: Number(data.amount) || 0, note: data.note || '',
+          created_at: data.created_at || null } });
+      }
+      case 'update_result_extra': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const id = p.id;
+        if(!id) return json(400,{error:'missing_id'});
+        // Whose line this is decides who may touch it, so it is read before
+        // anything is written - the body does not get to say.
+        const { data: row } = await admin.from('result_extras')
+          .select('id,user_id').eq('id',id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,role,reports_to').eq('id',row.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const patch = {};
+        if(p.amount !== undefined){
+          const amount = safeAmount(p.amount);
+          if(amount === null) return json(400,{error:'bad_amount'});
+          patch.amount = amount;
+        }
+        if(p.kind !== undefined) patch.kind = safeKind(p.kind);
+        if(p.note !== undefined) patch.note = (p.note == null ? '' : String(p.note)).slice(0, 500);
+        if(!Object.keys(patch).length) return json(400,{error:'nothing_to_update'});
+        const { data, error } = await admin.from('result_extras').update(patch)
+          .eq('id',id).select('id,kind,amount,note,created_at').single();
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, extra: { id: data.id, kind: data.kind,
+          amount: Number(data.amount) || 0, note: data.note || '',
+          created_at: data.created_at || null } });
+      }
+      case 'delete_result_extra': {
+        const me = await callerProfile(caller);
+        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
+        const id = p.id;
+        if(!id) return json(400,{error:'missing_id'});
+        const { data: row } = await admin.from('result_extras')
+          .select('id,user_id').eq('id',id).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,role,reports_to').eq('id',row.user_id).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        const { error } = await admin.from('result_extras').delete().eq('id',id);
+        if(error) return json(500,{error:'delete_failed'});
+        return json(200,{ ok:true, id });
+      }
       case 'set_monthly_perf_override': {
         const me = await callerProfile(caller);
         if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
