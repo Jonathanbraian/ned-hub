@@ -584,6 +584,24 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .btn-action.secondary{background:transparent;color:var(--blue);border:1px solid rgba(0,50,255,.25)}
 .btn-action.secondary:hover{background:var(--light-blue)}
 .profile-tabs{display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:24px}
+.xtr-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.xtr-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);
+  border:1px solid var(--border);border-radius:9px;font-size:12px}
+.xtr-row .xtr-row-kind{font-weight:600;color:var(--text)}
+.xtr-row .xtr-row-note{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.xtr-row .xtr-row-amt{font-weight:700;color:var(--success);white-space:nowrap}
+.xtr-row .xtr-row-del{background:transparent;border:none;cursor:pointer;color:var(--muted);
+  padding:2px 4px;line-height:1;font-size:15px}
+.xtr-row .xtr-row-del:hover{color:var(--solid-danger)}
+.xtr-empty{font-size:12px;color:var(--muted);padding:2px 0}
+.xtr-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.xtr-add .xtr-kind{flex:0 0 150px}
+.xtr-add .xtr-label{flex:0 0 140px}
+.xtr-add .xtr-amount{flex:0 0 120px}
+.xtr-add .xtr-note{flex:1;min-width:120px}
+.xtr-sum{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);margin-top:6px}
+.xtr-sum .xtr-sum-row{display:flex;justify-content:space-between;gap:12px}
+.xtr-sum .xtr-sum-total{font-weight:700;color:var(--text);border-top:1px solid var(--border);padding-top:4px}
 .profile-tab{flex:1;font-family:'Rubik',sans-serif;font-size:13px;font-weight:500;background:transparent;border:none;cursor:pointer;padding:13px 10px;color:var(--muted);transition:all .15s;border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:6px}
 .profile-tab:last-child{border-right:none}
 .profile-tab:hover{background:var(--bg);color:var(--text)}
@@ -3906,7 +3924,7 @@ a.clib-open{text-decoration:none}
       </div>
       <div class="modal-row">
         <div class="form-group"><label class="form-label">Target (€)</label><input class="form-input" type="number" id="uperf-target" placeholder="0" min="0" step="500"></div>
-        <div class="form-group"><label class="form-label">Actual Result (€)</label><input class="form-input" type="number" id="uperf-actual" placeholder="0" min="0" step="100"></div>
+        <div class="form-group"><label class="form-label">Actual Result (€)</label><input class="form-input" type="number" id="uperf-actual" placeholder="0" min="0" step="100" oninput="renderPerfComposition()"></div>
       </div>
       <div class="form-group" id="uperf-override-wrap" style="display:none">
         <label class="form-label" for="uperf-override">Monthly Performance this month</label>
@@ -3916,6 +3934,24 @@ a.clib-open{text-decoration:none}
                   onclick="clearMonthlyOverride()">Back to auto</button>
         </div>
         <div class="form-hint" id="uperf-override-hint"></div>
+      </div>
+      <div class="form-group" id="uperf-extras-wrap">
+        <label class="form-label">Extras - money this month that is not in the forecast</label>
+        <div id="uperf-extras-list" class="xtr-list"></div>
+        <div class="xtr-add">
+          <select class="form-select xtr-kind" id="uperf-extra-kind" onchange="xtrKindChanged()">
+            <option value="entry_visa">Entry visa</option>
+            <option value="extra_payment">Extra payment</option>
+            <option value="other">Other</option>
+          </select>
+          <input class="form-input xtr-label" type="text" id="uperf-extra-label"
+                 placeholder="Label" style="display:none">
+          <input class="form-input xtr-amount" type="number" id="uperf-extra-amount"
+                 placeholder="Amount" step="50">
+          <input class="form-input xtr-note" type="text" id="uperf-extra-note" placeholder="Note (optional)">
+          <button type="button" class="btn-action" id="uperf-extra-add" onclick="addPerfExtra()">Add</button>
+        </div>
+        <div class="form-hint" id="uperf-extras-total"></div>
       </div>
       <div class="form-group"><label class="form-label">Notes (optional)</label><textarea class="form-textarea" id="uperf-notes" placeholder="Any context about this result..." style="min-height:60px"></textarea></div>
       <label class="form-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -4703,6 +4739,23 @@ function monthlySourceLabel(u){
   if(e.source === 'forecast') return ' <span style="font-weight:400;text-transform:none">(from the forecast)</span>';
   return '';
 }
+// Money that was earned and is not in the sheet, per person per month, for
+// every month of a year rather than just the live one.
+//   perfExtras[year][uid][month] = the total of that month's extras
+const perfExtras = {};
+// THE rule, and it is the client's half of the gateway's: the month the
+// forecast speaks for already has its extras inside monthly_actual, so it is
+// read from there and NEVER added to again. Every other month adds its own.
+function extrasOf(uid, year, month){
+  const y = perfExtras[year];
+  const u = y && y[String(uid)];
+  return (u && Number(u[month])) || 0;
+}
+// What a month is worth once everything is counted, for a month the gateway
+// did not resolve for us.
+function actualWithExtras(uid, year, month, base){
+  return Number(base || 0) + extrasOf(uid, year, month);
+}
 // Is this cell the month the forecast speaks for?
 function isLiveMonth(year, month){
   const now=new Date();
@@ -4713,6 +4766,7 @@ async function loadPerformance(){
   const r = await callDb('get_performance', { year: perfYear });
   const eff = (r&&r.effective_targets)||{};
   perfMonthActual = (r && r.monthly_actual) || {};
+  perfExtras[perfYear] = (r && r.extras) || {};
   perfOverridesAvailable = !(r && r.overrides_available === false);
   teamPerf = {};
   ((r&&r.team_perf)||[]).forEach(t=>{ teamPerf[t.team_id]=t; });
@@ -4731,7 +4785,10 @@ async function loadPerformance(){
     // month is what it always was.
     const aOf=m=>{
       const e = (m===M && isLiveMonth(perfYear, m)) ? monthActualOf(u.id) : null;
-      return e ? Number(e.value) : (mm[m]?mm[m].actual:0);
+      // e.value already carries that month's extras; every other month has
+      // to be given its own.
+      return e ? Number(e.value)
+               : actualWithExtras(u.id, perfYear, m, mm[m]?mm[m].actual:0);
     };
     let qt=0,qa=0; for(let m=qs;m<qs+3;m++){qt+=tOf(m);qa+=aOf(m);}
     let at=0,aa=0; for(let m=1;m<=12;m++){at+=tOf(m);aa+=aOf(m);}
@@ -5596,6 +5653,10 @@ function prefillUperf(){
   document.getElementById('uperf-actual').value=row?row.actual:'';
   document.getElementById('uperf-notes').value=row?(row.notes||''):'';
   fillOverrideRow(u, year, month);
+  // The lines belong to the month on the form, so changing the month
+  // reloads them rather than leaving the previous month's on screen.
+  uperfExtras=[]; renderPerfExtras();
+  loadPerfExtras(u.id, year, month);
 }
 // The override belongs to the month the office is in, because that is the
 // only month the forecast speaks for. On any other month the row is not
@@ -5618,6 +5679,115 @@ function fillOverrideRow(u, year, month){
     : (auto!=null ? ('Auto - ' + fmt(auto) + ' from the forecast sheet. Type a number to override it.')
                   : 'Auto - no forecast match, so this month is whatever was entered above.');
 }
+// ── EXTRAS, in the editor ───────────────────────────────────
+// The lines belong to the month the form is open on, so they are reloaded
+// whenever that changes rather than carried over from the last one.
+let uperfExtras = [];
+const XTR_LABELS = { entry_visa:'Entry visa', extra_payment:'Extra payment' };
+// A kind the page offers has a name; one somebody typed is shown as typed.
+function xtrLabel(kind){ return XTR_LABELS[kind] || String(kind || ''); }
+function xtrKindChanged(){
+  const sel=document.getElementById('uperf-extra-kind');
+  const lab=document.getElementById('uperf-extra-label');
+  if(!sel || !lab) return;
+  const other = sel.value === 'other';
+  lab.style.display = other ? '' : 'none';
+  if(!other) lab.value='';
+}
+async function loadPerfExtras(uid, year, month){
+  uperfExtras = [];
+  const r = await callDb('list_result_extras', { user_id:uid, year, month });
+  if(r && r.ok) uperfExtras = r.extras || [];
+  renderPerfExtras();
+}
+function renderPerfExtras(){
+  const host=document.getElementById('uperf-extras-list');
+  if(!host) return;
+  host.innerHTML = uperfExtras.length
+    ? uperfExtras.map(x =>
+        '<div class="xtr-row" data-xtr="'+esc(x.id)+'">'+
+          '<span class="xtr-row-kind">'+esc(xtrLabel(x.kind))+'</span>'+
+          '<span class="xtr-row-note">'+esc(x.note||'')+'</span>'+
+          '<span class="xtr-row-amt">'+fmt(Number(x.amount)||0)+'</span>'+
+          '<button type="button" class="xtr-row-del" title="Remove" '+
+            'onclick="deletePerfExtra(\''+esc(x.id)+'\')">&times;</button>'+
+        '</div>').join('')
+    : '<div class="xtr-empty">Nothing added for this month yet.</div>';
+  renderPerfComposition();
+}
+// What the Actual Result is made of, said as a sum rather than one number:
+// the base keeps saying where it came from, and the extras are listed under
+// it. Only the month the forecast speaks for has a base to show - every
+// other month's base is simply what was entered above.
+function renderPerfComposition(){
+  const host=document.getElementById('uperf-extras-total');
+  if(!host) return;
+  const u=users.find(x=>x.id===document.getElementById('uperf-uid').value);
+  const month=Number(document.getElementById('uperf-month').value);
+  const year=Number(document.getElementById('uperf-year').value);
+  const sum=uperfExtras.reduce((a,x)=>a+(Number(x.amount)||0),0);
+  const live=isLiveMonth(year, month) ? monthActualOf(u && u.id) : null;
+  const base = live ? Number(live.base !== undefined ? live.base : live.value)
+                    : Number(document.getElementById('uperf-actual').value || 0);
+  const src = live && live.source === 'forecast' ? ' (from the forecast)'
+            : live && live.source === 'override' ? ' (set by hand)' : '';
+  host.innerHTML =
+    '<div class="xtr-sum">'+
+      '<div class="xtr-sum-row"><span>Base'+esc(src)+'</span><span>'+fmt(base)+'</span></div>'+
+      '<div class="xtr-sum-row"><span>Extras</span><span>'+fmt(sum)+'</span></div>'+
+      '<div class="xtr-sum-row xtr-sum-total"><span>Actual Result</span>'+
+        '<span id="uperf-actual-total">'+fmt(base+sum)+'</span></div>'+
+    '</div>';
+}
+async function addPerfExtra(){
+  const uid=document.getElementById('uperf-uid').value;
+  const month=Number(document.getElementById('uperf-month').value);
+  const year=Number(document.getElementById('uperf-year').value);
+  const sel=document.getElementById('uperf-extra-kind').value;
+  const label=document.getElementById('uperf-extra-label').value.trim();
+  const amountRaw=document.getElementById('uperf-extra-amount').value;
+  const note=document.getElementById('uperf-extra-note').value.trim();
+  clearUperfError();
+  if(amountRaw==='' || !Number.isFinite(Number(amountRaw))){
+    showUperfError('Enter an amount for this extra'); return; }
+  if(sel==='other' && !label){ showUperfError('Give this extra a label'); return; }
+  const btn=document.getElementById('uperf-extra-add');
+  if(btn) btn.disabled=true;
+  try{
+    const r=await callDb('add_result_extra', { user_id:uid, year, month,
+      kind: sel==='other' ? label : sel, amount:Number(amountRaw), note });
+    if(!r||!r.ok){ showUperfError(EXTRA_ERRORS[r&&r.error]||'Could not add this extra'); return; }
+    document.getElementById('uperf-extra-amount').value='';
+    document.getElementById('uperf-extra-note').value='';
+    document.getElementById('uperf-extra-label').value='';
+    await loadPerfExtras(uid, year, month);
+    await refreshAfterExtras();
+  } finally { if(btn) btn.disabled=false; }
+}
+async function deletePerfExtra(id){
+  const uid=document.getElementById('uperf-uid').value;
+  const month=Number(document.getElementById('uperf-month').value);
+  const year=Number(document.getElementById('uperf-year').value);
+  clearUperfError();
+  const r=await callDb('delete_result_extra', { id });
+  if(!r||!r.ok){ showUperfError(EXTRA_ERRORS[r&&r.error]||'Could not remove this extra'); return; }
+  await loadPerfExtras(uid, year, month);
+  await refreshAfterExtras();
+}
+// An extra changes the figure everywhere it is read, so everywhere is
+// redrawn - the same refresh the override does, for the same reason.
+async function refreshAfterExtras(){
+  await loadPerformance();
+  renderPerformancePage();
+  if(document.getElementById('page-home')?.classList.contains('active')) renderHomePerf();
+}
+const EXTRA_ERRORS={
+  out_of_scope:"You can't update this person",
+  forbidden:"You can't update this person",
+  bad_amount:'Enter a valid amount',
+  bad_input:'Pick a valid month and year',
+  not_found:'That line no longer exists'
+};
 // What the figure would be with nobody's hand on it. Only the gateway knows,
 // so this reads what it sent rather than working anything out again.
 function autoMonthlyOf(u){
@@ -12611,6 +12781,7 @@ async function loadPerfForYears(years){
     });
     perfCells[y]=byUser;
     perfEff[y]=(r&&r.effective_targets)||{};
+    perfExtras[y]=(r&&r.extras)||{};
   }
 }
 // ── START DATE ───────────────────────────────────────────────────
@@ -12640,16 +12811,22 @@ function cellFor(u, c){
   const live = isLiveMonth(c.y, c.m) ? monthActualOf(u.id) : null;
   const eff=(perfEff[c.y]&&perfEff[c.y][u.id]!=null) ? Number(perfEff[c.y][u.id])
           : (u._effTarget!=null ? Number(u._effTarget) : 0);
+  // Extras belong to every cell. The live one is the exception, and only
+  // because its figure arrives with them already in it.
+  const x = extrasOf(u.id, c.y, c.m);
   if(live){
     const target = preStart ? 0 : (row ? (Number(row.target)||0) : eff);
     // A figure that came from the sheet or from somebody's own hand IS an
     // entry: calling it "(no entry)" would be the page arguing with itself.
     return { target, actual:Number(live.value)||0,
-      filled: !!row || live.source !== 'entered', preStart };
+      filled: !!row || live.source !== 'entered' || x !== 0, preStart };
   }
-  if(row) return { target:preStart?0:(Number(row.target)||0), actual:Number(row.actual)||0, filled:true, preStart };
-  if(preStart) return { target:0, actual:0, filled:false, preStart:true };
-  return { target:eff, actual:0, filled:false, preStart:false };
+  // A month with nothing entered but money added by hand is a month with a
+  // figure, so it counts as filled rather than reading as "(no entry)".
+  if(row) return { target:preStart?0:(Number(row.target)||0),
+    actual:(Number(row.actual)||0)+x, filled:true, preStart };
+  if(preStart) return { target:0, actual:x, filled:x!==0, preStart:true };
+  return { target:eff, actual:x, filled:x!==0, preStart:false };
 }
 let periodCache=null;       // uid -> {target, actual, months, filled}
 function buildPeriodFigures(pop){
