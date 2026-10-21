@@ -1306,46 +1306,26 @@ function blankNum(raw){
   return (Number.isFinite(n) && n >= 0) ? n : BAD;
 }
 // ── WHAT A PERSON SOLD THIS MONTH ───────────────────────────
-// Three answers in order, and the order is the whole rule:
-//   1. a manual override on the profile, which is somebody's deliberate word
-//   2. the forecast sheet, through the same link the profile's Received
+// Two answers now, and the order is the whole rule:
+//   1. the forecast sheet, through the same link the profile's Received
 //      lines use, totalled over both campuses
-//   3. what was entered by hand for the month, which is what it has always been
+//   2. what was entered by hand for the month, for somebody the sheet does
+//      not carry - which is what it has always been
+// The manual override that used to sit in front of both is gone. It was a
+// second way of saying the same thing as the sheet, and two levers for one
+// figure is how a number ends up disagreeing with itself. The column stays
+// on profiles, written by nobody and read by nobody.
+//
 // Only the CURRENT month is touched. The snapshot speaks for this month and
 // no other, so every past month keeps the number it was recorded with and no
 // report about the past moves.
 function effectiveMonthlyActual(opts){
-  const override = (opts && opts.override !== null && opts.override !== undefined)
-    ? Number(opts.override) : null;
-  if(override !== null && Number.isFinite(override))
-    return { value: override, source: 'override' };
   if(opts && opts.received !== null && opts.received !== undefined)
     return { value: Number(opts.received), source: 'forecast' };
   // Not a fabricated number: whatever the month already said, which with no
   // row of its own is the zero it has always been.
   return { value: Number((opts && opts.entered) || 0), source: 'entered' };
 }
-// The override column is added by hand, like every other column here, and the
-// SQL is in the pull request for the owner to run. Until they do, asking for
-// it is an error rather than a null - so the answer is remembered after the
-// first ask and everything carries on behaving exactly as it did.
-let __overrideColumn = null;   // null = not asked yet
-async function monthlyOverrides(ids){
-  if(__overrideColumn === false || !(ids || []).length) return {};
-  const { data, error } = await admin.from('profiles')
-    .select('id,monthly_perf_override').in('id', ids);
-  if(error){ __overrideColumn = false; return {}; }
-  __overrideColumn = true;
-  const out = {};
-  (data || []).forEach(u => {
-    if(u.monthly_perf_override === null || u.monthly_perf_override === undefined) return;
-    const n = Number(u.monthly_perf_override);
-    if(Number.isFinite(n)) out[u.id] = n;
-  });
-  return out;
-}
-// Exported so a test can put the column back after proving the fallback.
-exports.__resetOverrideColumn = () => { __overrideColumn = null; };
 // ── EXTRAS ──────────────────────────────────────────────────
 // Money that was earned but is not in the forecast sheet: an entry visa, an
 // extra payment, whatever somebody had to put in by hand. They sit BESIDE
@@ -1386,9 +1366,8 @@ async function extrasTotal(user_id, year, month){
   if(error) return 0;
   return (data || []).reduce((a, r) => a + (Number(r.amount) || 0), 0);
 }
-// Everybody the response speaks about, for a whole year, in ONE query - the
-// same shape monthlyOverrides uses, for the same reason: a team list must not
-// turn into a query per person.
+// Everybody the response speaks about, for a whole year, in ONE query: a
+// team list must not turn into a query per person.
 //   out[user_id][month] = the total of that month's extras
 async function extrasForYear(ids, year){
   const out = {};
@@ -2024,7 +2003,6 @@ exports.handler = async (event) => {
         // person cannot be worth one thing in the list and another in the
         // total their team shows.
         const whoIds = Array.from(new Set((ids || []).concat(memberIds)));
-        const overrides = current ? await monthlyOverrides(whoIds) : {};
         // One query for everybody, for the whole year - extras speak for
         // every month, not just the one the forecast does, so this is loaded
         // whether or not the sheet has anything to say.
@@ -2040,15 +2018,16 @@ exports.handler = async (event) => {
             // The total of both campuses: somebody who sold to each of them
             // sold all of it, and the month is what they sold.
             const auto = fc.received_matched ? Number(fc.received) : null;
-            const got = effectiveMonthlyActual({ override: overrides[u.id],
-              received: auto, entered: entered[u.id] });
+            const got = effectiveMonthlyActual({ received: auto,
+              entered: entered[u.id] });
             // The extras sit on top of whichever of the three answered, and
             // the base travels with them so the editor can show the sum as
             // the sum of its parts rather than one number nobody can take
             // apart. value is what every consumer spends.
             const x = extrasOf(extras, u.id, M);
-            // auto travels with it so the editor can say what the figure
-            // would be with nobody's hand on it, even while a hand is on it.
+            // auto is what the sheet said, which is now the same as the base
+            // whenever the sheet said anything. Kept because the page reads
+            // it to tell a matched person from an unmatched one.
             monthActual[u.id] = { value: got.value + x, base: got.value,
               extras: x, source: got.source, auto };
           });
@@ -2129,8 +2108,6 @@ exports.handler = async (event) => {
         // it. One rule, and it is the client's half of the skip above.
         return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf,
           monthly_actual, extras,
-          // The page only has an override to offer where the column exists.
-          overrides_available: __overrideColumn !== false,
           forecast_month: snap.ok ? snap.month : null });
       }
       case 'set_result': {
@@ -2279,28 +2256,6 @@ exports.handler = async (event) => {
         const { error } = await admin.from('result_extras').delete().eq('id',id);
         if(error) return json(500,{error:'delete_failed'});
         return json(200,{ ok:true, id });
-      }
-      case 'set_monthly_perf_override': {
-        const me = await callerProfile(caller);
-        if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
-        const uid = p.user_id;
-        if(!uid) return json(400,{error:'missing_id'});
-        const raw = p.monthly_perf_override;
-        const blank = (raw === null || raw === undefined || String(raw).trim() === '');
-        const val = blank ? null : Number(raw);
-        if(val !== null && !(Number.isFinite(val) && val >= 0)) return json(400,{error:'bad_number'});
-        const { data: tgt } = await admin.from('profiles')
-          .select('id,role,reports_to').eq('id',uid).single();
-        if(!tgt) return json(404,{error:'not_found'});
-        if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
-        const { error } = await admin.from('profiles')
-          .update({ monthly_perf_override: val }).eq('id',uid);
-        // The column is created by hand, like every other column here. Until
-        // it exists, say so plainly rather than report a save that did not
-        // happen - and remember, so the rest of the app stops offering it.
-        if(error){ __overrideColumn = false; return json(400,{error:'override_column_missing'}); }
-        __overrideColumn = true;
-        return json(200,{ ok:true, monthly_perf_override: val });
       }
       case 'get_roles': {
         const { data, error } = await admin.from('roles')
