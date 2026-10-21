@@ -1237,17 +1237,30 @@ function forecastKey(name){ return cleanAgent(name).toLowerCase(); }
 // they have not - so only a mismatch needs picking by hand. A person the
 // sheet does not carry is unmatched, which is a state and not an error: no
 // figure is ever invented for them.
+// An agent can sell to both campuses, so the sheet can carry them on BOTH
+// tabs - and cleanAgent takes the -D and -L off, so one key finds both rows.
+// Each row keeps the campus it came from, so the two are reported apart and
+// added up, rather than one of them quietly winning: a .find() here would
+// have taken whichever sold more and thrown the rest away.
 function receivedForProfile(profile, snapshot){
   const stored = (profile && profile.results_name) ? String(profile.results_name).trim() : '';
-  const out = { results_name: stored || null, received: null, received_matched: false,
+  const out = { results_name: stored || null,
+    received_dublin: 0, received_limerick: 0, received: null, received_matched: false,
     received_month: (snapshot && snapshot.month) || null,
     received_month_label: (snapshot && snapshot.month) ? COMP_MONTHS[snapshot.month - 1] : null };
   const want = forecastKey(stored ||
     [profile && profile.first, profile && profile.last].filter(Boolean).join(' '));
   if(!want) return out;
-  const hit = ((snapshot && snapshot.ranking) || []).find(r => forecastKey(r.name) === want);
-  if(!hit) return out;
-  out.received = Number(hit.value);
+  const mine = ((snapshot && snapshot.ranking) || []).filter(r => forecastKey(r.name) === want);
+  if(!mine.length) return out;
+  // A campus the person has no row on is a real zero, not a gap: they sold
+  // nothing there. A campus the sheet does not name at all adds nothing.
+  mine.forEach(r => {
+    const v = Number(r.value) || 0;
+    if(r.campus === 'dublin') out.received_dublin += v;
+    else if(r.campus === 'limerick') out.received_limerick += v;
+  });
+  out.received = out.received_dublin + out.received_limerick;
   out.received_matched = true;
   return out;
 }
@@ -1284,7 +1297,8 @@ function rankingWithProfileNames(ranking, nameMap){
 // ── WHAT A PERSON SOLD THIS MONTH ───────────────────────────
 // Three answers in order, and the order is the whole rule:
 //   1. a manual override on the profile, which is somebody's deliberate word
-//   2. the forecast sheet, through the same link the profile's Recebido uses
+//   2. the forecast sheet, through the same link the profile's Received
+//      lines use, totalled over both campuses
 //   3. what was entered by hand for the month, which is what it has always been
 // Only the CURRENT month is touched. The snapshot speaks for this month and
 // no other, so every past month keeps the number it was recorded with and no
@@ -1940,6 +1954,8 @@ exports.handler = async (event) => {
           (allProfs || []).forEach(u => {
             if(!want.has(String(u.id))) return;
             const fc = receivedForProfile(u, snap);
+            // The total of both campuses: somebody who sold to each of them
+            // sold all of it, and the month is what they sold.
             const auto = fc.received_matched ? Number(fc.received) : null;
             const got = effectiveMonthlyActual({ override: overrides[u.id],
               received: auto, entered: entered[u.id] });
@@ -2822,6 +2838,12 @@ exports.handler = async (event) => {
         const fc = receivedForProfile(tgt, await forecastSnapshot());
         return json(200,{ profile: tgt, certs, appraisals, documents, training_completions,
           results_name: fc.results_name,
+          // Each campus apart, and the total that feeds the month. Apart
+          // because an agent who sells to both is two rows in the sheet and
+          // one person here, and a single figure could not say which was
+          // which.
+          received_dublin: fc.received_dublin,
+          received_limerick: fc.received_limerick,
           received: fc.received,
           received_matched: fc.received_matched,
           received_month: fc.received_month,

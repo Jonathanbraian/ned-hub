@@ -5745,11 +5745,25 @@ function buildProfileHTML(u,isMyProfile){
   // showing a zero somebody would read as a bad month.
   const recMatched=!!detail.received_matched;
   const recMonth=detail.received_month_label?' ('+detail.received_month_label+')':'';
-  const receivedHTML=recMatched
-    ? '<div class="pf-value" id="pf-received-'+esc(u.id)+'" style="color:var(--success);font-weight:700">'+
-      fmt(Number(detail.received||0))+'<span style="font-size:11px;color:var(--muted);font-weight:400">'+
-      esc(recMonth)+'</span></div>'
-    : '<div class="pf-value empty" id="pf-received-'+esc(u.id)+'">sem match - selecione o Received name</div>';
+  // One line per campus and one for the two together. A campus with no row
+  // shows zero rather than nothing: the person sold nothing there, which is
+  // a figure, and leaving it blank would read as "we do not know".
+  const recValue=(v,id)=>
+    '<div class="pf-value" id="pf-received-'+id+'-'+esc(u.id)+'">'+fmt(Number(v||0))+'</div>';
+  const receivedRows=recMatched
+    ? '<div class="profile-field"><div class="pf-label">Received (Forecast) Dublin</div>'+
+        recValue(detail.received_dublin,'dublin')+'</div>'+
+      '<div class="profile-field"><div class="pf-label">Received (Forecast) Limerick</div>'+
+        recValue(detail.received_limerick,'limerick')+'</div>'+
+      '<div class="profile-field" id="pf-received-row-'+esc(u.id)+'">'+
+        '<div class="pf-label">Total received</div>'+
+        '<div class="pf-value" id="pf-received-'+esc(u.id)+'" style="color:var(--success);font-weight:700">'+
+        fmt(Number(detail.received||0))+
+        '<span style="font-size:11px;color:var(--muted);font-weight:400">'+esc(recMonth)+'</span></div></div>'
+    : '<div class="profile-field" id="pf-received-row-'+esc(u.id)+'">'+
+        '<div class="pf-label">Received (Forecast)</div>'+
+        '<div class="pf-value empty" id="pf-received-'+esc(u.id)+'">'+
+        'no match - select the Received name</div></div>';
   const catalogNames=(certCatalog.length?certCatalog.map(c=>c.name):CERT_LIST);
   const earnedByName={}; dCerts.forEach(c=>{ earnedByName[c.name]=c.date_earned; });
   const earnedIds={}; dCerts.forEach(c=>{ earnedIds[String(c.id)]=c; });
@@ -5856,7 +5870,7 @@ function buildProfileHTML(u,isMyProfile){
           <div class="profile-field"><div class="pf-label">Manager</div><div class="pf-value ${managerNameOf(u)?'':'empty'}">${esc(dashFix(managerNameOf(u)))||'Not assigned'}</div></div>
           <div class="profile-field"><div class="pf-label">Monthly Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.monthly.target)}</div></div>
           <div class="profile-field"><div class="pf-label">Annual Target</div><div class="pf-value" style="color:var(--blue);font-weight:700">${fmt(u.perf.annual.target)}</div></div>
-          <div class="profile-field" id="pf-received-row-${esc(u.id)}"><div class="pf-label">Recebido (Forecast)</div>${receivedHTML}</div>
+          ${receivedRows}
         </div>
         <div class="profile-section-card full">
           <div class="ps-title">Monthly Performance Snapshot</div>
