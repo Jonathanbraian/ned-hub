@@ -3923,8 +3923,11 @@ a.clib-open{text-decoration:none}
         <div class="form-group"><label class="form-label">Year</label><input class="form-input" type="number" id="uperf-year" min="2000" max="2100" step="1" onchange="prefillUperf()"></div>
       </div>
       <div class="modal-row">
-        <div class="form-group"><label class="form-label">Target (€)</label><input class="form-input" type="number" id="uperf-target" placeholder="0" min="0" step="500"></div>
-        <div class="form-group"><label class="form-label">Actual Result (€)</label><input class="form-input" type="number" id="uperf-actual" placeholder="0" min="0" step="100" oninput="renderPerfComposition()"></div>
+        <div class="form-group"><label class="form-label">Target (€)</label>
+          <input class="form-input" type="number" id="uperf-target" min="0" step="500">
+          <div class="form-hint" id="uperf-target-hint"></div>
+        </div>
+        <div class="form-group" id="uperf-actual-wrap"><label class="form-label">Actual Result (€)</label><input class="form-input" type="number" id="uperf-actual" placeholder="0" min="0" step="100" oninput="renderPerfComposition()"></div>
       </div>
       <div class="form-group" id="uperf-override-wrap" style="display:none">
         <label class="form-label" for="uperf-override">Monthly Performance this month</label>
@@ -4756,8 +4759,14 @@ function extrasOf(uid, year, month){
 function actualWithExtras(uid, year, month, base){
   return Number(base || 0) + extrasOf(uid, year, month);
 }
-// Is this cell the month the forecast speaks for?
+// The month the office is in, as the GATEWAY worked it out - in Dublin,
+// which is the only clock the forecast answers to. The page used to ask its
+// own browser, so somebody in another timezone could disagree with the
+// server about which month was live and be shown the wrong lever for it.
+let perfLiveYear = null, perfLiveMonth = null;
 function isLiveMonth(year, month){
+  if(perfLiveMonth != null && perfLiveYear != null)
+    return year === perfLiveYear && month === perfLiveMonth;
   const now=new Date();
   return year === now.getFullYear() && month === now.getMonth()+1;
 }
@@ -4766,21 +4775,29 @@ async function loadPerformance(){
   const r = await callDb('get_performance', { year: perfYear });
   const eff = (r&&r.effective_targets)||{};
   perfMonthActual = (r && r.monthly_actual) || {};
+  // The month it answered about. Kept before anything reads isLiveMonth.
+  if(r && Number(r.month) >= 1 && Number(r.month) <= 12){
+    perfLiveYear = perfYear; perfLiveMonth = Number(r.month); }
   perfExtras[perfYear] = (r && r.extras) || {};
   perfOverridesAvailable = !(r && r.overrides_available === false);
   teamPerf = {};
   ((r&&r.team_perf)||[]).forEach(t=>{ teamPerf[t.team_id]=t; });
   const byUser = {};
+  // A target of null is not a target of nothing: it means nobody set one for
+  // that month, so the role or cargo ladder answers. Number(null) is 0, which
+  // would put a real target of zero in front of the ladder and hide it.
   ((r&&r.results)||[]).forEach(row=>{
     (byUser[row.user_id] ||= {})[row.month] =
-      { target:Number(row.target), actual:Number(row.actual), notes:row.notes||'' };
+      { target: row.target==null ? null : Number(row.target),
+        actual:Number(row.actual), notes:row.notes||'' };
   });
   const now=new Date(), M=(perfYear===now.getFullYear())?now.getMonth()+1:12, qs=Math.floor((M-1)/3)*3+1;
   users.forEach(u=>{
     const eT = effectiveTargetOf(u, eff);
     const mm = byUser[u.id]||{};
     // Same start_date rule as the Reports page, so the two never disagree.
-    const tOf=m=>(isBeforeStart(u, perfYear, m) ? 0 : (mm[m]?mm[m].target:eT));
+    const tOf=m=>(isBeforeStart(u, perfYear, m) ? 0
+      : (mm[m] && mm[m].target!=null ? mm[m].target : eT));
     // This month comes from the gateway's effective answer; every other
     // month is what it always was.
     const aOf=m=>{
@@ -5649,8 +5666,23 @@ function prefillUperf(){
   const month=Number(document.getElementById('uperf-month').value);
   const year=Number(document.getElementById('uperf-year').value);
   const row=(year===perfYear && u._months) ? u._months[month] : null;
-  document.getElementById('uperf-target').value=row?row.target:(u._effTarget!=null?u._effTarget:effectiveTargetOf(u));
-  document.getElementById('uperf-actual').value=row?row.actual:'';
+  // Only a target somebody SET for this month goes in the box. Filling in
+  // the ladder's answer would freeze it the moment anything is saved, and a
+  // later change to the cargo would stop reaching this month.
+  const own = (row && row.target != null) ? row.target : '';
+  const fallback = (u._effTarget!=null ? u._effTarget : effectiveTargetOf(u));
+  document.getElementById('uperf-target').value = own === '' ? '' : String(own);
+  const th=document.getElementById('uperf-target-hint');
+  if(th) th.textContent = 'Leave empty to use the default - ' + fmt(Number(fallback)||0);
+  const tin=document.getElementById('uperf-target');
+  if(tin) tin.placeholder = String(Number(fallback)||0);
+  // The month the forecast speaks for is not typed in: it is the sheet, or an
+  // override on it, plus the extras. Offering a box that would write under
+  // all of that is how a figure ends up disagreeing with itself.
+  const live=isLiveMonth(year, month);
+  const aw=document.getElementById('uperf-actual-wrap');
+  if(aw) aw.style.display = live ? 'none' : '';
+  document.getElementById('uperf-actual').value=(!live && row)?row.actual:'';
   document.getElementById('uperf-notes').value=row?(row.notes||''):'';
   fillOverrideRow(u, year, month);
   // The lines belong to the month on the form, so changing the month
@@ -5673,11 +5705,14 @@ function fillOverrideRow(u, year, month){
   box.value = (src === 'override' && e) ? e.value : '';
   const hint=document.getElementById('uperf-override-hint');
   const auto=autoMonthlyOf(u);
+  // This is the only way to set this month's figure by hand - the Actual
+  // Result box is not offered for it - so the hint says so rather than
+  // pointing at a field that is not on the screen.
   if(hint) hint.textContent = (src === 'override')
     ? ('Set by hand. ' + (auto!=null ? ('Auto would be ' + fmt(auto) + ' from the forecast.')
                                      : 'There is no forecast figure to fall back to.'))
-    : (auto!=null ? ('Auto - ' + fmt(auto) + ' from the forecast sheet. Type a number to override it.')
-                  : 'Auto - no forecast match, so this month is whatever was entered above.');
+    : (auto!=null ? ('Auto - ' + fmt(auto) + ' from the forecast sheet. Type a number to correct it.')
+                  : 'Auto - the forecast does not carry this person, so type the figure here.');
 }
 // ── EXTRAS, in the editor ───────────────────────────────────
 // The lines belong to the month the form is open on, so they are reloaded
@@ -5833,18 +5868,26 @@ async function savePerformanceUpdate(){
   const u=users.find(x=>x.id===uid); if(!u) return;
   const month=Number(document.getElementById('uperf-month').value);
   const year=Number(document.getElementById('uperf-year').value);
-  const targetRaw=document.getElementById('uperf-target').value;
-  const actualRaw=document.getElementById('uperf-actual').value;
-  const target=Number(targetRaw), actual=Number(actualRaw);
+  const targetRaw=document.getElementById('uperf-target').value.trim();
+  const live=isLiveMonth(year, month);
+  const actualRaw=live ? '' : document.getElementById('uperf-actual').value.trim();
   const notes=document.getElementById('uperf-notes').value.trim();
   const setBase=document.getElementById('uperf-set-base').checked;
   clearUperfError();
-  if(targetRaw===''||actualRaw===''||!(target>=0)||!(actual>=0)){ showUperfError('Enter valid amounts'); return; }
+  // Blank target means the default, so it is sent as null rather than
+  // refused. A number that is not one is still refused.
+  if(targetRaw!=='' && !(Number(targetRaw)>=0)){ showUperfError('Enter valid amounts'); return; }
+  if(!live && (actualRaw===''||!(Number(actualRaw)>=0))){ showUperfError('Enter valid amounts'); return; }
   if(!(year>=2000&&year<=2100)){ showUperfError('Pick a valid month and year'); return; }
+  const target = targetRaw==='' ? null : Number(targetRaw);
   const btn=document.getElementById('btn-save-uperf');
   if(btn) btn.disabled=true;
   try{
-    const r=await callDb('set_result',{user_id:uid,year,month,target,actual,notes,set_base_target:setBase});
+    // On the live month the actual is left out entirely: the gateway keeps
+    // whatever the row had, so nothing is written under the forecast.
+    const body={user_id:uid,year,month,target,notes,set_base_target:setBase};
+    if(!live) body.actual=Number(actualRaw);
+    const r=await callDb('set_result', body);
     if(!r||!r.ok){ showUperfError(SET_RESULT_ERRORS[r&&r.error]||'Could not save this result'); return; }
     // The override is its own field and its own action: the month's row is
     // what was entered, the override is what is shown instead of it.
@@ -12777,7 +12820,8 @@ async function loadPerfForYears(years){
     const byUser={};
     ((r&&r.results)||[]).forEach(row=>{
       (byUser[row.user_id] ||= {})[row.month] =
-        { target:Number(row.target), actual:Number(row.actual), notes:row.notes||'' };
+        { target: row.target==null ? null : Number(row.target),
+          actual:Number(row.actual), notes:row.notes||'' };
     });
     perfCells[y]=byUser;
     perfEff[y]=(r&&r.effective_targets)||{};
@@ -12814,8 +12858,10 @@ function cellFor(u, c){
   // Extras belong to every cell. The live one is the exception, and only
   // because its figure arrives with them already in it.
   const x = extrasOf(u.id, c.y, c.m);
+  // Same rule as the dashboard: no target of its own means the ladder's.
+  const rowTarget = (row && row.target != null) ? Number(row.target) : null;
   if(live){
-    const target = preStart ? 0 : (row ? (Number(row.target)||0) : eff);
+    const target = preStart ? 0 : (rowTarget != null ? rowTarget : eff);
     // A figure that came from the sheet or from somebody's own hand IS an
     // entry: calling it "(no entry)" would be the page arguing with itself.
     return { target, actual:Number(live.value)||0,
@@ -12823,7 +12869,7 @@ function cellFor(u, c){
   }
   // A month with nothing entered but money added by hand is a month with a
   // figure, so it counts as filled rather than reading as "(no entry)".
-  if(row) return { target:preStart?0:(Number(row.target)||0),
+  if(row) return { target:preStart?0:(rowTarget != null ? rowTarget : eff),
     actual:(Number(row.actual)||0)+x, filled:true, preStart };
   if(preStart) return { target:0, actual:x, filled:x!==0, preStart:true };
   return { target:eff, actual:x, filled:x!==0, preStart:false };
