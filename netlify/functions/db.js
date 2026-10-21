@@ -1294,6 +1294,17 @@ function rankingWithProfileNames(ranking, nameMap){
       name_linked: !!shown });
   });
 }
+// Blank means "nothing was said", which is not the same as "zero". null for
+// a field that was left empty, the number when there is one, and BAD for
+// anything that is neither - so a caller can tell a cleared field from a
+// typo without the two collapsing into 0.
+const BAD = Symbol('bad_number');
+function blankNum(raw){
+  if(raw === null || raw === undefined) return null;
+  if(typeof raw === 'string' && raw.trim() === '') return null;
+  const n = Number(raw);
+  return (Number.isFinite(n) && n >= 0) ? n : BAD;
+}
 // ── WHAT A PERSON SOLD THIS MONTH ───────────────────────────
 // Three answers in order, and the order is the whole rule:
 //   1. a manual override on the profile, which is somebody's deliberate word
@@ -1993,7 +2004,12 @@ exports.handler = async (event) => {
           teamRows = teamRows.concat(more||[]);
         }
         const now = new Date();
-        const M = (year === now.getFullYear()) ? now.getMonth()+1 : 12;
+        // The month the office is in, worked out the way forecastSnapshot
+        // works it out. It used to be the server's own month - UTC on
+        // Netlify - which disagrees with the snapshot beside it for an hour
+        // on the first of the month, Irish summer time.
+        const M = (year === Number(dublinYMD(now).slice(0,4)))
+          ? Number(dublinYMD(now).slice(5,7)) : 12;
         // One sheet load for the whole response, and one for the overrides.
         // Both only have anything to say about the month the office is in, so
         // a year that is not this one is left exactly as it was.
@@ -2121,19 +2137,38 @@ exports.handler = async (event) => {
         const me = await callerProfile(caller);
         if(!me || !canUpdatePerf(me.role)) return json(403,{error:'forbidden'});
         const uid=p.user_id, year=Number(p.year), month=Number(p.month),
-          target=Number(p.target), actual=Number(p.actual), notes=(p.notes||'').toString();
+          notes=(p.notes||'').toString();
         if(!uid || !(month>=1&&month<=12) || !(year>=2000&&year<=2100)) return json(400,{error:'bad_input'});
-        if(!(target>=0)||!(actual>=0)) return json(400,{error:'bad_numbers'});
+        // Blank is not zero. A target nobody typed means "whatever the role
+        // or the cargo says", which is a null here - storing a 0 would put a
+        // real target of nothing in front of the ladder and hide it.
+        const target = blankNum(p.target);
+        if(target === BAD) return json(400,{error:'bad_numbers'});
+        // The current month's figure is not edited through this field at all:
+        // it is the forecast, or an override on it. So an absent actual means
+        // LEAVE IT, not zero it - otherwise saving a target would quietly
+        // write an entered figure under the one the sheet is answering with.
+        const actual = blankNum(p.actual);
+        if(actual === BAD) return json(400,{error:'bad_numbers'});
         const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
         if(!await inScope(me,tgt)) return json(403,{error:'out_of_scope'});
+        let keepActual = 0;
+        if(actual === null){
+          const { data: had } = await admin.from('sales_results')
+            .select('actual').eq('user_id',uid).eq('year',year).eq('month',month);
+          keepActual = (had && had.length) ? (Number(had[0].actual) || 0) : 0;
+        }
         const { error } = await admin.from('sales_results').upsert(
-          { user_id:uid, year, month, target, actual, notes,
+          { user_id:uid, year, month, target,
+            actual: actual === null ? keepActual : actual, notes,
             updated_by:me.id, updated_at:new Date().toISOString() },
           { onConflict:'user_id,year,month' });
         if(error) return json(500,{error:'save_failed', detail:error.message});
+        // Clearing the target and ticking the box clears the base one too -
+        // the same word, said about the person rather than the month.
         if(p.set_base_target) await admin.from('profiles').update({monthly_target:target}).eq('id',uid);
-        return json(200,{ ok:true });
+        return json(200,{ ok:true, target, actual: actual === null ? keepActual : actual });
       }
       case 'set_monthly_target': {
         const me = await callerProfile(caller);
