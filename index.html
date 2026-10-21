@@ -5039,7 +5039,10 @@ function startApp(user){
   const lpe=document.getElementById('leader-proc-extra');
   if(lpe) lpe.style.display=cfg.leader?'block':'none';
   document.getElementById('home-mgr-band').style.display=cfg.leader?'block':'none';
-  renderUsers(); showPage('home');
+  // The hash decides, not Home: a reload, a PWA shortcut and the boot
+  // splash's "Try again" all come through here, and all three used to throw
+  // the person back to the landing page.
+  renderUsers(); applyStartRoute();
 
   // Hide install button if already installed
   if(window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone){
@@ -5096,8 +5099,79 @@ async function doLogout(){
   document.getElementById('login-error').style.display='none';
 }
 
+// ═══════════════════════════════════════
+// WHERE YOU ARE, IN THE URL
+// ═══════════════════════════════════════
+// A reload used to put everybody back on Home, and so did the boot splash's
+// "Try again" - both land in startApp(), which called showPage('home') flat.
+// So the page id travels in location.hash and startApp() reads it back.
+//
+// The slug IS the page id, with no prefix. The PWA manifest has already
+// declared that vocabulary - its shortcuts point at #performance, #comms and
+// #calendar - so a namespace here would leave those three pointing at nothing
+// instead of starting to work. Nothing else in the page reads the hash: the
+// only other ones are placeholder href="#" cards that open in a new tab.
+//
+// replaceState, not location.hash: the Back button goes on doing exactly what
+// it does today. Turning in-app navigation into history entries is a separate
+// decision and not this one.
+const ROUTE_LEADER_PAGES = ['team-profiles','reports','mgr-trainings','mgr-procedures'];
+const ROUTE_MGR_PAGES    = ['users','roles','teams','locations','lead-sources'];
+const ROUTE_ADMIN_PAGES  = ['competitions-admin'];
+// A profile page is about somebody, and the hash does not carry who. It is
+// never written and never restored; the page you CAN get back to is the one
+// you reached it from, which is what the hash still says.
+const ROUTE_NO_RESTORE   = ['view-profile'];
+// One alias, in one place, read by showPage and by the hash alike.
+function routeName(name){ return name==='mgr-handbook-leader' ? 'mgr-handbook' : name; }
+// A hash is typed, bookmarked and passed around, so it is read tolerantly -
+// spaces and case do not decide whether somebody gets their page back - and
+// then checked against the real pages rather than against a pattern.
+function routeFromHash(){
+  return routeName(String((window.location.hash || '')
+    .replace(/^#/,'')).trim().toLowerCase());
+}
+// The same cfg the nav is built from, asked the same way. A page this person
+// has no business on is not restored - the hash is cleared and they land on
+// the default, never on a forbidden page and never on a blank one.
+function routeAllows(name){
+  const el = name ? document.getElementById('page-'+name) : null;
+  if(!el || !el.classList.contains('page')) return false;
+  if(ROUTE_NO_RESTORE.indexOf(name) !== -1) return false;
+  if(!currentRole) return false;
+  const cfg = roleCfg(currentRole);
+  if(ROUTE_ADMIN_PAGES.indexOf(name) !== -1) return rank(currentRole) >= ROLE_RANK.admin;
+  if(ROUTE_MGR_PAGES.indexOf(name) !== -1) return !!cfg.mgr;
+  if(ROUTE_LEADER_PAGES.indexOf(name) !== -1) return !!cfg.leader;
+  return true;
+}
+// Writing it must never be what breaks a page, so every call is guarded: an
+// embedded or sandboxed context can refuse replaceState outright.
+function writeRoute(name){
+  if(!name || ROUTE_NO_RESTORE.indexOf(name) !== -1) return;
+  try { history.replaceState(null, '', '#'+name); } catch(e){ /* not worth a page for */ }
+}
+function clearRoute(){
+  try { history.replaceState(null, '', window.location.pathname + window.location.search); }
+  catch(e){ /* same */ }
+}
+// Called from startApp, after auth has resolved and currentRole is set.
+const ROUTE_DEFAULT_PAGE = 'home';
+function applyStartRoute(){
+  const want = routeFromHash();
+  if(want && routeAllows(want)){ showPage(want); return want; }
+  // Empty, unknown, or not theirs: the default page, and nothing left in the
+  // address bar. The clear comes AFTER showPage, which writes the default's
+  // own slug on its way through - so a refused hash leaves no trace rather
+  // than being quietly swapped for a working one. Arriving is not navigating:
+  // the hash starts being written the moment the person moves.
+  showPage(ROUTE_DEFAULT_PAGE);
+  clearRoute();
+  return ROUTE_DEFAULT_PAGE;
+}
+
 function showPage(name){
-  if(name==='mgr-handbook-leader') name='mgr-handbook';
+  name = routeName(name);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-links a').forEach(a=>a.classList.remove('active'));
   ['performance','orgchart','calendar'].forEach(pg=>{
@@ -5193,6 +5267,9 @@ function showPage(name){
   if(name==='reports') (async()=>{ await softLoad('performance', loadPerformance); seedCurrentYearCells(); renderReportsPage(); })();
   // Sync mobile nav highlight
   if(window._mobNavSync) window._mobNavSync(name);
+  // Last, so a page that threw on the way in does not leave the URL claiming
+  // you got there.
+  writeRoute(name);
 }
 
 // ═══════════════════════════════════════
