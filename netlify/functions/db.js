@@ -414,6 +414,33 @@ async function subtreeIds(me){
   }
   return out;
 }
+// The same question canViewProfileOf answers, asked once for a whole list
+// instead of once per person. It has to be: canViewProfileOf reaches
+// canActOn, which reaches subtreeIds, which selects the entire profiles
+// table - so asking it per person over a directory is one full-table read
+// per person. The four branches below mirror that function exactly, and the
+// suite holds them to it by checking the directory against what
+// get_profile_detail actually allows, person by person.
+//
+// `null` means "everyone", so a caller who may see the lot skips the
+// filtering altogether.
+async function personalFieldIds(me, rows){
+  if(!me) return new Set();
+  if(seesEverything(me.role)) return null;
+  const self = String(me.id);
+  if(rank(me.role) >= ROLE_RANK.director){
+    const ok = new Set([self]);
+    (rows||[]).forEach(r => { if(outranks(me.role, r.role)) ok.add(String(r.id)); });
+    return ok;
+  }
+  if(isLocalLeader(me.role)){
+    const sub = await subtreeIds(me);
+    const ok = new Set([self]);
+    (rows||[]).forEach(r => { if(sub.has(r.id) && outranks(me.role, r.role)) ok.add(String(r.id)); });
+    return ok;
+  }
+  return new Set([self]);
+}
 // Who may edit whose descriptive profile fields.
 async function canEditProfileOf(me, tgt){
   if(!me || !tgt) return false;
@@ -1873,12 +1900,53 @@ exports.handler = async (event) => {
           .update({ last_login:new Date().toISOString() }).eq('id', caller.id);
         return json(200, { ok:true });
       }
+      // The name list, which is shared on purpose: chat, the org chart and
+      // every scoped screen's own filtering all read it, so it stays
+      // company-wide. What was NOT on purpose is that it also carried every
+      // personal field on the row - a target, an email, a phone number, a
+      // bio - to every signed-in caller, because it returned the row itself.
+      //
+      // Now: identity to everybody, personal fields only for the people this
+      // caller could open the profile of. Absent rather than null-filled, so
+      // "you may not see this" and "there is nothing here" stay different
+      // answers.
       case 'get_directory': {
+        const me = await callerProfile(caller);
+        if(!me) return json(403,{error:'forbidden'});
         const { data, error } = await admin.from('profiles')
-          .select('id,first,last,nickname,email,role,campus,phone,instagram,linkedin,nationality,language,languages,birth_day,birth_month,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
+          .select('id,first,last,nickname,email,role,campus,phone,instagram,linkedin,nationality,languages,birth_day,birth_month,job_title,status,reports_to,photo,bio,monthly_target,role_id,team_id,start_date')
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
-        return json(200,{ directory:data });
+        const rows = data || [];
+        const maySee = await personalFieldIds(me, rows);
+        const directory = rows.map(r => {
+          // Identity and structure. Everything here is already on a card
+          // somebody can see: the org chart draws it, chat lists it, and the
+          // scoped screens filter it themselves.
+          const out = {
+            id: r.id, first: r.first, last: r.last, nickname: r.nickname,
+            photo: r.photo, role: r.role, role_id: r.role_id,
+            campus: r.campus, team_id: r.team_id, job_title: r.job_title,
+            status: r.status, reports_to: r.reports_to,
+            // Day and month, no year. Company-wide on purpose: the Home
+            // birthday card is for everybody and a birthday is a
+            // celebration, not a figure.
+            birth_day: r.birth_day, birth_month: r.birth_month
+          };
+          if(maySee === null || maySee.has(String(r.id))){
+            out.email = r.email;
+            out.phone = r.phone;
+            out.bio = r.bio;
+            out.instagram = r.instagram;
+            out.linkedin = r.linkedin;
+            out.nationality = r.nationality;
+            out.languages = r.languages;
+            out.start_date = r.start_date;
+            out.monthly_target = r.monthly_target;
+          }
+          return out;
+        });
+        return json(200,{ directory });
       }
       // ── THE ORG CHART ───────────────────────────────────────
       // The whole company to any signed-in caller, both campuses, and
