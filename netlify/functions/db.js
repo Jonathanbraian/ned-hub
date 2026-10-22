@@ -1221,12 +1221,17 @@ function competitionRanking(rows, monthIdx){
 async function forecastSnapshot(now){
   const src = await competitionSource();
   const data = await loadCompetition(src);
-  if(data.error) return { ok:false, month:null, ranking:[] };
+  if(data.error) return { ok:false, month:null, year:null, rows:[], ranking:[] };
   // The month the ranking defaults to, worked out the way get_competition
   // works it out: the current month in Dublin, which is the month the
   // office is in.
   const month = Number(dublinYMD(now || new Date()).slice(5,7));
-  return { ok:true, month, ranking: competitionRanking(data.rows, month - 1) };
+  // The rows travel with it now. One load already carries all twelve months
+  // for everybody - the ranking is just one of them - and throwing the other
+  // eleven away was the only reason a past month had nowhere to read its
+  // figure from. year says which year those twelve months are about.
+  return { ok:true, month, year: sheetYear(src, now), rows: data.rows,
+    ranking: competitionRanking(data.rows, month - 1) };
 }
 // The sheet is maintained by hand, so a name matches on cleanAgent and
 // nothing else - the campus suffix comes off, case and spacing stop
@@ -1242,25 +1247,52 @@ function forecastKey(name){ return cleanAgent(name).toLowerCase(); }
 // Each row keeps the campus it came from, so the two are reported apart and
 // added up, rather than one of them quietly winning: a .find() here would
 // have taken whichever sold more and thrown the rest away.
-function receivedForProfile(profile, snapshot){
+// Which sheet rows are this person's, by the one linking rule.
+function forecastRowsFor(profile, snapshot){
   const stored = (profile && profile.results_name) ? String(profile.results_name).trim() : '';
-  const out = { results_name: stored || null,
-    received_dublin: 0, received_limerick: 0, received: null, received_matched: false,
-    received_month: (snapshot && snapshot.month) || null,
-    received_month_label: (snapshot && snapshot.month) ? COMP_MONTHS[snapshot.month - 1] : null };
   const want = forecastKey(stored ||
     [profile && profile.first, profile && profile.last].filter(Boolean).join(' '));
-  if(!want) return out;
-  const mine = ((snapshot && snapshot.ranking) || []).filter(r => forecastKey(r.name) === want);
+  if(!want || !snapshot || !snapshot.ok) return [];
+  return (snapshot.rows || []).filter(r => forecastKey(r.agent) === want);
+}
+// What one person sold in ONE month, per campus and together. monthIdx is
+// zero based, the way the sheet's own months[] is indexed.
+//
+// This is the only place a figure is taken out of the sheet. Every month
+// reads it the same way, so a past month and the month the office is in are
+// the same question asked twice rather than two different rules.
+function forecastForMonth(profile, snapshot, monthIdx){
+  const out = { dublin: 0, limerick: 0, total: 0, matched: false };
+  if(!(monthIdx >= 0 && monthIdx <= 11)) return out;
+  const mine = forecastRowsFor(profile, snapshot);
   if(!mine.length) return out;
   // A campus the person has no row on is a real zero, not a gap: they sold
   // nothing there. A campus the sheet does not name at all adds nothing.
   mine.forEach(r => {
-    const v = Number(r.value) || 0;
-    if(r.campus === 'dublin') out.received_dublin += v;
-    else if(r.campus === 'limerick') out.received_limerick += v;
+    const v = Number((r.months || [])[monthIdx]) || 0;
+    if(r.campus === 'dublin') out.dublin += v;
+    else if(r.campus === 'limerick') out.limerick += v;
   });
-  out.received = out.received_dublin + out.received_limerick;
+  out.total = out.dublin + out.limerick;
+  out.matched = true;
+  return out;
+}
+// The profile's three Received lines, which are about the month the office
+// is in. Expressed through the reader above so the lines and the figure the
+// month is worth can never be two different answers.
+function receivedForProfile(profile, snapshot){
+  const stored = (profile && profile.results_name) ? String(profile.results_name).trim() : '';
+  const month = (snapshot && snapshot.month) || null;
+  const out = { results_name: stored || null,
+    received_dublin: 0, received_limerick: 0, received: null, received_matched: false,
+    received_month: month,
+    received_month_label: month ? COMP_MONTHS[month - 1] : null };
+  if(!month) return out;
+  const fc = forecastForMonth(profile, snapshot, month - 1);
+  if(!fc.matched) return out;
+  out.received_dublin = fc.dublin;
+  out.received_limerick = fc.limerick;
+  out.received = fc.total;
   out.received_matched = true;
   return out;
 }
@@ -1305,26 +1337,22 @@ function blankNum(raw){
   const n = Number(raw);
   return (Number.isFinite(n) && n >= 0) ? n : BAD;
 }
-// ── WHAT A PERSON SOLD THIS MONTH ───────────────────────────
-// Two answers now, and the order is the whole rule:
-//   1. the forecast sheet, through the same link the profile's Received
-//      lines use, totalled over both campuses
-//   2. what was entered by hand for the month, for somebody the sheet does
-//      not carry - which is what it has always been
-// The manual override that used to sit in front of both is gone. It was a
-// second way of saying the same thing as the sheet, and two levers for one
-// figure is how a number ends up disagreeing with itself. The column stays
-// on profiles, written by nobody and read by nobody.
+// ── WHAT A PERSON SOLD IN A MONTH ───────────────────────────
+// One rule, for every month of the year the sheet is about:
 //
-// Only the CURRENT month is touched. The snapshot speaks for this month and
-// no other, so every past month keeps the number it was recorded with and no
-// report about the past moves.
-function effectiveMonthlyActual(opts){
-  if(opts && opts.received !== null && opts.received !== undefined)
-    return { value: Number(opts.received), source: 'forecast' };
-  // Not a fabricated number: whatever the month already said, which with no
-  // row of its own is the zero it has always been.
-  return { value: Number((opts && opts.entered) || 0), source: 'entered' };
+//   actual(month) = the sheet's Dublin + Limerick figure for that month
+//                 + the extras recorded against that month
+//
+// There is nothing else in it. The manual figure that used to be typed in
+// is gone, and so is the override that once sat in front of both -
+// sales_results keeps its rows, its targets and its notes, but its actual
+// is no longer read by anything. A year the sheet does not cover has a
+// forecast of nothing, and the extras still stand on their own.
+function monthActualFor(profile, snapshot, monthIdx, extrasAmount){
+  const fc = forecastForMonth(profile, snapshot, monthIdx);
+  const x = Number(extrasAmount) || 0;
+  return { value: fc.total + x, base: fc.total, extras: x,
+    matched: fc.matched, source: fc.matched ? 'forecast' : 'none' };
 }
 // ── EXTRAS ──────────────────────────────────────────────────
 // Money that was earned but is not in the forecast sheet: an entry visa, an
@@ -1407,7 +1435,7 @@ exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
   parseCompetitionCsv, competitionWinner, competitionHighlights,
   competitionRanking, attachProfile, competitionUrl, COMP_MONTHS,
   forecastKey, receivedForProfile, forecastNameMap, rankingWithProfileNames,
-  effectiveMonthlyActual, safeKind, safeAmount, extrasOf };
+  forecastForMonth, monthActualFor, safeKind, safeAmount, extrasOf };
 exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
 exports.__clearCompetitionCache = () => { __compCache.clear(); };
 
@@ -1973,15 +2001,10 @@ exports.handler = async (event) => {
         const teamIds = await accessibleTeamIds(me, allTeams||[], allProfs||[]);
         const memberIds = (allProfs||[])
           .filter(u => u.team_id!=null && teamIds.includes(u.team_id)).map(u => u.id);
-        // Team actuals need every member's rows, even ones outside the caller's
-        // per-person scope; the per-user payload below stays scoped to `ids`.
-        const extra = memberIds.filter(id => !ids.includes(id));
-        let teamRows = rows || [];
-        if(extra.length){
-          const { data: more } = await admin.from('sales_results')
-            .select('user_id,year,month,target,actual').eq('year',year).in('user_id',extra);
-          teamRows = teamRows.concat(more||[]);
-        }
+        // A team's figures used to need every member's sales_results rows,
+        // even ones outside the caller's own scope - a second query, purely
+        // to sum recorded actuals. Nothing reads those actuals now, so the
+        // query is gone with them; `results` below is still scoped to `ids`.
         const now = new Date();
         // The month the office is in, worked out the way forecastSnapshot
         // works it out. It used to be the server's own month - UTC on
@@ -1989,103 +2012,73 @@ exports.handler = async (event) => {
         // on the first of the month, Irish summer time.
         const M = (year === Number(dublinYMD(now).slice(0,4)))
           ? Number(dublinYMD(now).slice(5,7)) : 12;
-        // One sheet load for the whole response, and one for the overrides.
-        // Both only have anything to say about the month the office is in, so
-        // a year that is not this one is left exactly as it was.
-        const snap = (year === now.getFullYear()) ? await forecastSnapshot(now)
-          : { ok:false, month:null, ranking:[] };
-        // A snapshot only exists for the current year, and its month is M by
-        // construction - asking again would be a guard no test could hold to
-        // account.
-        const current = !!snap.ok;
+        // One sheet load for the whole response. It carries every month, so
+        // a year that is not this one is still answered - with nothing,
+        // because the sheet is about one year and says so.
+        const snap = await forecastSnapshot(now);
+        // Does the sheet speak for the year being asked about at all? When
+        // it does not, every month's forecast is zero and the extras stand
+        // on their own.
+        const onSheet = !!(snap.ok && Number(snap.year) === year);
         // Everybody the response speaks about: the caller's own scope, plus
         // the team members whose figures are summed below. One pass, so a
         // person cannot be worth one thing in the list and another in the
         // total their team shows.
         const whoIds = Array.from(new Set((ids || []).concat(memberIds)));
-        // One query for everybody, for the whole year - extras speak for
-        // every month, not just the one the forecast does, so this is loaded
-        // whether or not the sheet has anything to say.
+        // One query for everybody, for the whole year.
         const extras = await extrasForYear(whoIds, year);
-        const monthActual = {};
-        if(current){
-          const entered = {};
-          teamRows.forEach(r => { if(r.month === M) entered[r.user_id] = Number(r.actual) || 0; });
-          const want = new Set(whoIds.map(String));
-          (allProfs || []).forEach(u => {
-            if(!want.has(String(u.id))) return;
-            const fc = receivedForProfile(u, snap);
-            // The total of both campuses: somebody who sold to each of them
-            // sold all of it, and the month is what they sold.
-            const auto = fc.received_matched ? Number(fc.received) : null;
-            const got = effectiveMonthlyActual({ received: auto,
-              entered: entered[u.id] });
-            // The extras sit on top of whichever of the three answered, and
-            // the base travels with them so the editor can show the sum as
-            // the sum of its parts rather than one number nobody can take
-            // apart. value is what every consumer spends.
-            const x = extrasOf(extras, u.id, M);
-            // auto is what the sheet said, which is now the same as the base
-            // whenever the sheet said anything. Kept because the page reads
-            // it to tell a matched person from an unmatched one.
-            monthActual[u.id] = { value: got.value + x, base: got.value,
-              extras: x, source: got.source, auto };
+        // Every month of the year, for everybody - the sheet's figure, which
+        // the page adds its own extras to. One rule, twelve months, no month
+        // treated differently from any other.
+        const profById = {}; (allProfs || []).forEach(u => { profById[u.id] = u; });
+        const forecast = {};
+        if(onSheet){
+          whoIds.forEach(id => {
+            const u = profById[id];
+            if(!u) return;
+            const mine = {};
+            for(let m = 1; m <= 12; m++){
+              const t = forecastForMonth(u, snap, m - 1).total;
+              if(t) mine[m] = t;
+            }
+            if(Object.keys(mine).length) forecast[id] = mine;
           });
         }
+        // What one person's month is worth, in full. The only place the two
+        // halves are added together on this side.
+        const forecastOf = (id, m) => {
+          const mine = forecast[id];
+          return (mine && Number(mine[m])) || 0;
+        };
+        const actualOf = (id, m) => forecastOf(id, m) + extrasOf(extras, id, m);
+
+        const monthActual = {};
+        whoIds.forEach(id => {
+          const u = profById[id];
+          if(!u) return;
+          const got = monthActualFor(u, onSheet ? snap : null, M - 1,
+            extrasOf(extras, id, M));
+          monthActual[id] = got;
+        });
+
         const qs = Math.floor((M-1)/3)*3+1;
         const teamOf = {}; (allProfs||[]).forEach(u => { teamOf[u.id] = u.team_id; });
         const sums = {};
         teamIds.forEach(id => { sums[id] = { monthly:0, quarterly:0, annual:0 }; });
-        teamRows.forEach(r => {
-          const tid = teamOf[r.user_id];
-          if(tid==null || !sums[tid]) return;
-          const a = Number(r.actual)||0;
-          // This month is the effective figure, added once per member below.
-          // The quarter and the year keep adding what was recorded, because
-          // the sheet speaks for this month and no other.
-          if(r.month >= qs && r.month < qs+3) sums[tid].quarterly += a;
-          sums[tid].annual += a;
-          if(r.month === M && !current) sums[tid].monthly += a;
-        });
-        if(current){
-          // Per member rather than per row: somebody with no row at all can
-          // still have a figure now, and somebody with one must not be
-          // counted twice.
-          (allProfs || []).forEach(u => {
-            const tid = teamOf[u.id];
-            if(tid==null || !sums[tid]) return;
-            const m = monthActual[u.id];
-            if(m) sums[tid].monthly += Number(m.value) || 0;
-          });
-          // The quarter and the year have to agree with the month they
-          // contain, so the difference the month made is carried into them.
-          (allProfs || []).forEach(u => {
-            const tid = teamOf[u.id];
-            if(tid==null || !sums[tid]) return;
-            const m = monthActual[u.id];
-            if(!m) return;
-            const was = (teamRows.find(r => String(r.user_id) === String(u.id) && r.month === M) || {}).actual;
-            const delta = (Number(m.value) || 0) - (Number(was) || 0);
-            if(M >= qs && M < qs+3) sums[tid].quarterly += delta;
-            sums[tid].annual += delta;
-          });
-        }
-        // Extras, on every month they were recorded against. The month the
-        // forecast speaks for is SKIPPED here: its extras are already inside
-        // monthActual, which the block above put into all three sums, and
-        // adding them again is the one way these figures could disagree with
-        // the per-person ones.
+        // Month by month, for every member. The quarter and the year used to
+        // be built from what was recorded in sales_results and then corrected
+        // for the one month the sheet spoke about; now all three are the same
+        // sum over the same months, so they cannot drift apart.
         (allProfs || []).forEach(u => {
           const tid = teamOf[u.id];
           if(tid == null || !sums[tid]) return;
-          const mine = extras[u.id] || {};
-          Object.keys(mine).forEach(k => {
-            const m = Number(k), x = Number(mine[k]) || 0;
-            if(current && m === M) return;
-            if(m >= qs && m < qs+3) sums[tid].quarterly += x;
-            sums[tid].annual += x;
-            if(m === M) sums[tid].monthly += x;
-          });
+          for(let m = 1; m <= 12; m++){
+            const a = actualOf(u.id, m);
+            if(!a) continue;
+            sums[tid].annual += a;
+            if(m >= qs && m < qs+3) sums[tid].quarterly += a;
+            if(m === M) sums[tid].monthly += a;
+          }
         });
         const team_perf = (allTeams||[]).filter(t => teamIds.includes(t.id)).map(t => ({
           team_id: t.id, name: t.name, leader_id: t.leader_id, campus: t.campus,
@@ -2093,21 +2086,24 @@ exports.handler = async (event) => {
           actual: sums[t.id] || { monthly:0, quarterly:0, annual:0 }
         }));
 
-        // Field by field, and only for this month: the number in force, and
-        // where it came from, so the page can say so rather than leaving
-        // somebody to wonder why a figure they typed is not the one showing.
+        // Field by field, for the month the office is in: what it is worth,
+        // what it is made of, and whether the sheet carries this person at
+        // all. The page reads it for the card beside their name.
         const monthly_actual = {};
         Object.keys(monthActual).forEach(id => {
           monthly_actual[id] = { value: monthActual[id].value,
             base: monthActual[id].base, extras: monthActual[id].extras,
-            source: monthActual[id].source, auto: monthActual[id].auto };
+            source: monthActual[id].source, matched: monthActual[id].matched };
         });
-        // Every month's extras, so the page can add them to the months the
-        // forecast says nothing about. The live month is in here too, and the
-        // page must NOT add it a second time - monthly_actual already carries
-        // it. One rule, and it is the client's half of the skip above.
+        // Both halves of every month, sent apart. The page adds them the way
+        // this response did - one rule, stated once on each side - so a month
+        // on screen cannot be worth something the team total disagrees with.
         return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf,
-          monthly_actual, extras,
+          monthly_actual, extras, forecast,
+          // The year the sheet is about. A page asking about any other year
+          // gets no forecast at all, and should say so rather than imply the
+          // figures are missing.
+          forecast_year: snap.ok ? snap.year : null,
           forecast_month: snap.ok ? snap.month : null });
       }
       case 'set_result': {

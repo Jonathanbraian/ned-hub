@@ -3927,7 +3927,6 @@ a.clib-open{text-decoration:none}
           <input class="form-input" type="number" id="uperf-target" min="0" step="500">
           <div class="form-hint" id="uperf-target-hint"></div>
         </div>
-        <div class="form-group" id="uperf-actual-wrap"><label class="form-label">Actual Result (€)</label><input class="form-input" type="number" id="uperf-actual" placeholder="0" min="0" step="100" oninput="renderPerfComposition()"></div>
       </div>
       <div class="form-group" id="uperf-extras-wrap">
         <label class="form-label">Extras - money this month that is not in the forecast</label>
@@ -4728,13 +4727,24 @@ function monthActualOf(uid){ return perfMonthActual[String(uid)] || null; }
 function monthlySourceLabel(u){
   const e=monthActualOf(u && u.id);
   if(!e) return '';
-  if(e.source === 'forecast') return ' <span style="font-weight:400;text-transform:none">(from the forecast)</span>';
+  // Said out loud only when the sheet actually carries this person: a figure
+  // that is purely extras should not claim to come from a forecast.
+  if(e.matched) return ' <span style="font-weight:400;text-transform:none">(from the forecast)</span>';
   return '';
 }
-// Money that was earned and is not in the sheet, per person per month, for
-// every month of a year rather than just the live one.
-//   perfExtras[year][uid][month] = the total of that month's extras
+// What the forecast sheet says each person sold, per month, for a whole
+// year - and what was added by hand on top of it.
+//   perfForecast[year][uid][month] = the sheet's Dublin + Limerick figure
+//   perfExtras[year][uid][month]   = the total of that month's extras
+// A year the sheet does not cover simply has no entry, which is a forecast
+// of nothing rather than a gap.
+const perfForecast = {};
 const perfExtras = {};
+function forecastOf(uid, year, month){
+  const y = perfForecast[year];
+  const u = y && y[String(uid)];
+  return (u && Number(u[month])) || 0;
+}
 // THE rule, and it is the client's half of the gateway's: the month the
 // forecast speaks for already has its extras inside monthly_actual, so it is
 // read from there and NEVER added to again. Every other month adds its own.
@@ -4745,8 +4755,11 @@ function extrasOf(uid, year, month){
 }
 // What a month is worth once everything is counted, for a month the gateway
 // did not resolve for us.
-function actualWithExtras(uid, year, month, base){
-  return Number(base || 0) + extrasOf(uid, year, month);
+// THE rule, stated once for the whole page: a month is what the sheet says
+// plus what was added by hand against it. Every figure on every screen goes
+// through here, so no two of them can disagree.
+function actualOf(uid, year, month){
+  return forecastOf(uid, year, month) + extrasOf(uid, year, month);
 }
 // ── A TARGET APPLIES FROM THE MONTH IT WAS SET ──────────────
 // A target is not a fact about one month: it is a change of policy that
@@ -4789,6 +4802,7 @@ async function loadPerformance(){
   if(r && Number(r.month) >= 1 && Number(r.month) <= 12){
     perfLiveYear = perfYear; perfLiveMonth = Number(r.month); }
   perfExtras[perfYear] = (r && r.extras) || {};
+  perfForecast[perfYear] = (r && r.forecast) || {};
   teamPerf = {};
   ((r&&r.team_perf)||[]).forEach(t=>{ teamPerf[t.team_id]=t; });
   const byUser = {};
@@ -4815,15 +4829,9 @@ async function loadPerformance(){
     const look=(y,mo)=> y===perfYear ? (mm[mo] || null) : undefined;
     const tOf=m=>(isBeforeStart(u, perfYear, m) ? 0
       : forwardTarget(look, perfYear, m, eT));
-    // This month comes from the gateway's effective answer; every other
-    // month is what it always was.
-    const aOf=m=>{
-      const e = (m===M && isLiveMonth(perfYear, m)) ? monthActualOf(u.id) : null;
-      // e.value already carries that month's extras; every other month has
-      // to be given its own.
-      return e ? Number(e.value)
-               : actualWithExtras(u.id, perfYear, m, mm[m]?mm[m].actual:0);
-    };
+    // Every month the same way, the live one included. There is no month
+    // that reads differently from the rest any more.
+    const aOf=m=>actualOf(u.id, perfYear, m);
     let qt=0,qa=0; for(let m=qs;m<qs+3;m++){qt+=tOf(m);qa+=aOf(m);}
     let at=0,aa=0; for(let m=1;m<=12;m++){at+=tOf(m);aa+=aOf(m);}
     u.perf = {
@@ -5702,13 +5710,9 @@ function prefillUperf(){
     'Leave empty to use the default - ' + fmt(Number(inherited)||0);
   const tin=document.getElementById('uperf-target');
   if(tin) tin.placeholder = String(Number(inherited)||0);
-  // The month the forecast speaks for is not typed in: it is the sheet plus
-  // the extras. Offering a box that would write under that is how a figure
-  // ends up disagreeing with itself.
-  const live=isLiveMonth(year, month);
-  const aw=document.getElementById('uperf-actual-wrap');
-  if(aw) aw.style.display = live ? 'none' : '';
-  document.getElementById('uperf-actual').value=(!live && row)?row.actual:'';
+  // No month is typed in any more: every one of them is the sheet plus the
+  // extras recorded against it, and a box that wrote under that is how a
+  // figure ends up disagreeing with itself.
   document.getElementById('uperf-notes').value=row?(row.notes||''):'';
   // The lines belong to the month on the form, so changing the month
   // reloads them rather than leaving the previous month's on screen.
@@ -5762,10 +5766,14 @@ function renderPerfComposition(){
   const month=Number(document.getElementById('uperf-month').value);
   const year=Number(document.getElementById('uperf-year').value);
   const sum=uperfExtras.reduce((a,x)=>a+(Number(x.amount)||0),0);
-  const live=isLiveMonth(year, month) ? monthActualOf(u && u.id) : null;
-  const base = live ? Number(live.base !== undefined ? live.base : live.value)
-                    : Number(document.getElementById('uperf-actual').value || 0);
-  const src = live && live.source === 'forecast' ? ' (from the forecast)' : '';
+  // The base is the sheet's figure for the month ON THE FORM, so changing
+  // the month changes it. It used to come from the live month's answer or
+  // from a box somebody typed in, which is why it could not follow.
+  const base = u ? forecastOf(u.id, year, month) : 0;
+  const onSheet = perfForecast[year] !== undefined;
+  const src = !onSheet ? ' (no forecast for ' + year + ')'
+            : base ? ' (from the forecast)'
+            : ' (the forecast does not carry this month)';
   host.innerHTML =
     '<div class="xtr-sum">'+
       '<div class="xtr-sum-row"><span>Base'+esc(src)+'</span><span>'+fmt(base)+'</span></div>'+
@@ -5846,25 +5854,21 @@ async function savePerformanceUpdate(){
   const month=Number(document.getElementById('uperf-month').value);
   const year=Number(document.getElementById('uperf-year').value);
   const targetRaw=document.getElementById('uperf-target').value.trim();
-  const live=isLiveMonth(year, month);
-  const actualRaw=live ? '' : document.getElementById('uperf-actual').value.trim();
   const notes=document.getElementById('uperf-notes').value.trim();
   const setBase=document.getElementById('uperf-set-base').checked;
   clearUperfError();
   // Blank target means the default, so it is sent as null rather than
   // refused. A number that is not one is still refused.
   if(targetRaw!=='' && !(Number(targetRaw)>=0)){ showUperfError('Enter valid amounts'); return; }
-  if(!live && (actualRaw===''||!(Number(actualRaw)>=0))){ showUperfError('Enter valid amounts'); return; }
   if(!(year>=2000&&year<=2100)){ showUperfError('Pick a valid month and year'); return; }
   const target = targetRaw==='' ? null : Number(targetRaw);
   const btn=document.getElementById('btn-save-uperf');
   if(btn) btn.disabled=true;
   try{
-    // On the live month the actual is left out entirely: the gateway keeps
-    // whatever the row had, so nothing is written under the forecast.
-    const body={user_id:uid,year,month,target,notes,set_base_target:setBase};
-    if(!live) body.actual=Number(actualRaw);
-    const r=await callDb('set_result', body);
+    // The actual is left out entirely, on every month: the gateway keeps
+    // whatever the row had, and nothing reads it anyway.
+    const r=await callDb('set_result',
+      {user_id:uid,year,month,target,notes,set_base_target:setBase});
     if(!r||!r.ok){ showUperfError(SET_RESULT_ERRORS[r&&r.error]||'Could not save this result'); return; }
     closeModal('modal-update-perf');
     // The page only loads perfYear, so say so rather than appear to do nothing.
@@ -12793,6 +12797,7 @@ async function loadPerfForYears(years){
     perfCells[y]=byUser;
     perfEff[y]=(r&&r.effective_targets)||{};
     perfExtras[y]=(r&&r.extras)||{};
+    perfForecast[y]=(r&&r.forecast)||{};
   }
 }
 // ── START DATE ───────────────────────────────────────────────────
@@ -12816,15 +12821,13 @@ function isBeforeStart(u, y, mo){
 function cellFor(u, c){
   const row=(perfCells[c.y]&&perfCells[c.y][u.id]&&perfCells[c.y][u.id][c.m])||null;
   const preStart=isBeforeStart(u, c.y, c.m);
-  // The month the office is in is the one the forecast has anything to say
-  // about. Every other cell is read exactly as before, so no report about a
-  // past month moves.
-  const live = isLiveMonth(c.y, c.m) ? monthActualOf(u.id) : null;
   const eff=(perfEff[c.y]&&perfEff[c.y][u.id]!=null) ? Number(perfEff[c.y][u.id])
           : (u._effTarget!=null ? Number(u._effTarget) : 0);
-  // Extras belong to every cell. The live one is the exception, and only
-  // because its figure arrives with them already in it.
+  // The same rule the dashboard uses, for every cell alike: the sheet's
+  // figure for that month, plus what was added by hand against it.
+  const fc = forecastOf(u.id, c.y, c.m);
   const x = extrasOf(u.id, c.y, c.m);
+  const actual = fc + x;
   // Same rule as the dashboard, and here the walk really can cross a year:
   // loadPerfForYears has whatever years the period asked for.
   const look=(y,mo)=>{
@@ -12834,20 +12837,12 @@ function cellFor(u, c){
     return (mine && mine[mo]) || null;
   };
   const rowTarget = forwardTarget(look, c.y, c.m, eff);
-  if(live){
-    const target = preStart ? 0 : rowTarget;
-    // A figure that came from the sheet or from somebody's own hand IS an
-    // entry: calling it "(no entry)" would be the page arguing with itself.
-    return { target, actual:Number(live.value)||0,
-      filled: !!row || live.source !== 'entered' || x !== 0, preStart };
-  }
-  // A month with nothing entered but money added by hand is a month with a
-  // figure, so it counts as filled rather than reading as "(no entry)".
-  if(row) return { target:preStart?0:rowTarget,
-    actual:(Number(row.actual)||0)+x, filled:true, preStart };
-  if(preStart) return { target:0, actual:x, filled:x!==0, preStart:true };
-  // A month with no row of its own still inherits the target in force.
-  return { target:rowTarget, actual:x, filled:x!==0, preStart:false };
+  // A month the sheet speaks for, or that had money added to it, is a month
+  // with a figure - calling it "(no entry)" would be the page arguing with
+  // itself. A row of its own still counts, because somebody filled one in.
+  const filled = !!row || fc !== 0 || x !== 0;
+  if(preStart) return { target:0, actual, filled, preStart:true };
+  return { target:rowTarget, actual, filled, preStart:false };
 }
 let periodCache=null;       // uid -> {target, actual, months, filled}
 function buildPeriodFigures(pop){
