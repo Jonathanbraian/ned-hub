@@ -4134,6 +4134,43 @@ async function callDb(action, payload = {}) {
   return res.json();
 }
 
+// ── WHAT THE GATEWAY SAID ────────────────────────────────────
+// A failure comes back as a code - which the maps through this file turn into
+// a sentence somebody can act on - and sometimes as a `detail`: the words
+// Postgres or Storage used when it refused. Every handler threw that detail
+// away, which is how a column that does not exist reads as "Could not save
+// this item" and sends the reader looking in the wrong place entirely.
+// One lead, one hyphen, then what the server actually said.
+const FAIL_DETAIL_MAX = 180;
+function failDetail(r){
+  // A string and nothing else. An object would stringify to [object Object],
+  // and a raw dump is not a message.
+  const d = r && r.detail;
+  if(typeof d !== 'string') return '';
+  const t = d.replace(/\s+/g,' ').trim();
+  if(!t) return '';
+  return t.length > FAIL_DETAIL_MAX ? t.slice(0, FAIL_DETAIL_MAX - 3) + '...' : t;
+}
+// The lead is whatever the handler was already going to show. This adds only
+// what the server knew and the handler did not.
+function withDetail(r, lead){
+  const d = failDetail(r);
+  return d ? (lead + ' - ' + d) : lead;
+}
+// The shape fifteen handlers had written out by hand, now written once.
+function failMsg(r, map, fallback){
+  return withDetail(r, (map && map[r && r.error]) || fallback);
+}
+// An Error that still carries the gateway's answer, for the one save that has
+// to throw past several steps to reach its catch. An upload that fails for
+// its own reasons throws a plain Error with a code and no response, which is
+// why the catch has to ask for both.
+function dbError(r, fallbackCode){
+  const err = new Error((r && r.error) || fallbackCode || 'save_failed');
+  err.res = r || null;
+  return err;
+}
+
 // ═══════════════════════════════════════
 // CONSTANTS & TARGETS
 // ═══════════════════════════════════════
@@ -5869,7 +5906,7 @@ async function savePerformanceUpdate(){
     // whatever the row had, and nothing reads it anyway.
     const r=await callDb('set_result',
       {user_id:uid,year,month,target,notes,set_base_target:setBase});
-    if(!r||!r.ok){ showUperfError(SET_RESULT_ERRORS[r&&r.error]||'Could not save this result'); return; }
+    if(!r||!r.ok){ showUperfError(failMsg(r, SET_RESULT_ERRORS, 'Could not save this result')); return; }
     closeModal('modal-update-perf');
     // The page only loads perfYear, so say so rather than appear to do nothing.
     showToast(year===perfYear ? 'Result saved'
@@ -6541,7 +6578,7 @@ async function saveProfile(){
   if(allowStartDate(uid)) fields.start_date=document.getElementById('ep-start-date').value || null;
   if(!fields.first||!fields.last){ showToast('First and last name are required.','error'); return; }
   const r=await callDb('update_profile',{ user_id:uid, fields });
-  if(!r||!r.ok){ showToast(PROFILE_SAVE_ERRORS[r&&r.error]||'Could not save this profile','error'); return; }
+  if(!r||!r.ok){ showToast(failMsg(r, PROFILE_SAVE_ERRORS, 'Could not save this profile'),'error'); return; }
 
   // The cargo is its own action too: role and role_id never travel through
   // update_profile, whose allowlist has neither.
@@ -7310,7 +7347,7 @@ async function saveAppraisal(){
     const r=id
       ? await callDb('update_appraisal',{ id:Number(id), template:key, period, overall_rating, responses })
       : await callDb('create_appraisal',{ user_id:uid, template:key, period, overall_rating, responses });
-    if(!r||!r.ok){ fail(SUBREC_ERRORS[r&&r.error]||'Could not save this appraisal'); return; }
+    if(!r||!r.ok){ fail(failMsg(r, SUBREC_ERRORS, 'Could not save this appraisal')); return; }
     closeModal('modal-appraisal');
     showToast(id?'Appraisal updated':'Appraisal added','success');
     await refreshProfile(uid,'appraisals');
@@ -7478,7 +7515,7 @@ async function saveLocation(){
   try{
     const r=id ? await callDb('update_location',{ id:Number(id), name, campus, active })
                : await callDb('create_location',{ name, campus });
-    if(!r||!r.ok){ showLocError(LOCATION_ERRORS[r&&r.error]||'Could not save this location'); return; }
+    if(!r||!r.ok){ showLocError(failMsg(r, LOCATION_ERRORS, 'Could not save this location')); return; }
     closeModal('modal-location');
     showToast('Location saved','success');
     await refreshAfterLocationChange();
@@ -7615,7 +7652,7 @@ async function saveTeam(){
   try{
     const r=id ? await callDb('update_team', Object.assign({id:Number(id), active}, payload))
                : await callDb('create_team', payload);
-    if(!r||!r.ok){showTeamError(TEAM_ERRORS[r&&r.error]||'Could not save this team');return;}
+    if(!r||!r.ok){showTeamError(failMsg(r, TEAM_ERRORS, 'Could not save this team'));return;}
     closeModal('modal-team');
     showToast('Team saved','success');
     await refreshAfterTeamChange();
@@ -7844,7 +7881,7 @@ async function saveWeek(quiet){
       if(r && r.error === 'window_closed' && r.window){
         weekWindow = r.window; renderWeekBanner(); applyWeekLock();
       }
-      showToast(WEEK_ERRORS[r&&r.error] || 'Could not save your results','error');
+      showToast(failMsg(r, WEEK_ERRORS, 'Could not save your results'),'error');
       return false;
     }
     await softLoad('weekly', loadMyWeek);
@@ -8195,7 +8232,7 @@ async function saveMemberWeek(alsoSubmit){
     const r = await callDb('save_week_entry', payload);
     if(!r || !r.ok){
       if(r && r.error === 'window_closed' && r.window){ weekWindow = r.window; renderWeekBanner(); }
-      memberError(WEEK_ERRORS[r&&r.error] || 'Could not save these results');
+      memberError(failMsg(r, WEEK_ERRORS, 'Could not save these results'));
       return;
     }
     if(alsoSubmit){
@@ -8286,7 +8323,7 @@ async function saveSource(){
     const r = id
       ? await callDb('update_lead_source', { id, name, active, sort_order })
       : await callDb('create_lead_source', { name, sort_order });
-    if(!r || !r.ok){ showSourceError(SOURCE_ERRORS[r&&r.error] || 'Could not save this source'); return; }
+    if(!r || !r.ok){ showSourceError(failMsg(r, SOURCE_ERRORS, 'Could not save this source')); return; }
     closeModal('modal-source');
     showToast('Lead source saved','success');
     await refreshAfterSourceChange();
@@ -8366,7 +8403,7 @@ async function saveRole(){
     const r=id
       ? await callDb('update_role', Object.assign({id:Number(id), active}, payload))
       : await callDb('create_role', payload);
-    if(!r||!r.ok){showRoleError(ROLE_CRUD_ERRORS[r&&r.error]||'Could not save this cargo');return;}
+    if(!r||!r.ok){showRoleError(failMsg(r, ROLE_CRUD_ERRORS, 'Could not save this cargo'));return;}
     closeModal('modal-role');
     showToast(r.cascaded?'Cargo saved - holders moved to the new permission level':'Cargo saved','success');
     await refreshAfterRoleChange();
@@ -8427,7 +8464,7 @@ async function saveTeamTarget(){
     const r=await callDb('set_team_target',{team_id: isNaN(Number(teamId))?teamId:Number(teamId),
       team_target: raw===''?null:Number(raw)});
     if(!r||!r.ok){
-      fail(r&&(r.error==='out_of_scope'||r.error==='forbidden')?"You can't set the target for this team":'Could not save the team target');
+      fail(withDetail(r, r&&(r.error==='out_of_scope'||r.error==='forbidden')?"You can't set the target for this team":'Could not save the team target'));
       return;
     }
     closeModal('modal-team-target');
@@ -9148,9 +9185,9 @@ async function saveCompetitionSource(){
   try {
     const r = await callDb('set_competition_source', { sheet_id, dublin_tab, limerick_tab });
     if(!r || !r.ok){
-      if(err) err.textContent = (r && r.error === 'forbidden')
+      if(err) err.textContent = withDetail(r, (r && r.error === 'forbidden')
         ? "You don't have permission for this"
-        : 'Could not save the source';
+        : 'Could not save the source');
       return;
     }
     compSource = r.source;
@@ -9910,7 +9947,9 @@ async function uploadToStorage(kind, file){
     filename = filename.replace(/\.[^.]+$/,'') + '.jpg';
   }
   const r = await callDb('content_upload_url', { bucket:kind, filename });
-  if(!r || !r.ok) throw new Error((r && r.error) || 'sign_failed');
+  // Storage refusing to sign says why, and that reason has to survive the
+  // throw as well - it reaches the same catch as the save itself.
+  if(!r || !r.ok) throw dbError(r, 'sign_failed');
   // uploadToSignedUrl builds its own URL from the path and token, so the
   // signed_url the server also returns is not needed here.
   const { error } = await sb.storage.from(r.bucket).uploadToSignedUrl(r.path, r.token, body, {
@@ -10088,7 +10127,7 @@ const LESSON_ERRORS = {
   save_failed:'That could not be saved'
 };
 function lessonFail(r, fallback){
-  showToast(LESSON_ERRORS[r && r.error] || fallback, 'error');
+  showToast(failMsg(r, LESSON_ERRORS, fallback), 'error');
 }
 // ── the author's side ───────────────────────────
 let lessonEditing = { training_id:null, pieces:[] };
@@ -10933,7 +10972,7 @@ async function saveContent(){
     const r = id
       ? await callDb('update_content', Object.assign({ id }, payload))
       : await callDb('create_content', Object.assign({ type }, payload));
-    if(!r || !r.ok) throw new Error((r && r.error) || 'save_failed');
+    if(!r || !r.ok) throw dbError(r);
     // Trainings only, and only after the item itself exists - a create has to
     // come back with an id before there is anything to attach a test to.
     if(isTraining){
@@ -10957,7 +10996,7 @@ async function saveContent(){
           body.questions = [];
         }
         const tr = await callDb('save_training_test', body);
-        if(!tr || !tr.ok) throw new Error((tr && tr.error) || 'save_failed');
+        if(!tr || !tr.ok) throw dbError(tr);
       }
     }
     closeModal('modal-content');
@@ -10975,7 +11014,8 @@ async function saveContent(){
     // the saved row and not on a blank.
     if(!id && isTraining && r.id) openContentModal(type, r.id);
   } catch(e){
-    contentError(CONTENT_ERRORS[e && e.message] || 'Could not save this item');
+    contentError(failMsg(e && e.res ? e.res : { error: e && e.message },
+      CONTENT_ERRORS, 'Could not save this item'));
   } finally {
     setContentBusy(false);
   }
@@ -12257,7 +12297,7 @@ function viewMeeting(id){
 
   document.getElementById('btn-save-minutes').onclick=async()=>{
     const r=await callDb('save_minutes',{ id:m.id, minutes:ta.value });
-    if(!r||!r.ok){ showToast(MEETING_ERRORS[r&&r.error]||'Could not save the minutes','error'); return; }
+    if(!r||!r.ok){ showToast(failMsg(r, MEETING_ERRORS, 'Could not save the minutes'),'error'); return; }
     closeModal('modal-meeting');
     await refreshCalendar();
     showToast('Meeting minutes saved.','success');
@@ -12402,7 +12442,7 @@ async function saveNewMeeting(){
         type:'meeting', location_id:locationId, is_online:isOnline, notes, minutes_private,
         attendee_ids:calNewMeetingAttendees });
     }
-    if(!r||!r.ok){ showNmError(MEETING_ERRORS[r&&r.error]||'Could not save this meeting'); return; }
+    if(!r||!r.ok){ showNmError(failMsg(r, MEETING_ERRORS, 'Could not save this meeting')); return; }
     const wasEdit=!!editingMeetingId;
     editingMeetingId=null;
     closeModal('modal-new-meeting');
