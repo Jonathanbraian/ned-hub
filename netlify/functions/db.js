@@ -3126,6 +3126,16 @@ exports.handler = async (event) => {
           const v = (rn === null || rn === undefined) ? '' : String(rn).trim();
           patch.results_name = v || null;
         }
+        // Campus is an enum, so it cannot ride the generic string path above -
+        // that would store whatever was typed. validCampus is the same check
+        // create_team and set_team use. Blank is refused rather than stored as
+        // null: orgPasses hides a person with no campus under EITHER campus
+        // filter, so clearing it would quietly drop somebody off the chart.
+        if(Object.prototype.hasOwnProperty.call(fields, 'campus')){
+          const c = validCampus(fields.campus);
+          if(c === false || c === null) return json(400,{error:'bad_campus'});
+          patch.campus = c;
+        }
         if(Object.prototype.hasOwnProperty.call(fields, 'languages')){
           const ls = normLanguages(fields.languages);
           if(!ls.ok) return json(400,{error:ls.error});
