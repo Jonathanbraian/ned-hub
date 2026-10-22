@@ -108,6 +108,13 @@ async function inScope(me, tgt){
 // it reads company-wide but commands nobody, so it is NOT ordered by what it
 // can see. Nothing holds either until someone is given it.
 const ROLE_LEVELS = ['agent','specialist','executive','senior_exec','leader','supervisor','manager','director','admin'];
+// What each tier is CALLED. Mirrors ROLE_LABELS in index.html, and is only
+// ever a fallback: a person's cargo name is the label wherever they have one,
+// exactly as displayRole() picks it on the client.
+const ROLE_LABELS = { agent:'Agent', specialist:'Sales Specialist',
+  executive:'Sales Executive', leader:'Team Leader', supervisor:'Supervisor',
+  manager:'Manager', director:'Director', admin:'Administrator',
+  senior_exec:'Senior Executive' };
 // null / '' clears the value; a bad number returns false so callers can 400.
 // ── WEEKLY RESULTS ───────────────────────────────────────────────
 // Everyone files their own line each week: sales per campus, leads per
@@ -1872,6 +1879,60 @@ exports.handler = async (event) => {
           .order('first',{ascending:true});
         if(error) return json(500,{error:'directory_failed'});
         return json(200,{ directory:data });
+      }
+      // ── THE ORG CHART ───────────────────────────────────────
+      // The whole company to any signed-in caller, both campuses, and
+      // nothing on a person but what a card draws. This is deliberately NOT
+      // get_directory: that one passes the profiles row straight through,
+      // monthly_target and email and all, because a dozen screens grew to
+      // depend on it. A chart needs seven fields, so seven is what it gets,
+      // named one at a time.
+      //
+      // parent_id is profiles.reports_to and nothing else - the same column
+      // subtreeIds() walks, so the chart and every scope decision in this
+      // file agree by construction rather than by resemblance. There may be
+      // no single root: reports_to is nullable and set_reports_to writes
+      // null outright, so what comes back is a forest.
+      case 'get_org_chart': {
+        const me = await callerProfile(caller);
+        if(!me) return json(403,{error:'forbidden'});
+        const { data, error } = await admin.from('profiles')
+          .select('id,first,last,role,role_id,campus,team_id,reports_to,photo,status')
+          .eq('status','active')
+          .order('first',{ascending:true});
+        if(error) return json(500,{error:'org_chart_failed', detail:error.message});
+        const rows = data || [];
+        // Labels come from the two tables that hold them. Both are already
+        // readable by any signed-in caller through get_roles / get_teams, so
+        // nothing is widened by reading a name here.
+        const { data: cargos } = await admin.from('roles').select('id,name');
+        const { data: teams } = await admin.from('teams').select('id,name');
+        const cargoName = {}; (cargos||[]).forEach(r => { cargoName[String(r.id)] = r.name; });
+        const teamName = {}; (teams||[]).forEach(t => { teamName[String(t.id)] = t.name; });
+        // Only a person who is themselves on the chart can be somebody's
+        // parent. An inactive manager would otherwise leave their reports
+        // pointing at an id that is not in the list, which is an orphan
+        // rather than a root - so the chain is cut here and they come back
+        // as a top-level person.
+        const present = new Set(rows.map(r => String(r.id)));
+        const people = rows.map(r => {
+          const parent = (r.reports_to != null && String(r.reports_to) !== String(r.id)
+                          && present.has(String(r.reports_to))) ? r.reports_to : null;
+          const cargo = (r.role_id != null) ? cargoName[String(r.role_id)] : null;
+          return {
+            id: r.id,
+            name: [r.first, r.last].map(x => (x == null ? '' : String(x)).trim())
+                    .filter(Boolean).join(' '),
+            // profiles.photo already holds the avatars bucket's public URL.
+            avatar_url: r.photo || '',
+            role_label: (cargo && String(cargo).trim())
+                          ? String(cargo).trim() : (ROLE_LABELS[r.role] || r.role || ''),
+            campus: r.campus || '',
+            team: (r.team_id != null && teamName[String(r.team_id)]) ? teamName[String(r.team_id)] : null,
+            parent_id: parent
+          };
+        });
+        return json(200,{ ok:true, people });
       }
       case 'list_users': {
         const me = await callerProfile(caller);
