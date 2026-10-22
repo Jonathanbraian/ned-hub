@@ -1267,7 +1267,7 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .org-filter-btn:hover{background:var(--light-blue);border-color:var(--border2);color:var(--blue)}
 .org-filter-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 /* Team multi-select */
-.org-team-check{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;color:var(--muted);transition:all .15s;user-select:none}
+.org-team-check{font-family:'Rubik',sans-serif;font-size:12px;font-weight:600;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;padding:6px 14px;cursor:pointer;color:var(--muted);transition:all .15s;user-select:none;line-height:1.4}
 .org-team-check:hover{background:var(--light-blue);border-color:var(--border2);color:var(--blue)}
 .org-team-check.active{background:var(--teal);color:#fff;border-color:var(--teal)}
 .org-tree{display:flex;flex-direction:column;align-items:center;gap:0;min-width:900px}
@@ -1313,7 +1313,49 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .org-branch-item{display:flex;flex-direction:column;align-items:center}
 .org-branch-item::before{content:'';width:2px;height:20px;background:var(--border2)}
 
+/* ── THE CHART ITSELF ──────────────────────────────────────────────
+   A fixed box you pan and zoom inside, rather than a page that grows
+   sideways until the scrollbar is the only way around it. The canvas is
+   absolutely positioned and transformed; the viewport clips it. */
+.org-ctl-group{display:flex;flex-direction:column;gap:6px}
+.org-ctl-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.org-ctl-row{display:flex;gap:4px;flex-wrap:wrap}
+.org-sep{width:1px;height:40px;background:var(--border);margin:0 4px}
+.org-hint{font-size:12px;color:var(--muted);margin-left:8px}
+.org-count{font-size:12px;color:var(--muted);font-weight:600}
+.org-viewport{position:relative;height:70vh;min-height:400px;border:1.5px solid var(--border);
+  border-radius:14px;background:var(--bg);overflow:hidden;cursor:grab;touch-action:none;user-select:none}
+.org-viewport.dragging{cursor:grabbing}
+.org-canvas{position:absolute;top:0;left:0;transform-origin:0 0;padding:24px;display:inline-block}
+.org-branch{display:flex;flex-direction:column;align-items:center}
+/* The bar joining a row of siblings. One child needs no bar - it needs the
+   stub above it, which the child draws for itself. */
+.org-kids{display:flex;gap:14px;align-items:flex-start;position:relative}
+.org-kids.sole::before{display:none}
+.org-kids::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--border2)}
+.org-toggle{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);z-index:2;
+  font-family:'Rubik',sans-serif;font-size:9.5px;font-weight:700;line-height:1;
+  background:var(--surface);border:1.5px solid var(--border2);color:var(--muted);
+  border-radius:9px;padding:2px 7px;cursor:pointer}
+.org-toggle:hover{color:var(--blue);border-color:var(--blue)}
+/* ── THE LIST ─────────────────────────────────────────────────────── */
+.org-list{display:flex;flex-direction:column;gap:3px;padding:6px 0}
+.org-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;
+  border:1.5px solid transparent;cursor:pointer;transition:all .15s}
+.org-row:hover{background:var(--light-blue);border-color:var(--border)}
+.org-row-toggle{flex-shrink:0;width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+  font-family:'Rubik',sans-serif;font-size:10px;font-weight:700;color:var(--muted);
+  background:transparent;border:1.5px solid var(--border);border-radius:6px;cursor:pointer}
+.org-row-toggle:hover{color:var(--blue);border-color:var(--blue)}
+.org-row-toggle.leaf{border-color:transparent;cursor:default;visibility:hidden}
+.org-row-av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0}
+.org-row-av img{width:100%;height:100%;object-fit:cover}
+.org-row-name{font-size:13px;font-weight:700;color:var(--text)}
+.org-row-meta{font-size:11px;color:var(--muted)}
+.org-empty{padding:40px;text-align:center;color:var(--muted)}
 @media(max-width:900px){.orgchart-wrap{padding:16px}}
+@media(max-width:760px){.org-viewport{height:60vh;min-height:320px}}
 
 .pwa-install-banner{
   position:fixed;bottom:0;left:0;right:0;z-index:400;
@@ -2454,15 +2496,41 @@ a.clib-open{text-decoration:none}
             <button class="org-filter-btn" data-campus="limerick" onclick="setOrgCampus('limerick',this)">Limerick</button>
           </div>
         </div>
-        <div style="width:1px;height:40px;background:var(--border);margin:0 4px"></div>
+        <div class="org-sep"></div>
         <!-- Team filter (multi-select checkboxes) -->
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Team</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap" id="org-team-btns">
-            <!-- built from the real teams table by fillOrgTeamFilter() -->
+        <div class="org-ctl-group">
+          <span class="org-ctl-label">Team</span>
+          <div class="org-ctl-row" id="org-team-btns">
+            <!-- built from the chart's own people by fillOrgTeamFilter() -->
           </div>
         </div>
-        <span style="font-size:12px;color:var(--muted);margin-left:8px">Click any card to view profile</span>
+        <div class="org-sep"></div>
+        <!-- Cargo filter (multi-select), built from the labels on the chart -->
+        <div class="org-ctl-group">
+          <span class="org-ctl-label">Cargo</span>
+          <div class="org-ctl-row" id="org-cargo-btns"></div>
+        </div>
+        <div class="org-sep"></div>
+        <div class="org-ctl-group">
+          <span class="org-ctl-label">View</span>
+          <div class="org-ctl-row">
+            <button class="org-filter-btn" id="org-view-tree" onclick="setOrgView('tree')">Tree</button>
+            <button class="org-filter-btn" id="org-view-list" onclick="setOrgView('list')">List</button>
+          </div>
+        </div>
+        <div class="org-sep" id="org-chart-sep"></div>
+        <div class="org-ctl-group" id="org-chart-ctls">
+          <span class="org-ctl-label">Chart</span>
+          <div class="org-ctl-row">
+            <button class="org-filter-btn" id="org-zoom-out" onclick="orgZoomBy(-0.2)" title="Zoom out">-</button>
+            <button class="org-filter-btn" id="org-zoom-in" onclick="orgZoomBy(0.2)" title="Zoom in">+</button>
+            <button class="org-filter-btn" id="org-fit-btn" onclick="orgFitToScreen()">Fit to screen</button>
+            <button class="org-filter-btn" id="org-expand-all" onclick="orgExpandAll()">Expand all</button>
+            <button class="org-filter-btn" id="org-collapse-all" onclick="orgCollapseAll()">Collapse all</button>
+          </div>
+        </div>
+        <span class="org-hint" id="org-hint">Click any card to view profile</span>
+        <span class="org-count" id="org-count"></span>
       </div>
       <div id="org-chart-container"></div>
     </div>
@@ -5399,7 +5467,7 @@ function showPage(name){
   })();
   if(name==='comms') renderCommsPage();
   if(name==='calendar') refreshCalendar();
-  if(name==='orgchart'){ fillOrgTeamFilter(); renderOrgChart(); }
+  if(name==='orgchart') orgPageOpened();
   if(name==='reports') (async()=>{ await softLoad('performance', loadPerformance); seedCurrentYearCells(); renderReportsPage(); })();
   // Sync mobile nav highlight
   if(window._mobNavSync) window._mobNavSync(name);
@@ -6629,8 +6697,9 @@ async function saveProfile(){
   if(here==='my-profile') await renderMyProfile();
   else if(here==='view-profile') await refreshOpenProfile();
   renderTeamProfiles();
-  // A manager change reshapes the hierarchy, so the chart is redrawn when open.
-  if(here==='orgchart') renderOrgChart();
+  // A manager change reshapes the hierarchy, so the chart is reloaded and
+  // redrawn when open - the shape it draws lives on the server now.
+  if(here==='orgchart') await refreshOrgChart();
   if(here==='users') await refreshUserManagement();
   showToast(`${fresh.first} ${fresh.last}'s profile updated.`,'success');
 }
@@ -7704,7 +7773,7 @@ async function refreshAfterTeamChange(){
   renderTeams();
   if(document.getElementById('page-users')?.classList.contains('active')) await refreshUserManagement();
   if(document.getElementById('page-team-profiles')?.classList.contains('active')) renderTeamProfiles();
-  if(document.getElementById('page-orgchart')?.classList.contains('active')) renderOrgChart();
+  if(document.getElementById('page-orgchart')?.classList.contains('active')) await refreshOrgChart();
 }
 
 // ═══════════════════════════════════════
@@ -13282,154 +13351,318 @@ function renderReportsPage(){
 }
 
 // ═══════════════════════════════════════════════════
-// ORG CHART FILTERS
-let orgCampus='all';  // 'all' | 'dublin' | 'limerick' - matches the default active filter button
-let orgTeams=new Set(['all']); // 'all' | String(teams.id) | 'individual'
+// ORG CHART
+// Drawn from get_org_chart: the whole company to anybody signed in, seven
+// fields a card needs and nothing else - no target, no email, no figure of
+// any kind. A person's parent is their parent_id, which is profiles
+// .reports_to, which is the column every scope rule in the gateway walks.
+// Nothing here derives a hierarchy from team or cargo.
+const ORG_MOBILE_PX = 760;      // below this a tree is unusable, so: the list
+const ORG_ZOOM_MIN = 0.2, ORG_ZOOM_MAX = 2.5;
+let orgPeople = [];             // flat, exactly as the gateway sent it
+let orgLoaded = false;
+let orgCampus = 'all';          // 'all' | 'dublin' | 'limerick'
+let orgTeams = new Set(['all']);
+let orgCargos = new Set(['all']);
+// null means "follow the viewport". It stays null until somebody presses the
+// toggle, so a phone gets the list and a desktop the tree without either
+// being a decision anybody made.
+let orgView = null;
+let orgCollapsed = new Set();   // ids whose children are folded away
+let orgZoom = 1, orgPanX = 0, orgPanY = 0;
+let orgFitted = false;          // fit once per load and per filter change
+let orgDrag = null;
 
-function setOrgCampus(v, btn){
-  orgCampus=v;
-  document.querySelectorAll('[data-campus]').forEach(b=>b.classList.toggle('active',b.dataset.campus===v));
+function orgDefaultView(){ return (window.innerWidth <= ORG_MOBILE_PX) ? 'list' : 'tree'; }
+function orgCurrentView(){ return orgView || orgDefaultView(); }
+
+async function loadOrgChart(){
+  const r = await callDb('get_org_chart');
+  orgPeople = (r && r.ok && Array.isArray(r.people)) ? r.people : [];
+  orgLoaded = true;
+}
+// Entering the page, and anything that reshapes the hierarchy, reload it:
+// a chart drawn from a stale directory is a chart of an org that has moved.
+async function refreshOrgChart(){
+  await loadOrgChart();
+  orgFitted = false;
+  fillOrgFilters();
   renderOrgChart();
 }
+function orgPageOpened(){
+  fillOrgFilters(); renderOrgChart();
+  refreshOrgChart();
+}
 
-// Same fix as the Reports filter: real team ids, not the legacy name string.
-function fillOrgTeamFilter(){
-  const el=document.getElementById('org-team-btns');
+// ── FILTERS ─────────────────────────────────────────
+// Built from the chart's own people rather than from the teams and roles
+// tables: the only options worth offering are the ones somebody is actually
+// on, and it keeps the page working before those tables have loaded.
+function orgTeamKey(p){ return p.team ? String(p.team) : 'individual'; }
+function orgCargoKey(p){ return p.role_label ? String(p.role_label) : 'none'; }
+function orgOptionsBy(keyOf, noneLabel){
+  const seen = new Map();
+  orgPeople.forEach(p => {
+    const k = keyOf(p);
+    if(!seen.has(k)) seen.set(k, (k === 'individual' || k === 'none') ? noneLabel : k);
+  });
+  const rest = [...seen.entries()].filter(([k]) => k !== 'individual' && k !== 'none')
+    .sort((a,b) => String(a[1]).localeCompare(String(b[1])));
+  const none = [...seen.entries()].filter(([k]) => k === 'individual' || k === 'none');
+  return [{k:'all', label:'All'}]
+    .concat(rest.map(([k,label]) => ({k, label})))
+    .concat(none.map(([k,label]) => ({k, label})));
+}
+// A <label> wrapping a hidden checkbox fires the handler TWICE on one click:
+// the label forwards the click to its input, and that click bubbles back out
+// through the label's own onclick. Two toggles are no toggle, which is why
+// these chips did nothing when pressed. The checkbox was display:none and
+// carried no value anybody read, so it goes - a button is a button.
+function orgChips(elId, opts, chosen, fn){
+  const el = document.getElementById(elId);
   if(!el) return;
-  el.innerHTML=teamFilterOptions().map(o=>
-    `<label class="org-team-check${orgTeams.has(o.k)?' active':''}" data-oteam="${esc(o.k)}" onclick="toggleOrgTeam('${esc(o.k)}',this)"><input type="checkbox"${orgTeams.has(o.k)?' checked':''} style="display:none"> ${esc(o.label)}</label>`
+  el.innerHTML = opts.map(o =>
+    `<button type="button" class="org-team-check${chosen.has(o.k)?' active':''}" `+
+    `data-oteam="${esc(o.k)}" aria-pressed="${chosen.has(o.k)?'true':'false'}" `+
+    `onclick="${fn}('${esc(String(o.k).replace(/'/g,"\\'"))}')">${esc(dashFix(o.label))}</button>`
   ).join('');
 }
-function toggleOrgTeam(v, lbl){
-  toggleTeamSet(orgTeams, v);
-  fillOrgTeamFilter();
+function fillOrgTeamFilter(){
+  orgChips('org-team-btns', orgOptionsBy(orgTeamKey, 'No team'), orgTeams, 'toggleOrgTeam');
+}
+function fillOrgCargoFilter(){
+  orgChips('org-cargo-btns', orgOptionsBy(orgCargoKey, 'No cargo'), orgCargos, 'toggleOrgCargo');
+}
+function fillOrgFilters(){ fillOrgTeamFilter(); fillOrgCargoFilter(); }
+
+function setOrgCampus(v, btn){
+  orgCampus = v;
+  document.querySelectorAll('[data-campus]').forEach(b=>b.classList.toggle('active', b.dataset.campus===v));
+  orgFitted = false;
+  renderOrgChart();
+}
+function toggleOrgTeam(v){ toggleTeamSet(orgTeams, v); orgFitted=false; fillOrgTeamFilter(); renderOrgChart(); }
+function toggleOrgCargo(v){ toggleTeamSet(orgCargos, v); orgFitted=false; fillOrgCargoFilter(); renderOrgChart(); }
+
+// Somebody on BOTH campuses belongs to either one, so a campus filter never
+// hides them. Nothing else is exempt: the whole point of reattaching to the
+// nearest visible ancestor is that an ancestor CAN be filtered out.
+function orgPasses(p){
+  if(orgCampus !== 'all' && p.campus !== orgCampus && p.campus !== 'both') return false;
+  if(!orgTeams.has('all') && !orgTeams.has(orgTeamKey(p))) return false;
+  if(!orgCargos.has('all') && !orgCargos.has(orgCargoKey(p))) return false;
+  return true;
+}
+
+// ── THE TREE, AFTER FILTERING ───────────────────────
+// Each visible person hangs off their nearest visible ancestor. Filter out a
+// supervisor and their agents move up under the manager rather than vanishing
+// with them; filter out everyone above somebody and they become a root.
+function orgVisibleTree(){
+  const byId = {};
+  orgPeople.forEach(p => { byId[String(p.id)] = p; });
+  const shown = orgPeople.filter(orgPasses);
+  const vis = new Set(shown.map(p => String(p.id)));
+  const parentOf = {};
+  shown.forEach(p => {
+    let up = (p.parent_id == null) ? null : String(p.parent_id);
+    // The gateway will not send a cycle, but a chart that hangs on one would
+    // be a blank page rather than a wrong one, so the walk carries its own
+    // visited set and stops.
+    const seen = new Set([String(p.id)]);
+    while(up && !vis.has(up)){
+      if(seen.has(up)){ up = null; break; }
+      seen.add(up);
+      const next = byId[up];
+      up = (next && next.parent_id != null) ? String(next.parent_id) : null;
+    }
+    parentOf[String(p.id)] = up || null;
+  });
+  const kids = {}, roots = [];
+  shown.forEach(p => {
+    const par = parentOf[String(p.id)];
+    if(par){ (kids[par] = kids[par] || []).push(p); }
+    else roots.push(p);
+  });
+  return { shown, kids, roots, parentOf };
+}
+
+function orgInitials(p){
+  const parts = String((p && p.name) || '').trim().split(/\s+/).filter(Boolean);
+  return (((parts[0]||'?')[0]) + ((parts[1]||'')[0] || '')).toUpperCase();
+}
+function orgCampusLabel(p){ return (p && p.campus) ? (CAMPUS_LABELS[p.campus] || p.campus) : ''; }
+function orgAvatar(p, cls){
+  return `<div class="${cls} ${avColor(p.id)}">`+
+    (p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="" loading="lazy">` : esc(orgInitials(p)))+
+    `</div>`;
+}
+function orgIdAttr(id){ return esc(String(id).replace(/'/g,"\\'")); }
+
+function orgCard(p, kidCount){
+  const meta = [orgCampusLabel(p), p.team].filter(Boolean).join(' - ');
+  const folded = orgCollapsed.has(String(p.id));
+  const toggle = kidCount
+    ? `<button class="org-toggle" data-org-toggle="${esc(p.id)}" title="${folded?'Expand':'Collapse'} this branch" `+
+      `onclick="toggleOrgBranch(event,'${orgIdAttr(p.id)}')">${folded?'\u25b8':'\u25be'}${kidCount}</button>`
+    : '';
+  return `<div class="org-node-card" data-org-card="${esc(p.id)}" title="${esc(dashFix(p.name))}" `+
+    `onclick="viewUserProfile('${orgIdAttr(p.id)}')">`+
+    orgAvatar(p,'org-avatar')+
+    `<div class="org-name">${esc(dashFix(p.name))}</div>`+
+    `<span class="role-badge" style="font-size:9.5px;padding:2px 6px">${esc(dashFix(p.role_label))}</span>`+
+    (meta ? `<div style="font-size:9.5px;color:var(--muted)">${esc(dashFix(meta))}</div>` : '')+
+    toggle+
+  `</div>`;
+}
+const ORG_STUB = '<div class="org-vert-line"></div>';
+function orgTreeHtml(p, tree, isRoot){
+  const kidList = tree.kids[String(p.id)] || [];
+  const folded = orgCollapsed.has(String(p.id));
+  const stub = isRoot ? '' : ORG_STUB;
+  if(!kidList.length || folded)
+    return `<div class="org-branch">${stub}${orgCard(p, kidList.length)}</div>`;
+  return `<div class="org-branch">${stub}${orgCard(p, kidList.length)}${ORG_STUB}`+
+    `<div class="org-kids${kidList.length===1?' sole':''}">`+
+    kidList.map(k => orgTreeHtml(k, tree, false)).join('')+
+    `</div></div>`;
+}
+function orgListHtml(p, tree, depth){
+  const kidList = tree.kids[String(p.id)] || [];
+  const folded = orgCollapsed.has(String(p.id));
+  const meta = [p.role_label, orgCampusLabel(p), p.team].filter(Boolean).join(' - ');
+  const tog = kidList.length
+    ? `<button class="org-row-toggle" data-org-toggle="${esc(p.id)}" title="${folded?'Expand':'Collapse'}" `+
+      `onclick="toggleOrgBranch(event,'${orgIdAttr(p.id)}')">${folded?'\u25b8':'\u25be'}</button>`
+    : `<span class="org-row-toggle leaf">\u25be</span>`;
+  const row = `<div class="org-row" data-org-card="${esc(p.id)}" style="margin-left:${depth*22}px" `+
+    `onclick="viewUserProfile('${orgIdAttr(p.id)}')">${tog}`+
+    orgAvatar(p,'org-row-av')+
+    `<div><div class="org-row-name">${esc(dashFix(p.name))}</div>`+
+    `<div class="org-row-meta">${esc(dashFix(meta))}</div></div></div>`;
+  return row + ((kidList.length && !folded)
+    ? kidList.map(k => orgListHtml(k, tree, depth+1)).join('') : '');
+}
+
+// ── PAN, ZOOM AND FIT ───────────────────────────────
+function orgApplyTransform(){
+  const c = document.getElementById('org-canvas');
+  if(c) c.style.transform = `translate(${orgPanX}px, ${orgPanY}px) scale(${orgZoom})`;
+}
+function orgSetZoom(z){
+  const n = Number(z);
+  orgZoom = Math.min(ORG_ZOOM_MAX, Math.max(ORG_ZOOM_MIN, Number.isFinite(n) ? n : 1));
+  orgApplyTransform();
+}
+function orgZoomBy(d){ orgSetZoom(orgZoom + Number(d||0)); }
+// The canvas is transformed, so its drawn size is not its laid-out size.
+// offsetWidth/Height are the laid-out ones, which is what has to fit.
+function orgFitToScreen(){
+  const vp = document.getElementById('org-viewport'), c = document.getElementById('org-canvas');
+  if(!vp || !c) return;
+  const w = c.offsetWidth || c.scrollWidth, h = c.offsetHeight || c.scrollHeight;
+  const vw = vp.clientWidth, vh = vp.clientHeight;
+  if(!w || !h || !vw || !vh) return;
+  // Never magnify: a chart of three people should sit at its own size.
+  orgZoom = Math.max(ORG_ZOOM_MIN, Math.min(vw / w, vh / h, 1));
+  orgPanX = Math.max(0, (vw - w * orgZoom) / 2);
+  orgPanY = 0;
+  orgApplyTransform();
+  orgFitted = true;
+}
+function orgBindViewport(){
+  const vp = document.getElementById('org-viewport');
+  if(!vp) return;
+  const end = () => { orgDrag = null; vp.classList.remove('dragging'); };
+  vp.addEventListener('pointerdown', e => {
+    // A card is a link, not a handle. Dragging starts anywhere else.
+    if(e.target && e.target.closest && e.target.closest('.org-node-card')) return;
+    orgDrag = { x:e.clientX, y:e.clientY, px:orgPanX, py:orgPanY };
+    vp.classList.add('dragging');
+    try { vp.setPointerCapture(e.pointerId); } catch(_){}
+  });
+  vp.addEventListener('pointermove', e => {
+    if(!orgDrag) return;
+    orgPanX = orgDrag.px + (e.clientX - orgDrag.x);
+    orgPanY = orgDrag.py + (e.clientY - orgDrag.y);
+    orgApplyTransform();
+  });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => vp.addEventListener(ev, end));
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    orgZoomBy(e.deltaY > 0 ? -0.12 : 0.12);
+  }, { passive:false });
+}
+
+function toggleOrgBranch(e, id){
+  if(e){ e.stopPropagation(); if(e.preventDefault) e.preventDefault(); }
+  const k = String(id);
+  if(orgCollapsed.has(k)) orgCollapsed.delete(k); else orgCollapsed.add(k);
+  renderOrgChart();
+}
+function orgExpandAll(){ orgCollapsed.clear(); renderOrgChart(); }
+function orgCollapseAll(){
+  orgCollapsed = new Set(Object.keys(orgVisibleTree().kids));
+  renderOrgChart();
+}
+function setOrgView(v){
+  orgView = (v === 'list') ? 'list' : 'tree';
+  orgFitted = false;
   renderOrgChart();
 }
 
 function renderOrgChart(){
-  const container=document.getElementById('org-chart-container');
+  const container = document.getElementById('org-chart-container');
   if(!container) return;
-
-  // Card for a single person
-  function card(u){
-    const av=u.photo?`<img src="${esc(u.photo)}" alt="">`:esc(getInitials(u));
-    const roleLbl=displayRole(u);
-    const teamLbl=teamNameOf(u)?`<div style="font-size:9.5px;color:var(--muted);margin-top:1px">${esc(teamNameOf(u))}</div>`:'';
-    const campLbl=u.campus&&u.campus!=='both'?`<div style="font-size:9.5px;color:var(--muted)">${CAMPUS_LABELS[u.campus]||u.campus}</div>`:'';
-    return `<div class="org-node-card ${esc(u.role)}" onclick="viewUserProfile('${esc(u.id)}')" title="${esc(dashFix(u.first+' '+u.last))}">
-      <div class="org-avatar ${avColor(u.id)}">${av}</div>
-      <div class="org-name">${esc(dashFix(u.first+' '+u.last))}</div>
-      ${u.nickname?`<div class="org-nick">(${esc(dashFix(u.nickname))})</div>`:''}
-      <span class="role-badge ${ROLE_BADGE[u.role]||''}" style="font-size:9.5px;padding:2px 6px">${esc(roleLbl)}</span>
-      ${teamLbl}${campLbl}
-    </div>`;
-  }
-
-  const vline=`<div class="org-vert-line"></div>`;
-
-  // Horizontal bar above a list of column items
-  function hbar(cols){
-    if(!cols.length) return '';
-    if(cols.length===1) return cols[0];
-    return `<div style="position:relative;display:flex;gap:12px;align-items:flex-start">
-      <div style="position:absolute;top:0;left:0;right:0;height:2px;background:var(--border2)"></div>
-      ${cols.join('')}
-    </div>`;
-  }
-
-  // Does this person pass the active filter?
-  function pass(u){
-    // Leadership is never filtered
-    if(rank(u.role) >= ROLE_RANK.leader) return true;
-    if(orgCampus==='dublin'  && u.campus!=='dublin'  && u.campus!=='both') return false;
-    if(orgCampus==='limerick'&& u.campus!=='limerick' && u.campus!=='both') return false;
-    if(!orgTeams.has('all') && !orgTeams.has(teamFilterKey(u))) return false;
-    return true;
-  }
-
-  // Direct reports resolved by reports_to
-  function directReports(id){
-    return users.filter(u=>u.reports_to===id && u.id!==id);
-  }
-  // Anyone at leader tier or above opens a branch. This used to be a literal
-  // list without 'director', which was harmless only while a director was
-  // always a root; with a tier above them a director has a parent, and would
-  // otherwise render as a childless leaf with their whole org hidden.
-  const isBranch=r=>rank(r) >= ROLE_RANK.leader;
-  // A leaf is simply anyone who is not a branch. This was the literal list
-  // ['agent','specialist','executive'], which silently DROPPED any role that
-  // was neither a branch nor on it - a hole that only opened once a non-leader
-  // tier outside the sales ladder existed.
-  const isLeaf=r=>!isBranch(r);
-  // A node renders as its own kind of subtree, whatever level it sits at.
-  function subtree(u){
-    if(u.role==='leader') return leaderTree(u);
-    if(isBranch(u.role)) return branchTree(u);
-    return `<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(u)}</div>`;
-  }
-
-  // ── Leader subtree ────────────────
-  function leaderTree(ldr){
-    const rpts=directReports(ldr.id).filter(pass);
-    const inner=card(ldr);
-    if(!rpts.length) return `<div style="display:flex;flex-direction:column;align-items:center">${vline}${inner}</div>`;
-    const childCols=rpts.map(u=>`<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(u)}</div>`);
-    return `<div style="display:flex;flex-direction:column;align-items:center">
-      ${vline}${inner}${vline}
-      ${hbar(childCols)}
-    </div>`;
-  }
-
-  // Manager / supervisor subtree: leadership branches, then leaves grouped by team
-  function branchTree(node){
-    const rpts=directReports(node.id);
-    const branches=rpts.filter(u=>isBranch(u.role));
-    const leaves=rpts.filter(u=>isLeaf(u.role)).filter(pass);
-    const suffix=node.role==='manager'?' (Direct)':'';
-
-    const cols=[];
-    branches.forEach(b=>cols.push(subtree(b)));
-    const leafTeams=[...new Set(leaves.map(u=>displayTeam(u)))].sort();
-    leafTeams.forEach(team=>{
-      const members=leaves.filter(u=>displayTeam(u)===team);
-      const memberCols=members.map(u=>`<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(u)}</div>`);
-      const grpLabel=`<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:1px;text-align:center;margin-bottom:4px">${esc(dashFix(team))}${suffix}</div>`;
-      cols.push(`<div style="display:flex;flex-direction:column;align-items:center">
-        ${vline}${grpLabel}
-        ${hbar(memberCols)}
-      </div>`);
-    });
-
-    if(!cols.length) return `<div style="display:flex;flex-direction:column;align-items:center">${vline}${card(node)}</div>`;
-
-    return `<div style="display:flex;flex-direction:column;align-items:center">
-      ${vline}${card(node)}${vline}
-      ${hbar(cols)}
-    </div>`;
-  }
-
-  // ── Director → Managers ───────────────────────────────
-  // A local leader's chart is rooted at themselves: everything reachable by
-  // walking DOWN from there is exactly their branch, so no further filtering is
-  // needed. Everyone else keeps the real roots of the tree.
-  const viewer=users.find(u=>u.id===currentUserId);
-  const roots=(viewer && isLocalLeader(viewer.role))
-    ? [viewer] : users.filter(u=>!u.reports_to);
-  if(!roots.length){ container.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted)">No one in the directory yet.</div>'; return; }
-
-  const rootCols=roots.map(root=>{
-    const childCols=directReports(root.id).map(subtree);
-    return `<div style="display:flex;flex-direction:column;align-items:center">
-      ${card(root)}
-      ${childCols.length?`${vline}${hbar(childCols)}`:''}
-    </div>`;
+  const view = orgCurrentView();
+  const mark = (id, on) => { const el = document.getElementById(id); if(el) el.classList.toggle('active', on); };
+  mark('org-view-tree', view === 'tree');
+  mark('org-view-list', view === 'list');
+  // Pan, zoom and fit mean nothing to an indented list, so they are not
+  // offered there rather than offered and ignored.
+  ['org-chart-ctls','org-chart-sep'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.style.display = (view === 'tree') ? '' : 'none';
   });
-
-  container.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;padding:24px 0;overflow-x:auto;min-width:900px">
-    ${rootCols.length===1?rootCols[0]:hbar(rootCols)}
-  </div>`;
+  const count = document.getElementById('org-count');
+  if(!orgLoaded){
+    if(count) count.textContent = '';
+    container.innerHTML = '<div class="org-empty">Loading the chart...</div>';
+    return;
+  }
+  const tree = orgVisibleTree();
+  if(count) count.textContent = orgPeople.length
+    ? (tree.shown.length + ' of ' + orgPeople.length + ' people') : '';
+  if(!orgPeople.length){
+    container.innerHTML = '<div class="org-empty">No one in the directory yet.</div>'; return;
+  }
+  if(!tree.shown.length){
+    container.innerHTML = '<div class="org-empty">Nobody matches these filters.</div>'; return;
+  }
+  if(view === 'list'){
+    container.innerHTML = `<div class="org-list" id="org-list">`+
+      tree.roots.map(r => orgListHtml(r, tree, 0)).join('')+`</div>`;
+    return;
+  }
+  const body = (tree.roots.length === 1)
+    ? orgTreeHtml(tree.roots[0], tree, true)
+    : `<div class="org-kids">${tree.roots.map(r => orgTreeHtml(r, tree, false)).join('')}</div>`;
+  container.innerHTML = `<div class="org-viewport" id="org-viewport">`+
+    `<div class="org-canvas" id="org-canvas"><div class="org-branch">${body}</div></div></div>`;
+  orgBindViewport();
+  // Fit on arrival and whenever the shape changed under the filters, but not
+  // on a collapse: folding a branch must not throw away where somebody had
+  // panned to.
+  if(!orgFitted) orgFitToScreen(); else orgApplyTransform();
 }
 
+// Crossing the phone breakpoint re-picks the default, but only while nobody
+// has pressed the toggle - an explicit choice outlives a resize.
+window.addEventListener('resize', () => {
+  if(orgView !== null) return;
+  if(!document.getElementById('page-orgchart')?.classList.contains('active')) return;
+  orgFitted = false;
+  renderOrgChart();
+});
 // ═══════════════════════════════════════════════════
 // The <head> bootstrap already set data-theme; match the button to it.
 syncThemeToggle(currentTheme());
