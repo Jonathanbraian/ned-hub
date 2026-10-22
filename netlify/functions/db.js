@@ -765,11 +765,22 @@ async function myTrainingStatus(userId, contentId){
 // by every action below so the type gate is written once. The row's own type
 // comes back with it, because create_assignment needs to be narrower than
 // this and says so for itself.
-async function trainingRow(id){
+//
+// Hand it a caller and the library's audience rule is applied too. That rule
+// lived only on the LESSON paths, through visibleTraining, so an item with no
+// lessons had nothing at all between a held id and its test: there were no
+// lessons to be refused on the way in. The caller is optional rather than
+// required because create_assignment reaches here for a supervisor assigning
+// an agents-only training to their own agents, and the audience rule would
+// refuse that - the question there is whose team it is, not whose shelf.
+// audienceAllows lets every isMgr caller through, so passing `me` from an
+// isMgr-gated action changes nothing by construction.
+async function trainingRow(id, me){
   const { data: row } = await admin.from('content_items')
-    .select('id,type,title,has_test,pass_threshold,test_num_questions').eq('id',id).single();
+    .select('id,type,title,has_test,pass_threshold,test_num_questions,audience').eq('id',id).single();
   if(!row) return { ok:false, status:404, error:'not_found' };
   if(!isLessonType(row.type)) return { ok:false, status:400, error:'not_a_training' };
+  if(me && !audienceAllows(me, row.audience)) return { ok:false, status:403, error:'out_of_scope' };
   return { ok:true, row };
 }
 // job_title stays here so an old client cannot be broken by its removal, but
@@ -3705,7 +3716,7 @@ exports.handler = async (event) => {
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
         if(!p.content_id) return json(400,{error:'missing_id'});
-        const t = await trainingRow(p.content_id);
+        const t = await trainingRow(p.content_id, me);
         if(!t.ok) return json(t.status,{error:t.error});
         const { data: qs, error } = await admin.from('training_questions')
           .select('id,question,options,correct_index,sort_order')
@@ -3727,7 +3738,7 @@ exports.handler = async (event) => {
       case 'get_test': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         if(!p.content_id) return json(400,{error:'missing_id'});
-        const t = await trainingRow(p.content_id);
+        const t = await trainingRow(p.content_id, me);
         if(!t.ok) return json(t.status,{error:t.error});
         if(!t.row.has_test) return json(404,{error:'no_test'});
         // Where a training has lessons, the test is the end of them. Where
@@ -3759,7 +3770,7 @@ exports.handler = async (event) => {
       case 'submit_test': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         if(!p.content_id) return json(400,{error:'missing_id'});
-        const t = await trainingRow(p.content_id);
+        const t = await trainingRow(p.content_id, me);
         if(!t.ok) return json(t.status,{error:t.error});
         if(!t.row.has_test) return json(404,{error:'no_test'});
         // Gated here too, not only where the questions are served: a client
