@@ -47,7 +47,8 @@
 <script src="vendor/xlsx-0.18.5.full.min.js"></script>
 <!-- Certificates as a file rather than a print dialogue. Pinned, like
      every other script here. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf-2.5.1.umd.min.js"></script>
+<script src="vendor/html2canvas-1.4.1.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1354,6 +1355,19 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .org-row-name{font-size:13px;font-weight:700;color:var(--text)}
 .org-row-meta{font-size:11px;color:var(--muted)}
 .org-empty{padding:40px;text-align:center;color:var(--muted)}
+/* The chart is captured from here, not from the viewport: laid out at its
+   natural size with nothing clipped and nothing transformed. Fixed and far
+   off to the left so it is rendered but never seen. The light tokens are
+   redefined ON the stage - custom properties inherit, so every card inside
+   draws light whatever the page theme is, and a PDF is always paper. */
+.org-pdf-stage{position:fixed;left:-20000px;top:0;z-index:-1;display:inline-block;
+  background:#FFFFFF;padding:24px;
+  --bg:#F4F6FB;--surface:#FFFFFF;--border:#E2E8F0;--border2:#C7D6F5;
+  --text:#0F1B3D;--muted:#6B7A99;--light-blue:#EEF2FF;
+  --manager-bg:#F3EEFF;--manager-border:#DDD6FE;
+  --org-supervisor-bg:rgba(251,146,60,.06);--org-leader-bg:rgba(252,211,77,.06)}
+.org-pdf-stage .org-toggle{display:none}
+.org-pdf-stage .org-node-card{box-shadow:none}
 @media(max-width:900px){.orgchart-wrap{padding:16px}}
 @media(max-width:760px){.org-viewport{height:60vh;min-height:320px}}
 
@@ -2527,6 +2541,13 @@ a.clib-open{text-decoration:none}
             <button class="org-filter-btn" id="org-fit-btn" onclick="orgFitToScreen()">Fit to screen</button>
             <button class="org-filter-btn" id="org-expand-all" onclick="orgExpandAll()">Expand all</button>
             <button class="org-filter-btn" id="org-collapse-all" onclick="orgCollapseAll()">Collapse all</button>
+          </div>
+        </div>
+        <div class="org-sep"></div>
+        <div class="org-ctl-group">
+          <span class="org-ctl-label">Export</span>
+          <div class="org-ctl-row">
+            <button class="org-filter-btn" id="org-pdf-btn" onclick="downloadOrgPdf()">Download PDF</button>
           </div>
         </div>
         <span class="org-hint" id="org-hint">Click any card to view profile</span>
@@ -4048,6 +4069,10 @@ a.clib-open{text-decoration:none}
         <input class="form-input" type="text" id="ep-mgr" readonly>
         <div class="form-hint" id="ep-mgr-hint">Set by the team or on creation</div>
       </div></div>
+      <div class="modal-row"><div class="form-group"><label class="form-label">Campus</label>
+        <select class="form-select" id="ep-campus"></select>
+        <div class="form-hint">Which campus this person sells for.</div>
+      </div><div class="form-group"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">Phone</label><input class="form-input" type="text" id="ep-phone"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" type="text" id="ep-instagram" placeholder="@username"></div></div>
       <div class="modal-row"><div class="form-group"><label class="form-label">LinkedIn</label><input class="form-input" type="text" id="ep-linkedin" placeholder="username or full profile link"></div><div class="form-group"><label class="form-label">Nationality</label><select class="form-select" id="ep-nationality"></select></div></div>
       <div class="form-group"><label class="form-label">Languages</label>
@@ -6480,6 +6505,19 @@ function buildBirthdaySelects(day, month){
   ms.value = month ? String(month) : '';
 }
 
+// The three campuses, named once, from the same map every card reads. A
+// value outside it cannot be chosen here and is refused by the gateway, so
+// the select is the whole story rather than a convenience over free text.
+function fillCampusSelect(elId, current){
+  const sel = document.getElementById(elId);
+  if(!sel) return;
+  const cur = String(current || '').toLowerCase();
+  sel.innerHTML = Object.keys(CAMPUS_LABELS).map(k =>
+    `<option value="${esc(k)}"${k === cur ? ' selected' : ''}>${esc(CAMPUS_LABELS[k])}</option>`).join('');
+  // An old row with no campus at all would otherwise silently read as Dublin
+  // just because it is first; say so instead, and saving still has to pick.
+  if(!CAMPUS_LABELS[cur]) sel.value = '';
+}
 function openEditProfile(uid){
   const u=users.find(x=>x.id===uid); if(!u) return;
   editingProfileUserId=uid;
@@ -6488,6 +6526,7 @@ function openEditProfile(uid){
   document.getElementById('ep-first').value=u.first||'';
   document.getElementById('ep-last').value=u.last||'';
   document.getElementById('ep-nickname').value=u.nickname||'';
+  fillCampusSelect('ep-campus', u.campus);
   fillResultsNameSelect(uid);
   // The job title is the cargo now, so it is shown rather than typed.
   document.getElementById('ep-jobtitle-ro').value=displayRole(u)||'-';
@@ -6644,6 +6683,11 @@ async function saveProfile(){
   // Omitted entirely when this person may not set it, so an ordinary self-edit
   // still saves every other field instead of being refused wholesale.
   if(allowStartDate(uid)) fields.start_date=document.getElementById('ep-start-date').value || null;
+  // Same shape, same reason: a row that never had a campus leaves the select
+  // blank, and the gateway refuses a blank one. Sending nothing saves every
+  // other field rather than failing the lot over a field nobody touched.
+  const campusPick=document.getElementById('ep-campus').value;
+  if(campusPick) fields.campus=campusPick;
   if(!fields.first||!fields.last){ showToast('First and last name are required.','error'); return; }
   const r=await callDb('update_profile',{ user_id:uid, fields });
   if(!r||!r.ok){ showToast(failMsg(r, PROFILE_SAVE_ERRORS, 'Could not save this profile'),'error'); return; }
@@ -13653,6 +13697,211 @@ function renderOrgChart(){
   // on a collapse: folding a branch must not throw away where somebody had
   // panned to.
   if(!orgFitted) orgFitToScreen(); else orgApplyTransform();
+}
+
+// ── THE CHART AS A PDF ──────────────────────────────────
+// What goes in is the CURRENTLY FILTERED chart, fully expanded: a fold is a
+// way of reading the screen, not a statement about the organisation, so the
+// export carries every person the filters left in.
+const ORG_PDF_PAGE = { w:297, h:210, margin:10, header:22 };   // A4 landscape, mm
+// Millimetres per captured pixel. The capture is taken at 2x, so this is half
+// of what a CSS pixel becomes on paper. Scaling to fit the page width is
+// right until the chart is wide enough that the text stops being readable;
+// below this floor the chart is tiled across pages instead of shrunk.
+const ORG_PDF_MIN_MM_PER_PX = 0.05;
+const ORG_PDF_LOGO_MM = 9;
+const ORG_PDF_JPEG_Q = 0.92;
+// The capture is taken at this device ratio. Two was sharper than a page can
+// show and made the file several times bigger for it.
+const ORG_PDF_CAPTURE_SCALE = 1.5;
+
+// The title says what was asked for. No filter is the whole department; a
+// campus or a team narrows it and replaces the word that was there.
+function orgPdfTitle(){
+  const campus = (orgCampus === 'dublin' || orgCampus === 'limerick')
+    ? (CAMPUS_LABELS[orgCampus] || orgCampus) : '';
+  const named = (set, noneKey, noneLabel) => (!set || set.has('all')) ? []
+    : [...set].map(k => k === noneKey ? noneLabel : String(k)).sort();
+  const teams = named(orgTeams, 'individual', 'No team');
+  const cargos = named(orgCargos, 'none', 'No cargo');
+  const join = list => list.length <= 1 ? (list[0] || '')
+    : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+  const parts = [campus, join(teams)].filter(Boolean);
+  // "Sales" only when nothing narrowed it - otherwise it reads as a claim
+  // about a filtered chart that it is the whole department.
+  const base = parts.length ? parts.join(' - ') : 'Sales';
+  // The cargo filter is a different kind of narrowing: it does not name a
+  // group of people, it names what they do, so it goes behind the title
+  // rather than into it.
+  return base + ' Team' + (cargos.length ? ' (' + join(cargos) + ')' : '');
+}
+function orgPdfFilename(){
+  const slug = orgPdfTitle().toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sales-team';
+  return 'org-chart-' + slug + '.pdf';
+}
+
+// The same tree the page draws, with every branch open.
+function orgFullTreeHtml(tree){
+  const saved = orgCollapsed;
+  orgCollapsed = new Set();
+  try {
+    return (tree.roots.length === 1)
+      ? orgTreeHtml(tree.roots[0], tree, true)
+      : `<div class="org-kids">${tree.roots.map(r => orgTreeHtml(r, tree, false)).join('')}</div>`;
+  } finally { orgCollapsed = saved; }
+}
+// The header mark, shrunk to the height it is drawn at so a 450KB asset does
+// not travel into the file at full size. Resolves to '' rather than throwing
+// when the logo cannot be read - a PDF with no logo beats no PDF.
+let orgPdfLogo = null;
+function orgPdfLogoData(){
+  if(orgPdfLogo !== null) return Promise.resolve(orgPdfLogo);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const h = 64, w = Math.max(1, Math.round(img.width * (h / img.height)));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        orgPdfLogo = { data: c.toDataURL('image/png'), w, h };
+      } catch(e){ orgPdfLogo = ''; }
+      resolve(orgPdfLogo);
+    };
+    img.onerror = () => { orgPdfLogo = ''; resolve(orgPdfLogo); };
+    img.src = 'assets/logo-light.png';
+  });
+}
+function orgPdfHeader(doc, title, logo){
+  const { margin } = ORG_PDF_PAGE;
+  let x = margin;
+  if(logo && logo.data){
+    const w = ORG_PDF_LOGO_MM * (logo.w / logo.h);
+    try { doc.addImage(logo.data, 'PNG', margin, margin - 2, w, ORG_PDF_LOGO_MM, 'nedlogo', 'FAST'); x += w + 5; }
+    catch(e){ /* an unreadable logo is not a reason to lose the chart */ }
+  }
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(15,27,61);
+  doc.text(title, x, margin + 5);
+  doc.setDrawColor(199,214,245); doc.setLineWidth(0.4);
+  doc.line(margin, ORG_PDF_PAGE.header - 4, ORG_PDF_PAGE.w - margin, ORG_PDF_PAGE.header - 4);
+}
+
+// The preferred body: the drawn tree itself, captured off-screen at its
+// natural size. Returns null when html2canvas is not there or the capture
+// comes back empty, and the outline below takes over.
+async function orgPdfCapture(tree){
+  if(typeof html2canvas !== 'function') return null;
+  const stage = document.createElement('div');
+  stage.className = 'org-pdf-stage';
+  stage.innerHTML = `<div class="org-branch">${orgFullTreeHtml(tree)}</div>`;
+  document.body.appendChild(stage);
+  try {
+    const canvas = await html2canvas(stage, { backgroundColor:'#FFFFFF',
+      scale: ORG_PDF_CAPTURE_SCALE, useCORS:true, imageTimeout:2500, logging:false });
+    return (canvas && canvas.width && canvas.height) ? canvas : null;
+  } catch(e){ return null; }
+  finally { stage.remove(); }
+}
+// The fallback: the same people and the same shape, drawn as text. Readable
+// whatever the chart's width, and what a chart too wide to raster falls back
+// to.
+function orgPdfOutlineRows(tree){
+  const rows = [];
+  const walk = (p, depth) => {
+    rows.push({ depth, name: p.name,
+      meta: [p.role_label, orgCampusLabel(p), p.team].filter(Boolean).join(' - ') });
+    (tree.kids[String(p.id)] || []).forEach(k => walk(k, depth + 1));
+  };
+  tree.roots.forEach(r => walk(r, 0));
+  return rows;
+}
+function orgPdfDrawOutline(doc, tree, title, logo){
+  const { w, h, margin, header } = ORG_PDF_PAGE;
+  const rows = orgPdfOutlineRows(tree);
+  const line = 7, indent = 7;
+  let y = header + 4;
+  orgPdfHeader(doc, title, logo);
+  rows.forEach(r => {
+    if(y > h - margin){ doc.addPage(); orgPdfHeader(doc, title, logo); y = header + 4; }
+    const x = margin + r.depth * indent;
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(15,27,61);
+    doc.text(String(r.name), x, y);
+    if(r.meta){
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(107,122,153);
+      doc.text(String(r.meta), x + Math.min(80, w - margin - x), y);
+    }
+    y += line;
+  });
+  return rows.length;
+}
+
+let orgPdfBusy = false;
+async function downloadOrgPdf(){
+  if(orgPdfBusy) return;
+  const maker = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+  if(!maker){ showToast('The PDF library did not load - try again.','error'); return; }
+  const tree = orgVisibleTree();
+  if(!tree.shown.length){ showToast('Nobody matches these filters.','warning'); return; }
+  const btn = document.getElementById('org-pdf-btn');
+  orgPdfBusy = true;
+  if(btn){ btn.disabled = true; btn.textContent = 'Building...'; }
+  try {
+    const title = orgPdfTitle();
+    const logo = await orgPdfLogoData();
+    const doc = new maker({ unit:'mm', format:'a4', orientation:'landscape' });
+    const { w, h, margin, header } = ORG_PDF_PAGE;
+    const availW = w - margin * 2, availH = h - header - margin;
+    const canvas = await orgPdfCapture(tree);
+    let how = 'outline';
+    if(canvas){
+      how = 'chart';
+      // Fit the WHOLE chart on one page when it is still legible at that
+      // size - that is one uncut picture, which is what a chart wants to be.
+      // Only when fitting it whole would push the text under the floor is it
+      // tiled instead, and then at the floor so the tiles stay readable.
+      // Fitting to the page WIDTH alone was wrong: it cut cards in half at
+      // every page boundary for a chart that would have fitted on one.
+      const mm = Math.max(Math.min(availW / canvas.width, availH / canvas.height),
+                          ORG_PDF_MIN_MM_PER_PX);
+      const pageWpx = Math.floor(availW / mm), pageHpx = Math.floor(availH / mm);
+      const cols = Math.max(1, Math.ceil(canvas.width / pageWpx));
+      const rows = Math.max(1, Math.ceil(canvas.height / pageHpx));
+      let first = true;
+      for(let r = 0; r < rows; r++){
+        for(let c = 0; c < cols; c++){
+          if(!first) doc.addPage();
+          first = false;
+          orgPdfHeader(doc, title, logo);
+          const sx = c * pageWpx, sy = r * pageHpx;
+          const sw = Math.min(pageWpx, canvas.width - sx), sh = Math.min(pageHpx, canvas.height - sy);
+          const slice = document.createElement('canvas');
+          slice.width = sw; slice.height = sh;
+          slice.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+          // JPEG, not PNG. A 4-megapixel slice of chart encodes to a few
+          // hundred KB as JPEG and to several MB as PNG, and the difference
+          // between them on a page of cards and hairlines is invisible -
+          // an org chart nobody can email is not an export.
+          // A chart that fits on one page is centred on it; tiles are not,
+          // because a tile has to line up with the one beside it.
+          const drawW = sw * mm;
+          const x = (cols === 1) ? margin + Math.max(0, (availW - drawW) / 2) : margin;
+          doc.addImage(slice.toDataURL('image/jpeg', ORG_PDF_JPEG_Q), 'JPEG',
+            x, header, drawW, sh * mm, undefined, 'FAST');
+        }
+      }
+    } else {
+      orgPdfDrawOutline(doc, tree, title, logo);
+    }
+    doc.save(orgPdfFilename());
+    showToast(tree.shown.length + ' people exported', 'success');
+    return how;
+  } catch(e){
+    showToast('The chart could not be exported - ' + (e && e.message ? e.message : 'try again'), 'error');
+  } finally {
+    orgPdfBusy = false;
+    if(btn){ btn.disabled = false; btn.textContent = 'Download PDF'; }
+  }
 }
 
 // Crossing the phone breakpoint re-picks the default, but only while nobody
