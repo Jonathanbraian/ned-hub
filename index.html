@@ -4415,7 +4415,10 @@ function mapProfileToUser(u){
   return {
     id:u.id, first:d(u.first), last:d(u.last), nickname:d(u.nickname)||'', email:u.email, role:u.role,
     campus:u.campus, phone:u.phone||'', instagram:u.instagram||'', linkedin:u.linkedin||'',
-    nationality:d(u.nationality)||'', language:d(u.language)||'', jobTitle:d(u.job_title)||'',
+    // `language` singular was mapped here and read by nothing at all - the
+    // picker and the profile both read `languages`. It has gone from the
+    // projection with it.
+    nationality:d(u.nationality)||'', jobTitle:d(u.job_title)||'',
     // languages is text[]; anything else (an old row, a stubbed response) reads
     // as "none picked" rather than throwing on .join() later.
     languages: Array.isArray(u.languages) ? u.languages.filter(Boolean).map(d) : [],
@@ -13038,8 +13041,15 @@ function teamFilterOptions(){
 function fillRptTeamFilter(){
   const el=document.getElementById('rpt-team-btns');
   if(!el) return;
+  // A <label> wrapping a hidden checkbox fires the handler TWICE on one
+  // click - the label forwards the click to its input, and that click
+  // bubbles back out through the label's own onclick. Two toggles are no
+  // toggle, which is why this filter did nothing when pressed. Same fault
+  // and same fix as the org chart's chips.
   el.innerHTML=teamFilterOptions().map(o=>
-    `<label class="org-team-check${rptTeams.has(o.k)?' active':''}" data-rteam="${esc(o.k)}" onclick="toggleRptTeam('${esc(o.k)}',this)"><input type="checkbox"${rptTeams.has(o.k)?' checked':''} style="display:none"> ${esc(o.label)}</label>`
+    `<button type="button" class="org-team-check${rptTeams.has(o.k)?' active':''}" `+
+    `data-rteam="${esc(o.k)}" aria-pressed="${rptTeams.has(o.k)?'true':'false'}" `+
+    `onclick="toggleRptTeam('${esc(o.k)}')">${esc(o.label)}</button>`
   ).join('');
 }
 function toggleTeamSet(set, v){
@@ -13238,9 +13248,17 @@ async function generateReport(){
 }
 
 // ── PEOPLE / STRUCTURE ────────────────────────────────────────────
-// Company-wide on purpose: get_directory is unscoped for every client and the
-// directory is already visible app-wide, so a people listing is not a new
-// disclosure. Performance reports keep their reportPopulation() scope.
+// The LISTING is company-wide on purpose: names, cargos, teams and campuses
+// are what the org chart already draws for everybody, so a people listing is
+// not a new disclosure. Performance reports keep their reportPopulation()
+// scope.
+//
+// Email, Phone and Start date are a different matter, and the sentence that
+// used to stand here - "get_directory is unscoped for every client" - was
+// the reason they were in this export at all. It is not unscoped any more:
+// it carries those fields only for the people the caller could open the
+// profile of, so for anybody else these cells come out blank. That is the
+// disclosure being closed, not a column being broken.
 function fmtStartDate(v){
   const t=String(v||'').slice(0,10);
   return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : '';
