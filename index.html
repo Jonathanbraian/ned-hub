@@ -1318,6 +1318,14 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
    A fixed box you pan and zoom inside, rather than a page that grows
    sideways until the scrollbar is the only way around it. The canvas is
    absolutely positioned and transformed; the viewport clips it. */
+.campus-target{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
+  padding:12px 14px;margin-bottom:14px}
+.campus-target .ct-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.campus-target .ct-label{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.campus-target .ct-month{width:auto;min-width:120px;padding:6px 10px;font-size:12.5px}
+.campus-target .ct-amount{width:150px;padding:6px 10px;font-size:12.5px}
+.campus-target .ct-hint{font-size:11.5px;color:var(--muted);margin-top:7px}
+.campus-target .ct-error{margin:8px 0 0}
 .org-ctl-group{display:flex;flex-direction:column;gap:6px}
 .org-ctl-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
 .org-ctl-row{display:flex;gap:4px;flex-wrap:wrap}
@@ -4714,6 +4722,39 @@ function effectiveTargetOf(u, eff){
 // A team target lives on the team and is measured against that team's members
 // (profiles.team_id). A leader can run several teams plus loose individuals.
 let teamPerf = {};
+// Per campus: what its people add up to month by month, and the figure a
+// director set for it, forward-filled. Both arrive from the gateway, which
+// applies the same start-date gate the page applies person by person.
+let campusPerf = {};
+// The months a period covers, from the month the gateway called live. The
+// campus figures are per month, so a quarter or a year is the sum of its
+// months rather than a monthly number multiplied by three or twelve.
+function perfMonthsFor(p){
+  const M = (perfLiveMonth != null && perfLiveYear === perfYear) ? perfLiveMonth
+          : (perfYear === new Date().getFullYear() ? new Date().getMonth()+1 : 12);
+  if(p === 'monthly') return [M];
+  if(p === 'quarterly'){ const qs = Math.floor((M-1)/3)*3+1; return [qs,qs+1,qs+2]; }
+  const all = []; for(let m=1;m<=12;m++) all.push(m); return all;
+}
+// The campus meta for a period: the sum of its months, and null when not one
+// of them carries a figure. A quarter where only the last month was set is
+// still a quarter with a target - the forward-fill answers for the other
+// two, so the gateway has already filled them in.
+function campusMetaFor(campus, p){
+  const c = campusPerf[campus];
+  if(!c || !c.meta) return null;
+  const months = perfMonthsFor(p);
+  let total = 0, any = false;
+  months.forEach(m => { const v = c.meta[m]; if(v != null){ total += Number(v); any = true; } });
+  return any ? total : null;
+}
+function campusAgentsSumFor(campus, p){
+  const c = campusPerf[campus];
+  if(!c || !c.agents_sum) return null;
+  let total = 0;
+  perfMonthsFor(p).forEach(m => { total += Number(c.agents_sum[m]) || 0; });
+  return total;
+}
 
 function teamSubtreeOf(leaderId){
   const out=[], seen=new Set([leaderId]);
@@ -4938,6 +4979,8 @@ async function loadPerformance(){
   perfForecast[perfYear] = (r && r.forecast) || {};
   teamPerf = {};
   ((r&&r.team_perf)||[]).forEach(t=>{ teamPerf[t.team_id]=t; });
+  campusPerf = {};
+  ((r&&r.campus_perf)||[]).forEach(c=>{ campusPerf[c.campus]=c; });
   const byUser = {};
   // A target of null is not a target of nothing: it means nobody set one for
   // that month, so the role or cargo ladder answers. Number(null) is 0, which
@@ -5525,7 +5568,7 @@ function switchPerfView(mode, btn){
   if(btn) btn.classList.add('active');
   // show/hide secondary filter
   const sf=document.getElementById('perf-secondary-filter');
-  sf.style.display=(mode==='byteam'||mode==='individual')?'flex':'none';
+  sf.style.display=(mode==='byteam'||mode==='individual'||mode==='campus')?'flex':'none';
   renderPerformancePage();
 }
 
@@ -5650,10 +5693,20 @@ function renderByCampusView(me, teamList, p, canUpdate){
     {key:'dublin', label:'Dublin'},
     {key:'limerick', label:'Limerick'},
   ];
-  const campusCards=campuses.map(c=>{
+  // The campus filter is the one already on the page - it just never
+  // reached this view before.
+  const campF=document.getElementById('perf-filter-campus')?.value||'';
+  const shown=campF ? campuses.filter(c=>c.key===campF) : campuses;
+  const canSetCampus=rank(currentRole) >= ROLE_RANK.director;
+  const campusCards=shown.map(c=>{
     const cl=teamList.filter(u=>u.campus===c.key||u.campus==='both');
     const actual=cl.reduce((a,u)=>a+u.perf[p].actual,0);
-    const target=aggregateTargetOf(cl,p);
+    // What the people there add up to, the way this card has always counted
+    // them. A director may put a figure over the top of it; when they have,
+    // the sum stays on the card as the line it replaced.
+    const agentsSum=aggregateTargetOf(cl,p);
+    const meta=campusMetaFor(c.key,p);
+    const target=(meta!=null)?meta:agentsSum;
     const pct=target>0?Math.round(actual/target*100):0;
     if(cl.length===0) return '';
     return `
@@ -5665,14 +5718,71 @@ function renderByCampusView(me, teamList, p, canUpdate){
         <span style="font-size:13px;color:var(--muted);margin-left:auto">${fmt(actual)} / ${fmt(target)}</span>
       </div>
       <div class="kpi-row" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px">
-        <div class="kpi-card kc-blue"><div class="kpi-label">Target</div><div class="kpi-val" style="color:var(--blue)">${fmt(target)}</div><div class="kpi-sub">${cl.length} members</div></div>
+        <div class="kpi-card kc-blue"><div class="kpi-label">Target</div><div class="kpi-val" style="color:var(--blue)">${fmt(target)}</div><div class="kpi-sub" data-campus-sub="${esc(c.key)}">${meta!=null?('Campus target - agents add up to '+fmt(agentsSum)):(cl.length+' members')}</div></div>
         <div class="kpi-card kc-green"><div class="kpi-label">Actual</div><div class="kpi-val" style="color:${pctColor(pct)}">${fmt(actual)}</div><div class="kpi-sub">${pct}% achieved</div></div>
         <div class="kpi-card kc-orange"><div class="kpi-label">Gap</div><div class="kpi-val" style="color:${pctColor(pct)}">${actual>=target?'+'+fmt(actual-target):fmt(actual-target)}</div><div class="kpi-sub">${actual>=target?'Above':'Below'} target</div></div>
       </div>
+      ${canSetCampus?renderCampusTargetEditor(c.key, meta, agentsSum):''}
       ${renderTeamTable(cl, p, canUpdate)}
     </div>`;
   }).join('');
   return campusCards||'<div style="padding:40px;text-align:center;color:var(--muted)">No data available.</div>';
+}
+
+// ── THE CAMPUS TARGET EDITOR ──────────────────────────────────
+// Director and above only. The server says the same thing, and says it
+// first; this decides whether the box is drawn, not whether the write is
+// allowed.
+const CAMPUS_TARGET_ERRORS = {
+  forbidden:'Only directors and admins can set a campus target',
+  bad_campus:'That campus is not one of the two',
+  bad_year:'That year is out of range',
+  bad_month:'Pick a month between 1 and 12',
+  bad_amount:'Enter a number, or leave it blank to use the agents sum'
+};
+function renderCampusTargetEditor(campus, meta, agentsSum){
+  const M = (perfLiveMonth != null && perfLiveYear === perfYear) ? perfLiveMonth
+          : (perfYear === new Date().getFullYear() ? new Date().getMonth()+1 : 12);
+  const set = (campusPerf[campus] && campusPerf[campus].meta) ? campusPerf[campus].meta[M] : null;
+  return `<div class="campus-target" data-campus-editor="${esc(campus)}">
+    <div class="ct-row">
+      <span class="ct-label">Campus target</span>
+      <select class="form-select ct-month" id="ct-month-${esc(campus)}">
+        ${MONTH_NAMES.map((n,i)=>`<option value="${i+1}"${(i+1)===M?' selected':''}>${esc(n)}</option>`).join('')}
+      </select>
+      <input class="form-input ct-amount" type="number" min="0" step="1"
+        id="ct-amount-${esc(campus)}" value="${set!=null?esc(String(set)):''}" placeholder="Agents sum: ${esc(fmt(agentsSum))}">
+      <button class="org-filter-btn" id="ct-save-${esc(campus)}"
+        onclick="saveCampusTarget('${esc(campus)}')">Save</button>
+    </div>
+    <div class="ct-hint">Applies from this month forward until another month changes it. Leave it blank to use the agents sum.</div>
+    <div class="login-error ct-error" id="ct-error-${esc(campus)}" style="display:none"></div>
+  </div>`;
+}
+async function saveCampusTarget(campus){
+  const mEl = document.getElementById('ct-month-'+campus);
+  const aEl = document.getElementById('ct-amount-'+campus);
+  const err = document.getElementById('ct-error-'+campus);
+  const fail = m => { if(err){ err.textContent = m; err.style.display='block'; } };
+  if(err){ err.textContent=''; err.style.display='none'; }
+  if(!mEl || !aEl) return;
+  const btn = document.getElementById('ct-save-'+campus);
+  if(btn) btn.disabled = true;
+  try {
+    const raw = aEl.value.trim();
+    const r = await callDb('set_campus_target', { campus, year: perfYear,
+      month: Number(mEl.value), amount: raw === '' ? null : Number(raw) });
+    if(!r || !r.ok){ fail(failMsg(r, CAMPUS_TARGET_ERRORS, 'Could not save this campus target')); return; }
+    showToast(r.cleared ? 'Campus target cleared' : 'Campus target saved','success');
+    // The figure moved, so everything that reads it has to be asked again.
+    await loadPerformance();
+    renderPerformancePage();
+  } catch(e){
+    fail('Could not save this campus target - ' + ((e && e.message) || 'try again'));
+  } finally {
+    const b = document.getElementById('ct-save-'+campus);
+    if(b) b.disabled = false;
+  }
 }
 
 // ── BY TEAM VIEW ──────────────────────────────────────────────
