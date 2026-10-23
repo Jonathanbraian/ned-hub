@@ -35,6 +35,9 @@ Gate authority on `rank(me.role) >= ROLE_RANK.director`, never on
 
 ## Content audience
 
+This is the rule for every type EXCEPT `training` and `course`, which are
+not aimed at a tier at all - see the ladder below.
+
 Every `content_items` row carries `audience`: `everyone`, `agents` or
 `leadership`. Two tiers decide who is shown what, and they are **not** the
 rank table:
@@ -54,6 +57,28 @@ the way out of every path that lists content, so an item aimed elsewhere
 is never listed at all rather than listed and refused. Anything
 unrecognised, including a row written before the column existed, reads as
 `everyone`.
+
+## Content level: trainings and courses
+
+A training or a course is not aimed at a tier, it **starts at one**. Every
+such row carries `min_level`, and a person sees it when their cargo stands
+at or above that rung. It is cumulative: `supervisor` means supervisors AND
+everybody above them, which is the thing two tiers cannot say.
+
+`TRAINING_LADDER` in `db.js` is the order, and it is the role enum
+(`ROLE_LEVELS`) and nothing else:
+
+    agent < specialist < executive < senior_exec < leader < supervisor
+          < manager < director < admin
+
+It is deliberately **not** `ROLE_RANK`, where `senior_exec` ranks 0 and four
+roles tie at the floor. Gate a training on the ladder; gate authority on the
+rank table. The two answer different questions and must not be swapped.
+
+`min_level` null, or any value not on the ladder, is the floor - everyone.
+`isMgr(me.role)` still sees everything, because a manager is the one who
+publishes it. `contentAllows(me, row)` is the one predicate that asks a row
+which of the two models applies, so no caller has to remember.
 
 ## Schema
 
@@ -93,6 +118,10 @@ go browser to Storage and never through the function body.
 - **`content_items.pass_threshold` is nullable**, and so is
   `test_num_questions`: switching a test off writes `null` to both. A NOT NULL
   on either breaks saving a training that has no test.
+- **`content_items.min_level` is nullable text with NO CHECK constraint**, for
+  the same reason as `type`: the valid rungs are `TRAINING_LADDER` in `db.js`,
+  and null is the floor. Moving a training back to Everyone writes `null`, so
+  a NOT NULL breaks it.
 
 ### Tables
 
@@ -107,7 +136,9 @@ go browser to Storage and never through the function body.
 - **`content_items`** - `id`, `type`, `title`, `description`, `category`,
   `cover_url`, `file_path`, `file_name`, `file_type`, `link_url`, `pinned`,
   `sort_order`, `active`, `has_test`, `pass_threshold`, `test_num_questions`,
-  `audience` (`everyone` / `agents` / `leadership`), `created_at`.
+  `audience` (`everyone` / `agents` / `leadership`), `min_level` (a
+  `TRAINING_LADDER` rung, or null for the floor - read for `training` and
+  `course` only, where it replaces `audience`), `created_at`.
 - **`training_questions`** - `id`, `content_id`, `question`, `options` (an
   array of strings), `correct_index`, `sort_order`. `correct_index` never
   leaves the server except to an `isMgr` caller.

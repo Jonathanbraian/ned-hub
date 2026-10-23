@@ -163,6 +163,9 @@ async function inScope(me, tgt){
 // it reads company-wide but commands nobody, so it is NOT ordered by what it
 // can see. Nothing holds either until someone is given it.
 const ROLE_LEVELS = ['agent','specialist','executive','senior_exec','leader','supervisor','manager','director','admin'];
+// Exported so the suite can hold TRAINING_LADDER to it: the two agree
+// today and are allowed to stop agreeing, but not by accident.
+exports.__roleLevels = ROLE_LEVELS;
 // What each tier is CALLED. Mirrors ROLE_LABELS in index.html, and is only
 // ever a fallback: a person's cargo name is the label wherever they have one,
 // exactly as displayRole() picks it on the client.
@@ -623,7 +626,57 @@ function audienceAllows(me, audience){
   const a = audienceOf(audience);
   return a === 'everyone' || a === audienceTierFor(me);
 }
-exports.__audience = { AUDIENCES, AUDIENCE_LEADERSHIP, audienceTierFor, audienceOf, audienceAllows };
+// ── THE TRAINING LADDER ──────────────────────────────────────────
+// Trainings and courses are not aimed at a tier, they start at one: an item
+// with min_level 'supervisor' is for supervisors AND everybody above them.
+// Cumulative, "from X up", which the three-tier audience cannot say - it
+// splits the company in two and a training ladder needs eight rungs.
+//
+// Deliberately NOT ROLE_RANK, which collapses agent, specialist, executive
+// and senior_exec to zero because none of them acts on anybody. That is the
+// right answer to "who may command whom" and the wrong one here: a senior
+// executive is further along than an agent for the purpose of what they are
+// READY FOR, and the ladder has to be able to say so.
+//
+// It is written out rather than derived from ROLE_LEVELS even though the two
+// agree today: one is the order of a Postgres enum and the other is a
+// judgement about training, and a change to either should not silently move
+// the other. The suite asserts they still agree, so a divergence is noticed
+// rather than inherited.
+const TRAINING_LADDER = { agent:0, specialist:1, executive:2, senior_exec:3,
+  leader:4, supervisor:5, manager:6, director:7, admin:8 };
+// A rung, or the floor. An unrecognised role, a row written before the
+// column existed and a null alike read as the bottom of the ladder, which is
+// "everyone" - visible rather than hidden, the same way audienceOf reads an
+// unknown audience.
+function ladderOf(role){
+  const v = TRAINING_LADDER[String(role == null ? '' : role).trim().toLowerCase()];
+  return (v === undefined) ? 0 : v;
+}
+// The value a training carries, normalised. Anything that is not a rung is
+// null, which is the floor.
+function minLevelOf(v){
+  const k = String(v == null ? '' : v).trim().toLowerCase();
+  return (TRAINING_LADDER[k] === undefined) ? null : k;
+}
+// May this person see this training? Managers see every item whoever it is
+// for, because they are the ones who manage it - the same exemption the
+// audience rule makes, for the same reason.
+function ladderAllows(me, minLevel){
+  if(isMgr(me && me.role)) return true;
+  return ladderOf(me && me.role) >= ladderOf(minLevelOf(minLevel) || 'agent');
+}
+// The one place the two models meet. A training or a course is decided by
+// the ladder; everything else keeps the three-tier audience exactly as it
+// was. Asking it by row means no call site has to remember which is which.
+function contentAllows(me, row){
+  if(!row) return false;
+  return isLessonType(row.type)
+    ? ladderAllows(me, row.min_level)
+    : audienceAllows(me, row.audience);
+}
+exports.__audience = { AUDIENCES, AUDIENCE_LEADERSHIP, audienceTierFor, audienceOf, audienceAllows,
+  TRAINING_LADDER, ladderOf, minLevelOf, ladderAllows, contentAllows };
 const CONTENT_BUCKETS = { cover:'content-covers', file:'content-files' };
 // ── TRAINING PIECES ────────────────────────────────────
 // A training may now be a sequence of lessons: one media file each, video
@@ -644,10 +697,10 @@ function pieceMedia(v){ return PIECE_MEDIA.includes(v) ? v : 'video'; }
 // shown does not get to hand them its lessons through a side door.
 async function visibleTraining(me, id){
   const { data: row } = await admin.from('content_items')
-    .select('id,type,title,has_test,pass_threshold,audience').eq('id', id).single();
+    .select('id,type,title,has_test,pass_threshold,audience,min_level').eq('id', id).single();
   if(!row) return { ok:false, status:404, error:'not_found' };
   if(!isLessonType(row.type)) return { ok:false, status:400, error:'not_a_training' };
-  if(!audienceAllows(me, row.audience)) return { ok:false, status:403, error:'out_of_scope' };
+  if(!ladderAllows(me, row.min_level)) return { ok:false, status:403, error:'out_of_scope' };
   return { ok:true, row };
 }
 async function trainingPieces(trainingId){
@@ -866,10 +919,12 @@ async function myTrainingStatus(userId, contentId){
 // isMgr-gated action changes nothing by construction.
 async function trainingRow(id, me){
   const { data: row } = await admin.from('content_items')
-    .select('id,type,title,has_test,pass_threshold,test_num_questions,audience').eq('id',id).single();
+    .select('id,type,title,has_test,pass_threshold,test_num_questions,audience,min_level').eq('id',id).single();
   if(!row) return { ok:false, status:404, error:'not_found' };
   if(!isLessonType(row.type)) return { ok:false, status:400, error:'not_a_training' };
-  if(me && !audienceAllows(me, row.audience)) return { ok:false, status:403, error:'out_of_scope' };
+  // The type gate above has already established this is a training or a
+  // course, so the ladder is the rule here and the audience never applies.
+  if(me && !ladderAllows(me, row.min_level)) return { ok:false, status:403, error:'out_of_scope' };
   return { ok:true, row };
 }
 // job_title stays here so an old client cannot be broken by its removal, but
@@ -3591,7 +3646,7 @@ exports.handler = async (event) => {
       case 'get_content': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         let q = admin.from('content_items')
-          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,pinned,has_test,pass_threshold,sort_order,created_at,audience')
+          .select('id,type,title,description,category,cover_url,file_path,file_name,file_type,link_url,pinned,has_test,pass_threshold,sort_order,created_at,audience,min_level')
           .eq('active', true);
         // A library is browsed; a news feed is read. Updates therefore order
         // pinned-first then newest-first, and every other type keeps the
@@ -3614,7 +3669,11 @@ exports.handler = async (event) => {
         // out, not a card that says no. The filter runs here, on the way
         // out, so no caller can ask for a shelf and be handed somebody
         // else's.
-        const visible = (data||[]).filter(r => audienceAllows(me, r.audience));
+        // Two models meeting: a training or a course is decided by the
+        // ladder it starts at, everything else by the tier it is aimed at.
+        // contentAllows asks the row which it is, so this line does not have
+        // to know.
+        const visible = (data||[]).filter(r => contentAllows(me, r));
         // Only the trainings, and only the ones this caller can see: a card
         // has to know whether it opens a file or a course.
         const counts = await pieceCounts(visible.filter(r => isLessonType(r.type)).map(r => r.id));
@@ -3637,7 +3696,11 @@ exports.handler = async (event) => {
           has_test: !!r.has_test,
           pass_threshold: (r.pass_threshold===null||r.pass_threshold===undefined) ? null : Number(r.pass_threshold),
           // Who it is for, so the card can say so to the people who manage it.
+          // Both are sent for every type: the modal shows one or the other
+          // depending on what is being edited, and a card reads whichever
+          // its own type uses.
           audience: audienceOf(r.audience),
+          min_level: minLevelOf(r.min_level),
           // Lessons, if it has any. Zero for everything else, which is every
           // type but training and every training written before this.
           piece_count: counts[String(r.id)] || 0,
@@ -3683,6 +3746,10 @@ exports.handler = async (event) => {
           // what lands on the row is an http(s) URL or nothing at all.
           link_url: safeHttpUrl(p.link_url),
           audience: audienceOf(p.audience),
+          // Only a training or a course has a rung; for every other type the
+          // column stays null and the audience above is what decides. An
+          // unrecognised value coerces to null, which is the floor.
+          min_level: isLessonType(p.type) ? minLevelOf(p.min_level) : null,
           pinned: !!p.pinned,
           sort_order: Number.isFinite(Number(p.sort_order)) ? Number(p.sort_order) : 0,
           // Never from the request. A test is attached afterwards, by
@@ -3717,6 +3784,7 @@ exports.handler = async (event) => {
         if(p.link_url !== undefined) patch.link_url = safeHttpUrl(p.link_url);
         if(p.pinned !== undefined) patch.pinned = !!p.pinned;
         if(p.audience !== undefined) patch.audience = audienceOf(p.audience);
+        if(p.min_level !== undefined) patch.min_level = minLevelOf(p.min_level);
         if(p.sort_order !== undefined && Number.isFinite(Number(p.sort_order))) patch.sort_order = Number(p.sort_order);
         if(p.active !== undefined) patch.active = !!p.active;
         // A replaced cover or file leaves its predecessor in the bucket unless
@@ -4120,6 +4188,50 @@ exports.handler = async (event) => {
         }
         return json(500,{error:'cert_mint_failed'});
       }
+      // How many trainings this person's level puts in front of them, and
+      // how many of those they have finished. The denominator is theirs, not
+      // a company-wide constant: a training they will never be shown should
+      // not sit in their total making them look incomplete.
+      //
+      // Trainings only, not courses - which is what the Completed Trainings
+      // line has always counted, and the number this gives it a denominator
+      // for.
+      //
+      // NOT get_training_progress: that name is taken, by the per-training
+      // lesson walk a few hundred lines up. A second case with the same name
+      // would never have run.
+      case 'get_training_tally': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const uid = p.user_id || me.id;
+        // About somebody else, only if you could open their profile. Your own
+        // is always yours.
+        let who = me;
+        if(String(uid) !== String(me.id)){
+          const { data: tgt } = await admin.from('profiles')
+            .select('id,role,reports_to').eq('id', uid).single();
+          if(!tgt) return json(404,{error:'not_found'});
+          if(!await canViewProfileOf(me, tgt)) return json(403,{error:'out_of_scope'});
+          who = tgt;
+        }
+        const { data: rows } = await admin.from('content_items')
+          .select('id,min_level').eq('type','training');
+        // The ladder as it applies to THEM, not to the caller reading it -
+        // a manager looking at an agent's profile is asking about the
+        // agent's shelf. isMgr is deliberately not consulted here: it is an
+        // exemption for managing the library, not a claim that a manager has
+        // personally been assigned every training in it.
+        const visible = (rows||[]).filter(r =>
+          ladderOf(who.role) >= ladderOf(minLevelOf(r.min_level) || 'agent'));
+        const ids = visible.map(r => String(r.id));
+        let completed = 0;
+        if(ids.length){
+          const { data: done } = await admin.from('training_completions')
+            .select('content_id').eq('user_id', uid);
+          const got = new Set((done||[]).map(r => String(r.content_id)));
+          completed = ids.filter(id => got.has(id)).length;
+        }
+        return json(200,{ ok:true, user_id: uid, completed, total: ids.length });
+      }
       case 'get_my_training_status': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         if(p.content_id){
@@ -4134,13 +4246,13 @@ exports.handler = async (event) => {
           }, mine) ] });
         }
         const { data: rows } = await admin.from('content_items')
-          .select('id,has_test,pass_threshold,audience').in('type', LESSON_TYPES).eq('has_test', true);
+          .select('id,type,has_test,pass_threshold,audience,min_level').in('type', LESSON_TYPES).eq('has_test', true);
         const items = [];
         for(const r of (rows||[])){
           // The same rule as the library itself: a training this person is
           // never shown does not get to put its id, or their standing on
           // it, into their status list.
-          if(!audienceAllows(me, r.audience)) continue;
+          if(!ladderAllows(me, r.min_level)) continue;
           const mine = await myTrainingStatus(me.id, r.id);
           const pr = await pieceProgress(me.id, r.id);
           items.push(Object.assign({ content_id: r.id, has_test: true,
