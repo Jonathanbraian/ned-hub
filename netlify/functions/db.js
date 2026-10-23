@@ -95,6 +95,61 @@ async function canActOn(me, tgt){
 const ROLE_TARGETS = { agent:14000, specialist:17000, executive:20000, leader:22000,
   supervisor:22000, manager:0, director:0, admin:0, senior_exec:0 };
 function canUpdatePerf(role){ return rank(role) >= ROLE_RANK.supervisor; }
+// ── CAMPUS TARGETS ───────────────────────────────────────────────
+// A campus can be given a target of its own, per month, forward-filled the
+// same way an agent's is: the figure that applies to a month is the most
+// recent one anybody set at or before it, and clearing a month deletes its
+// change-point so the month falls back to the one before - or, when there is
+// none, to the sum of that campus's agents.
+//
+// Deliberately director and above, NOT canUpdatePerf: a supervisor may set
+// the target of somebody in their branch, which is a conversation with that
+// person. A campus number is a company commitment and sits a tier higher.
+const CAMPUSES = ['dublin','limerick'];
+function campusKey(v){
+  const c = String(v == null ? '' : v).trim().toLowerCase();
+  return CAMPUSES.includes(c) ? c : false;
+}
+// Months since year 0, so "at or before" is one comparison rather than a
+// walk. The client walks because it only holds the years it loaded; this
+// side has every row for the campus and can simply take the latest.
+function monthIndex(year, month){ return Number(year) * 12 + (Number(month) - 1); }
+function campusTargetFor(rows, campus, year, month){
+  const want = monthIndex(year, month);
+  let best = null, bestAt = -1;
+  (rows || []).forEach(r => {
+    if(String(r.campus) !== String(campus)) return;
+    if(r.amount == null) return;
+    const at = monthIndex(r.year, r.month);
+    if(at <= want && at > bestAt){ bestAt = at; best = r; }
+  });
+  return best ? Number(best.amount) : null;
+}
+// The month somebody started, as a month index, or null when nobody said.
+// A null start_date means "no information", which gates nothing - the same
+// reading startMonthIndexOf has on the client.
+function startMonthOf(u){
+  const m = /^(\d{4})-(\d{2})/.exec(String((u && u.start_date) || ''));
+  return m ? monthIndex(Number(m[1]), Number(m[2])) : null;
+}
+function beforeStart(u, year, month){
+  const st = startMonthOf(u);
+  return st != null && monthIndex(year, month) < st;
+}
+// The agent forward-fill, server side. Mirrors forwardTarget() in index.html:
+// the most recent target anybody SET at or before this month, else the
+// ladder. `rows` is this year's sales_results, so the walk stops at January
+// and the ladder answers for anything the year does not carry.
+function agentTargetFor(byUserMonth, uid, year, month, ladder){
+  const mine = byUserMonth[String(uid)];
+  if(mine){
+    for(let m = month; m >= 1; m--){
+      const row = mine[m];
+      if(row && row.target != null) return Number(row.target);
+    }
+  }
+  return Number(ladder) || 0;
+}
 // Whose sales figures a caller may write. Your own are always in scope - both
 // call sites have already established you may write figures at all - and
 // everyone else is the ordinary "may I act on this person" question.
@@ -2118,7 +2173,7 @@ exports.handler = async (event) => {
           .select('user_id,year,month,target,actual,notes').eq('year',year).in('user_id',ids);
         if(error) return json(500,{error:'perf_failed'});
         const { data: profs } = await admin.from('profiles')
-          .select('id,role,role_id,monthly_target,first,last,results_name').in('id',ids);
+          .select('id,role,role_id,monthly_target,first,last,results_name,campus,start_date').in('id',ids);
         const { data: roleRows } = await admin.from('roles')
           .select('id,base_level,individual_target');
         const byRole = {}; (roleRows||[]).forEach(r=>{ byRole[r.id]=r; });
@@ -2220,6 +2275,37 @@ exports.handler = async (event) => {
             if(m === M) sums[tid].monthly += a;
           }
         });
+        // ── per-campus figures ────────────────────────────────────
+        // Two numbers per campus per month, and they answer different
+        // questions. agents_sum is what the people there add up to, with the
+        // same forward-fill and the same start-date gate the page applies
+        // person by person - a month before somebody joined carries no
+        // target, so it cannot lift the campus total either. meta is the
+        // figure a director SET for the campus, forward-filled; null when
+        // nobody has. The page shows meta when there is one and the sum when
+        // there is not, and names the sum beside it either way.
+        const { data: ctRows } = await admin.from('campus_targets')
+          .select('id,campus,year,month,amount');
+        const byUserMonth = {};
+        (rows || []).forEach(r => {
+          const k = String(r.user_id);
+          (byUserMonth[k] = byUserMonth[k] || {})[Number(r.month)] = r;
+        });
+        const campus_perf = CAMPUSES.map(c => {
+          const mine = (profs || []).filter(u => u.campus === c || u.campus === 'both');
+          const agents_sum = {}, meta = {};
+          for(let m = 1; m <= 12; m++){
+            let sum = 0;
+            mine.forEach(u => {
+              if(beforeStart(u, year, m)) return;        // not here yet
+              sum += agentTargetFor(byUserMonth, u.id, year, m, eff[u.id]);
+            });
+            agents_sum[m] = sum;
+            const mt = campusTargetFor(ctRows, c, year, m);
+            meta[m] = (mt == null) ? null : mt;
+          }
+          return { campus: c, members: mine.length, agents_sum, meta };
+        });
         const team_perf = (allTeams||[]).filter(t => teamIds.includes(t.id)).map(t => ({
           team_id: t.id, name: t.name, leader_id: t.leader_id, campus: t.campus,
           target: (t.team_target!=null) ? Number(t.team_target) : null,
@@ -2239,7 +2325,7 @@ exports.handler = async (event) => {
         // this response did - one rule, stated once on each side - so a month
         // on screen cannot be worth something the team total disagrees with.
         return json(200,{ year, month: M, results: rows||[], effective_targets: eff, team_perf,
-          monthly_actual, extras, forecast,
+          campus_perf, monthly_actual, extras, forecast,
           // The year the sheet is about. A page asking about any other year
           // gets no forecast at all, and should say so rather than imply the
           // figures are missing.
@@ -2282,6 +2368,48 @@ exports.handler = async (event) => {
         // the same word, said about the person rather than the month.
         if(p.set_base_target) await admin.from('profiles').update({monthly_target:target}).eq('id',uid);
         return json(200,{ ok:true, target, actual: actual === null ? keepActual : actual });
+      }
+      // Any signed-in caller may READ the campus figures - they are what the
+      // Performance page draws for everybody. Only a director may move them.
+      case 'list_campus_targets': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const year = Number(p.year);
+        let q = admin.from('campus_targets').select('id,campus,year,month,amount,created_at');
+        if(Number.isInteger(year)) q = q.eq('year', year);
+        const { data, error } = await q.order('year',{ascending:true}).order('month',{ascending:true});
+        if(error) return json(500,{error:'campus_targets_failed', detail:error.message});
+        return json(200,{ ok:true, targets: (data||[]).map(r => ({
+          id: r.id, campus: r.campus, year: Number(r.year),
+          month: Number(r.month), amount: Number(r.amount) })) });
+      }
+      case 'set_campus_target': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // The director floor, written out rather than borrowed: canUpdatePerf
+        // is supervisor+ and isMgr is manager+, and neither is this question.
+        if(rank(me.role) < ROLE_RANK.director) return json(403,{error:'forbidden'});
+        const campus = campusKey(p.campus);
+        if(campus === false) return json(400,{error:'bad_campus'});
+        const year = Number(p.year), month = Number(p.month);
+        if(!Number.isInteger(year) || year < 2000 || year > 2100) return json(400,{error:'bad_year'});
+        if(!Number.isInteger(month) || month < 1 || month > 12) return json(400,{error:'bad_month'});
+        // Blank CLEARS the change-point rather than storing a zero. A zero is
+        // a target of nothing, which is a real thing to say; blank means
+        // "this month says nothing, use whatever came before it".
+        const raw = p.amount;
+        const blank = (raw === null || raw === undefined || String(raw).trim() === '');
+        if(blank){
+          const { error } = await admin.from('campus_targets').delete()
+            .eq('campus',campus).eq('year',year).eq('month',month);
+          if(error) return json(500,{error:'save_failed', detail:error.message});
+          return json(200,{ ok:true, cleared:true, campus, year, month });
+        }
+        const amount = Number(raw);
+        if(!Number.isFinite(amount) || amount < 0) return json(400,{error:'bad_amount'});
+        const { error } = await admin.from('campus_targets')
+          .upsert({ campus, year, month, amount, created_by: me.id },
+                  { onConflict:'campus,year,month' });
+        if(error) return json(500,{error:'save_failed', detail:error.message});
+        return json(200,{ ok:true, cleared:false, campus, year, month, amount });
       }
       case 'set_monthly_target': {
         const me = await callerProfile(caller);
