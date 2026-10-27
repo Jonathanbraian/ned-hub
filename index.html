@@ -2840,6 +2840,15 @@ a.clib-open{text-decoration:none}
       </div>
       <div class="clib-grid" id="clib-grid-training"></div>
     </div>
+    <!-- Supervisor and above on the ladder. Hidden outright when this
+         person's level reaches none of them, so nobody is shown a heading
+         over an empty shelf. -->
+    <div class="sec" id="clib-sec-training-leaders" style="display:none">
+      <div class="clib-head">
+        <div><div class="sec-label">For Leaders</div><div class="sec-title">Trainings for Leaders</div><div class="sec-desc">Leadership and management training programmes for Supervisors, Managers and Directors</div></div>
+      </div>
+      <div class="clib-grid" id="clib-grid-training-leaders"></div>
+    </div>
     <div class="sec">
       <div class="clib-head">
         <div><div class="sec-label">Courses</div><div class="sec-title">Course Library</div></div>
@@ -3576,10 +3585,11 @@ a.clib-open{text-decoration:none}
           <div class="form-hint">Pinned updates stay at the top of the list and of the Home band.</div>
         </div>
       </div>
-      <!-- Every type, one question: the modal is shared, so this is asked
-           once and applies to trainings, materials, procedures and the rest
-           alike. -->
-      <div class="form-group">
+      <!-- Two answers to the same question, and only one of them is on
+           screen at a time. A training or a course climbs the ladder below
+           it; every other type keeps the three tiers, which is the question
+           the shared modal has always asked. -->
+      <div class="form-group" id="clib-audience-group">
         <label class="form-label" for="clib-audience">Who can see this</label>
         <select class="form-input" id="clib-audience">
           <option value="everyone">Everyone</option>
@@ -3587,6 +3597,11 @@ a.clib-open{text-decoration:none}
           <option value="leadership">Leadership</option>
         </select>
         <div class="form-hint">Agents means the agent, specialist and executive roles. Leadership means team leader and above, including senior executives. Managers see everything either way.</div>
+      </div>
+      <div class="form-group" id="clib-minlevel-group">
+        <label class="form-label" for="clib-min-level">Available from</label>
+        <select class="form-input" id="clib-min-level"></select>
+        <div class="form-hint">Cumulative: a rung means that role and everyone above it on the ladder. Everyone means no floor at all. Managers see everything either way.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Cover image <span class="form-hint" style="display:inline">(optional)</span></label>
@@ -6157,9 +6172,17 @@ let profileDetail = {};   // user_id -> { profile, certs, appraisals, documents 
 const PROFILE_LOADING='<div style="padding:60px;text-align:center;color:var(--muted)">Loading profile…</div>';
 
 async function loadProfileDetail(uid){
-  const r = await callDb('get_profile_detail', { user_id: uid });
+  // The tally is a second question the profile cannot answer: how many
+  // trainings this person's level reaches. Asked alongside, so the card is
+  // not waiting on two round trips in a row.
+  const [r, tally] = await Promise.all([
+    callDb('get_profile_detail', { user_id: uid }),
+    callDb('get_training_tally', { user_id: uid })
+  ]);
   if(!r || !r.profile) return null;
   profileDetail[uid] = r;
+  if(tally && tally.ok) r.training_tally =
+    { completed: Number(tally.completed) || 0, total: Number(tally.total) || 0 };
   // Keep the directory copy in step with what the profile just returned -
   // but only about the things the profile actually knows. mapProfileToUser
   // rebuilds perf from the role ladder with an actual of zero, and this
@@ -6234,6 +6257,10 @@ function buildProfileHTML(u,isMyProfile){
   // Completed trainings arrive with get_profile_detail under the same gate as
   // the certificate catalogue above, so there is nothing to check here.
   const dTrain=detail.training_completions||[];
+  // X of the trainings this person's level reaches, counted by the server.
+  // Absent - an older page, or a tally that did not come back - and the line
+  // reads the way it did before, rather than claiming a total of nothing.
+  const dTally=detail.training_tally||null;
   // The server decides what this viewer may see; these only shape the UI.
   const canManageCerts=!!detail.can_manage_certs;
   const showAppraisals=!!detail.can_see_appraisals;
@@ -6404,7 +6431,7 @@ function buildProfileHTML(u,isMyProfile){
     </div>
     <div class="profile-tab-content" id="tab-${u.id}-certificates">
       <div class="profile-section-card" style="margin-bottom:16px">
-        <div class="ps-title">Completed Trainings - ${dTrain.length} certificate${dTrain.length===1?'':'s'}</div>
+        <div class="ps-title">Completed Trainings - ${dTally?`${dTally.completed} / ${dTally.total} completed`:`${dTrain.length} certificate${dTrain.length===1?'':'s'}`}</div>
         <div class="doc-list">${trainHTML}</div>
         <div class="form-hint" style="margin-top:12px">Earned by passing a training's test. The certificate number is minted on the server when the test is passed.</div>
       </div>
@@ -10072,6 +10099,34 @@ const CONTENT_LABEL = { training:'training', course:'course', material:'material
 // client's half of the same answer, and the two must not drift apart.
 const LESSON_TYPES = ['training','course'];
 function isLessonType(type){ return LESSON_TYPES.indexOf(type) !== -1; }
+// A training or a course is reached by level rather than by tier: a person
+// sees it when their cargo stands at or above the rung it is available from.
+// This is the gateway's TRAINING_LADDER in the same order, and the two must
+// agree - the gateway is what actually decides, this only shapes the UI.
+const TRAINING_LADDER = ['agent','specialist','executive','senior_exec','leader','supervisor','manager','director','admin'];
+// What the author picks from. Everyone is the agent floor, written as a
+// cleared value, and admin is not offered - a rung nobody but an admin could
+// reach is a way to publish a training to nobody.
+const LADDER_CHOICES = [
+  { value:'',            label:'Everyone' },
+  { value:'specialist',  label:'From Specialist' },
+  { value:'executive',   label:'From Executive' },
+  { value:'senior_exec', label:'From Senior Exec' },
+  { value:'leader',      label:'From Team Leader' },
+  { value:'supervisor',  label:'From Supervisor' },
+  { value:'manager',     label:'From Manager' },
+  { value:'director',    label:'From Director' }
+];
+// Anything unrecognised, a cleared rung included, reads as the floor - the
+// same answer the gateway gives a row written before the column existed.
+function ladderPos(v){
+  const i = TRAINING_LADDER.indexOf(String(v == null ? '' : v).trim().toLowerCase());
+  return i < 0 ? 0 : i;
+}
+// Which shelf a training sits on: supervisor and above is the leaders' one.
+function isLeaderTraining(it){
+  return ladderPos(it && it.min_level) >= TRAINING_LADDER.indexOf('supervisor');
+}
 // The item behind an id, whichever of the two shelves it is sitting on.
 function lessonItem(id){
   for(const t of LESSON_TYPES){
@@ -10270,9 +10325,17 @@ function contentCardHtml(it){
     : '';
   // Said only when it is not everyone: a card with no audience chip is for
   // the whole company, which is the ordinary case and needs no label.
-  const audChip = (it.audience === 'agents' || it.audience === 'leadership')
-    ? `<span class="clib-aud">${it.audience === 'agents' ? 'Agents' : 'Leadership'}</span>`
-    : '';
+  // A training or a course says its rung instead - its tier is not what
+  // decides who sees it any more, so printing one would be a label that
+  // means nothing.
+  const audRung = isLessonType(it.type)
+    ? (LADDER_CHOICES.find(c => c.value && c.value === it.min_level) || null)
+    : null;
+  const audChip = isLessonType(it.type)
+    ? (audRung ? `<span class="clib-aud">${esc(audRung.label)}</span>` : '')
+    : ((it.audience === 'agents' || it.audience === 'leadership')
+      ? `<span class="clib-aud">${it.audience === 'agents' ? 'Agents' : 'Leadership'}</span>`
+      : '');
   // An update is a dated thing, so the card says when - and whether it is
   // pinned. Every other type keeps the chip row it has always had.
   const meta = isUpdate
@@ -10301,14 +10364,31 @@ function renderContentSection(type){
   const add = document.getElementById('clib-add-'+type);
   if(add) add.style.display = isUserAdmin() ? '' : 'none';
   const items = contentCache[type];
-  if(items === undefined){ host.innerHTML = `<div class="clib-empty">Loading...</div>`; return; }
+  // Trainings are drawn on two shelves from the one list: the leaders' one
+  // takes every rung from supervisor up, the main one keeps the rest. The
+  // list itself is already filtered by the gateway, so this only decides
+  // where something goes, never whether it is shown.
+  const leadHost = (type === 'training') ? document.getElementById('clib-grid-training-leaders') : null;
+  const leadSec = leadHost ? document.getElementById('clib-sec-training-leaders') : null;
+  if(items === undefined){
+    host.innerHTML = `<div class="clib-empty">Loading...</div>`;
+    if(leadHost) leadHost.innerHTML = '';
+    if(leadSec) leadSec.style.display = 'none';
+    return;
+  }
+  const lead = leadHost ? items.filter(isLeaderTraining) : [];
+  const main = leadHost ? items.filter(it => !isLeaderTraining(it)) : items;
+  if(leadHost){
+    if(leadSec) leadSec.style.display = lead.length ? '' : 'none';
+    leadHost.innerHTML = lead.map(contentCardHtml).join('');
+  }
   if(!items.length){
     host.innerHTML = `<div class="clib-empty">No ${CONTENT_PLURAL[type]} yet.` +
       (isUserAdmin() ? ` Use <strong>Add ${CONTENT_LABEL[type]}</strong> above to publish the first one.` : '') +
       `</div>`;
     return;
   }
-  host.innerHTML = items.map(contentCardHtml).join('');
+  host.innerHTML = main.map(contentCardHtml).join('');
 }
 
 // Draw at once from whatever is cached - so the Add button and any existing
@@ -11061,6 +11141,17 @@ function openContentModal(type, id){
   // everyone, which is what every item was before this existed.
   document.getElementById('clib-audience').value =
     (it && ['everyone','agents','leadership'].indexOf(it.audience) >= 0) ? it.audience : 'everyone';
+  // The ladder is the question for a training or a course, the three tiers
+  // for everything else, and only the one that applies is on screen.
+  const lad = document.getElementById('clib-min-level');
+  lad.innerHTML = LADDER_CHOICES.map(c =>
+    `<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('');
+  lad.value = (it && LADDER_CHOICES.some(c => c.value && c.value === it.min_level))
+    ? it.min_level : '';
+  const audGroup = document.getElementById('clib-audience-group');
+  const ladGroup = document.getElementById('clib-minlevel-group');
+  if(audGroup) audGroup.style.display = isLessonType(type) ? 'none' : '';
+  if(ladGroup) ladGroup.style.display = isLessonType(type) ? '' : 'none';
   // Say what is already attached, so "leave it alone" is an obvious option
   // rather than something the person has to guess at.
   document.getElementById('clib-cover-current').textContent =
@@ -11183,9 +11274,12 @@ async function saveContent(){
         : document.getElementById('clib-cat').value.trim(),
       // Always sent, so emptying the field clears the column on an edit.
       link_url: link,
-      // The gateway coerces anything it does not recognise to everyone, so
-      // a stale page cannot hide an item by accident.
-      audience: document.getElementById('clib-audience').value,
+      // Only the question this type was actually asked is sent. The gateway
+      // coerces anything it does not recognise to everyone, or to no floor
+      // at all, so a stale page cannot hide an item by accident.
+      ...(isLesson
+        ? { min_level: document.getElementById('clib-min-level').value }
+        : { audience: document.getElementById('clib-audience').value }),
       // A course, material or tool says so outright. The gateway pins these
       // columns regardless of what any client sends, so this is a statement
       // of intent rather than the thing being relied on.
