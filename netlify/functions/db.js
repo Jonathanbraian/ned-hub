@@ -1781,6 +1781,40 @@ function isDuplicateEmail(err){
   return !Number.isFinite(status) || status < 500;
 }
 
+// The first password nobody ever types, sees or is sent.
+//
+// It exists only so the auth row can be created at all: the person never
+// learns it, because the welcome email carries a recovery link they set
+// their own password through, and must_change_password is true regardless.
+// So the only job here is to clear whatever policy the Supabase project has
+// turned on - and since nobody has to read it out, it can be far stronger
+// than anything an admin would have typed.
+//
+// One character is taken from each class first, so the result ALWAYS has all
+// four whatever the shuffle does - drawing 24 at random leaves a real chance
+// of a class missing, and that is the failure this is meant to end.
+const PW_LOWER  = 'abcdefghijkmnopqrstuvwxyz';   // no l
+const PW_UPPER  = 'ABCDEFGHJKLMNPQRSTUVWXYZ';    // no I, no O
+const PW_DIGIT  = '23456789';                    // no 0, no 1
+const PW_SYMBOL = '!@#$%^&*()-_=+[]{}?';
+const PW_LENGTH = 24;
+function pickFrom(set){
+  // randomInt, not Math.random: this is a credential, however short-lived.
+  return set[require('crypto').randomInt(set.length)];
+}
+function generatePassword(){
+  const out = [pickFrom(PW_LOWER), pickFrom(PW_UPPER), pickFrom(PW_DIGIT), pickFrom(PW_SYMBOL)];
+  const all = PW_LOWER + PW_UPPER + PW_DIGIT + PW_SYMBOL;
+  while(out.length < PW_LENGTH) out.push(pickFrom(all));
+  // Fisher-Yates, so the four guaranteed characters do not always sit at the
+  // front in the same order.
+  for(let i = out.length - 1; i > 0; i--){
+    const j = require('crypto').randomInt(i + 1);
+    const t = out[i]; out[i] = out[j]; out[j] = t;
+  }
+  return out.join('');
+}
+
 async function assignmentTarget(me, userId){
   if(!userId) return { ok:false, status:400, error:'missing_user' };
   const { data: tgt } = await admin.from('profiles')
@@ -1802,6 +1836,7 @@ async function assignmentForManager(me, id){
 }
 exports.__assignments = { assignmentEffective, assignmentPassKey, ASSIGNMENT_TYPES };
 exports.__isDuplicateEmail = isDuplicateEmail;
+exports.__password = { generatePassword, PW_LENGTH, PW_LOWER, PW_UPPER, PW_DIGIT, PW_SYMBOL };
 
 // ── APPRAISALS ───────────────────────────────────────────────────
 // The template content itself lives in the client, assembled from
@@ -2233,7 +2268,10 @@ exports.handler = async (event) => {
         const email = (b.email||'').trim().toLowerCase();
         const first = (b.first||'').trim();
         const last  = (b.last||'').trim();
-        const password = b.password || '';
+        // Generated here and nowhere else. Anything the client sends under
+        // this name is ignored: the admin does not choose it, does not see it
+        // and is never shown it, and it does not come back in the response.
+        const password = generatePassword();
         const ROLES = ROLE_LEVELS;
         if(!email || !first || !last) return json(400,{error:'missing_fields'});
         // The cargo decides the base permission level; every existing check then
@@ -2245,7 +2283,10 @@ exports.handler = async (event) => {
         if(cargo.active === false) return json(400,{error:'role_inactive'});
         const role = cargo.base_level;
         if(!ROLES.includes(role)) return json(400,{error:'bad_role'});
-        if(password.length < 6) return json(400,{error:'weak_password'});
+        // The weak_password check that stood here asked whether the ADMIN had
+        // typed six characters. Nobody types one any more, so there is nothing
+        // left to refuse: generatePassword's own shape is the guarantee, and
+        // the suite holds it to that.
         if(!outranks(me.role, role)) return json(403,{error:'forbidden_role'});
         // Resolve the team before anything is created, so a bad team can never
         // leave an orphaned auth user behind. Its leader wins as reports_to.
