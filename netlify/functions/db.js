@@ -1763,7 +1763,7 @@ function assignmentOut(row, eff){
 async function assignmentTarget(me, userId){
   if(!userId) return { ok:false, status:400, error:'missing_user' };
   const { data: tgt } = await admin.from('profiles')
-    .select('id,first,last,nickname,role,role_id,status').eq('id', userId).single();
+    .select('id,first,last,nickname,email,role,role_id,status').eq('id', userId).single();
   if(!tgt) return { ok:false, status:404, error:'not_found' };
   if(!await canActOn(me, tgt)) return { ok:false, status:403, error:'out_of_scope' };
   return { ok:true, tgt };
@@ -1874,6 +1874,83 @@ function appraisalAssignmentSummary(rows, passes, today, start, end){
 exports.__appraisals = { APPRAISAL_TEMPLATES, APPRAISAL_CADENCES, APPRAISAL_CARGOS,
   appraisalRating, isResponseMap, appraisalRange, appraisalSales,
   appraisalAssignmentSummary };
+
+// ── TRANSACTIONAL EMAIL ──────────────────────────────────────────
+// Best-effort, always, and that is the whole contract. A send that cannot
+// happen - no key configured, Resend down, a bad address - must never change
+// what the action returns: the user was still created, the assignment was
+// still made. So nothing in here throws, every caller wraps its call anyway,
+// and no caller reads the result. Merging this before RESEND_API_KEY exists
+// is safe because the missing key is just one more skipped send.
+const MAIL_FROM = process.env.MAIL_FROM || 'no-reply@nedsales.app';
+const APP_URL   = process.env.APP_URL   || 'https://nedsales.app';
+const RESEND_URL = 'https://api.resend.com/emails';
+// The network behind a seam, exactly as compFetch does it above: a test
+// replaces this and reads back what would have gone to Resend.
+let __emailFetch = null;
+function emailFetch(url, init){
+  if(__emailFetch) return __emailFetch(url, init);
+  if(typeof fetch !== 'function') return Promise.reject(new Error('no fetch in this runtime'));
+  return fetch(url, init);
+}
+// One template for every message: header, a line or two, one button. Inline
+// styles because an email client throws away a stylesheet, and plain hyphens
+// because somebody reads this.
+function emailHtml(o){
+  const esc = v => String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const lines = (o.lines || []).map(t =>
+    '<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155">' + esc(t) + '</p>').join('');
+  const button = (o.button && o.url)
+    ? '<p style="margin:26px 0 8px"><a href="' + esc(o.url) + '" style="display:inline-block;' +
+      'background:#1d4ed8;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;' +
+      'padding:12px 24px;border-radius:8px">' + esc(o.button) + '</a></p>' +
+      '<p style="margin:0 0 14px;font-size:12px;line-height:1.6;color:#64748b">' +
+      'If the button does not work, copy this link into your browser:<br>' +
+      '<span style="color:#1d4ed8">' + esc(o.url) + '</span></p>'
+    : '';
+  const note = o.note
+    ? '<p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:#64748b">' + esc(o.note) + '</p>'
+    : '';
+  return '<!doctype html><html><body style="margin:0;padding:24px;background:#f1f5f9;' +
+    'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;' +
+    'background:#ffffff;border-radius:12px;border:1px solid #e2e8f0"><tr><td style="padding:28px 32px">' +
+    '<div style="font-size:13px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;' +
+    'color:#1d4ed8;margin-bottom:6px">NED College</div>' +
+    '<div style="font-size:20px;font-weight:700;color:#0f172a;margin-bottom:18px">Sales Hub</div>' +
+    '<h1 style="margin:0 0 14px;font-size:19px;line-height:1.35;color:#0f172a">' + esc(o.heading) + '</h1>' +
+    lines + button + note +
+    '</td></tr></table></body></html>';
+}
+// Never throws. Returns what happened so a test can read it; no caller does.
+async function sendEmail(msg){
+  const to = msg && msg.to;
+  // Read at call time rather than at module load, so a key added to the
+  // environment does not wait for a cold start, and a test can set it.
+  const key = process.env.RESEND_API_KEY;
+  if(!key){ console.log('email skipped, no RESEND_API_KEY:', msg && msg.subject); return { ok:false, skipped:'no_key' }; }
+  if(!to){ console.log('email skipped, no recipient:', msg && msg.subject); return { ok:false, skipped:'no_to' }; }
+  try {
+    const res = await emailFetch(RESEND_URL, {
+      method:'POST',
+      headers:{ Authorization:'Bearer ' + key, 'Content-Type':'application/json' },
+      body: JSON.stringify({ from: MAIL_FROM, to:[to], subject: msg.subject, html: msg.html })
+    });
+    if(res && res.ok === false){
+      let detail = '';
+      try { detail = await res.text(); } catch(_e){}
+      console.log('email failed:', res.status, String(detail).slice(0,200));
+      return { ok:false, status: res.status };
+    }
+    return { ok:true };
+  } catch(e){
+    console.log('email error:', e && e.message);
+    return { ok:false, error: e && e.message };
+  }
+}
+exports.__email = { emailHtml, sendEmail, MAIL_FROM, APP_URL, RESEND_URL };
+exports.__setEmailFetch = (fn) => { __emailFetch = (typeof fn === 'function') ? fn : null; };
 
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error:'method_not_allowed' });
@@ -2191,6 +2268,37 @@ exports.handler = async (event) => {
           if(pErr.code === '23505') return json(409,{error:'email_exists'});
           return json(500,{error:'profile_insert_failed', detail:pErr.message});
         }
+        // Welcome, best-effort. The account exists either way - this block
+        // cannot fail the create, which is why the whole of it, link and
+        // send together, sits inside one catch that does nothing.
+        // The temporary password the form set is deliberately NOT in here:
+        // a password that travels by email is a password anyone who reads
+        // the mailbox owns. The recovery link lets them set their own.
+        try {
+          let setUrl = APP_URL;
+          try {
+            const { data: link } = await admin.auth.admin.generateLink({
+              type:'recovery', email, options:{ redirectTo: APP_URL }
+            });
+            const action = link && (link.properties ? link.properties.action_link : link.action_link);
+            if(action) setUrl = action;
+          } catch(_e){}
+          await sendEmail({
+            to: email,
+            subject: 'Welcome to the NED Sales Hub',
+            html: emailHtml({
+              heading: 'Welcome, ' + first + '.',
+              lines: [
+                'An account has been created for you on the NED College Sales Hub.',
+                'You sign in with this email address: ' + email,
+                'Choose your own password using the button below, then sign in at ' + APP_URL + '.'
+              ],
+              button: 'Set your password',
+              url: setUrl,
+              note: 'If you were not expecting this, you can ignore this message and nothing will change.'
+            })
+          });
+        } catch(_e){}
         return json(200,{ ok:true, id:newId });
       }
       case 'reset_password': {
@@ -3487,7 +3595,8 @@ exports.handler = async (event) => {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         const uid = p.user_id;
         if(!uid) return json(400,{error:'missing_id'});
-        const { data: tgt } = await admin.from('profiles').select('id,role,reports_to').eq('id',uid).single();
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,first,last,email,role,reports_to').eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
         if(!(await gatesFor(me,tgt)).appraisal) return json(403,{error:'out_of_scope'});
         const period = (p.period||'').toString().trim();
@@ -3504,6 +3613,25 @@ exports.handler = async (event) => {
           created_by: me.id, created_at: new Date().toISOString()
         }).select('id').single();
         if(error) return json(500,{error:'save_failed', detail:error.message});
+        // Best-effort notice. Deliberately says nothing about what is IN it:
+        // gatesFor is `appraisal: !self && chain`, so the person this is
+        // about cannot read their own appraisal in the app, and an email
+        // that carried the rating would hand them what the gate withholds.
+        try {
+          await sendEmail({
+            to: tgt.email,
+            subject: 'A new appraisal has been recorded for you',
+            html: emailHtml({
+              heading: 'A new appraisal has been recorded.',
+              lines: [
+                (tgt.first || 'Hello') + ', an appraisal has been recorded for you for ' + period + '.',
+                'Your manager will go through it with you.'
+              ],
+              button: 'Open the Sales Hub',
+              url: APP_URL
+            })
+          });
+        } catch(_e){}
         return json(200,{ ok:true, id:data && data.id });
       }
       case 'get_appraisal_kpis': {
@@ -4919,6 +5047,25 @@ exports.handler = async (event) => {
           submitted_at: null, completed_at: null, updated_at: now })
           .select('id').single();
         if(error) return json(500,{error:'create_failed', detail:error.message});
+        // Told, best-effort, after the row exists. The assignment stands
+        // whether or not the message gets through.
+        try {
+          const word = (type === 'training') ? 'training' : type;
+          await sendEmail({
+            to: who.tgt.email,
+            subject: 'A new ' + word + ' has been assigned to you',
+            html: emailHtml({
+              heading: 'You have a new ' + word + '.',
+              lines: [
+                (who.tgt.first || 'Hello') + ', a new ' + word + ' has been assigned to you: ' + title + '.',
+                due_date ? ('It is due on ' + due_date + '.') : 'It has no due date.',
+                'Open the Sales Hub to see it in full.'
+              ],
+              button: 'Open the Sales Hub',
+              url: APP_URL
+            })
+          });
+        } catch(_e){}
         return json(200,{ ok:true, id: data && data.id });
       }
       case 'submit_assignment': {
