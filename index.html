@@ -201,6 +201,9 @@ html[data-theme="dark"] .status-select{background-image:url("data:image/svg+xml,
 .btn-primary-full{font-family:'Rubik',sans-serif;font-size:14px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:10px;padding:13px;cursor:pointer;transition:all .15s;width:100%;margin-top:8px}
 .btn-primary-full:hover{background:var(--blue-dark);transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,50,255,.25)}
 .login-error{font-size:12px;font-weight:500;color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:8px;padding:10px 14px;display:none;margin-bottom:10px}
+.login-note{font-size:12px;font-weight:500;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:8px;padding:10px 14px;display:none;margin-bottom:10px}
+.login-forgot{display:block;margin-top:8px;font-size:12px;font-weight:500;color:var(--blue);background:none;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:left}
+.login-forgot:hover{text-decoration:underline}
 .temp-pw-banner{background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:10px 14px;display:none;margin-bottom:10px;font-size:12.5px;color:var(--warning);line-height:1.5}
 .login-right{flex:1;background:linear-gradient(-25deg,#001580,#0032FF,#00A7B5);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
 .login-right::before{content:'';position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200&q=60') center/cover;mix-blend-mode:overlay;opacity:.25}
@@ -2146,6 +2149,7 @@ a.clib-open{text-decoration:none}
     <h1 class="login-heading">Welcome back</h1>
     <p class="login-sub">Sign in with your NED College credentials to access the Sales Hub.</p>
     <div class="login-error" id="login-error"></div>
+    <div class="login-note" id="login-note"></div>
     <div class="temp-pw-banner" id="temp-pw-banner">
       <strong>Temporary password detected.</strong> You will be asked to create a new password on your next login.
     </div>
@@ -2154,6 +2158,7 @@ a.clib-open{text-decoration:none}
       <div class="input-wrap"><input class="form-input" type="password" id="l-password" placeholder="Enter your password">
         <button class="input-eye" onclick="togglePwEl('l-password',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
       </div>
+      <button type="button" class="login-forgot" id="l-forgot" onclick="doForgotPassword()">Forgot your password?</button>
     </div>
     <button class="btn-primary-full" onclick="doLogin()">Sign In</button>
   </div>
@@ -5151,6 +5156,32 @@ async function doLogin(){
   await completeLoginReal(profile);
 }
 
+// Supabase sends this one, not the gateway: resetPasswordForEmail posts to
+// the auth server, which mails the link over its own SMTP. Nothing here
+// talks to Resend.
+async function doForgotPassword(){
+  const email = document.getElementById('l-email').value.trim().toLowerCase();
+  const err  = document.getElementById('login-error');
+  const note = document.getElementById('login-note');
+  note.style.display='none';
+  if(!email){ err.style.display='block'; err.textContent='Enter your email address first, then press Forgot your password.'; return; }
+  err.style.display='none';
+  const btn = document.getElementById('l-forgot');
+  if(btn) btn.disabled = true;
+  try {
+    // Back to this same page: the recovery link returns here with a session
+    // already open, and the change-password screen takes it from there.
+    await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+  } catch(_e){}
+  if(btn) btn.disabled = false;
+  // The same answer whether or not the address exists - anything else turns
+  // this box into a way of asking who has an account here.
+  note.style.display='block';
+  note.textContent='If that address has an account, a reset link is on its way. Check your inbox.';
+}
+
 function showChangePwScreen(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('change-pw-screen').style.display='flex';
@@ -5386,6 +5417,8 @@ async function doLogout(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('l-email').value='';
   document.getElementById('l-password').value='';
+  const lgNote = document.getElementById('login-note');
+  if(lgNote) lgNote.style.display='none';
   document.getElementById('login-error').style.display='none';
 }
 
