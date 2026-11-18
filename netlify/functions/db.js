@@ -3146,10 +3146,31 @@ exports.handler = async (event) => {
         return json(200,{ ok:true });
       }
       case 'get_teams': {
+        // Who leads which team and who is on it is the shape of the company,
+        // and every screen that draws a picker, a filter or an org chart needs
+        // it. What a team is TARGETED to sell is a management figure, and it
+        // used to ride along to every signed-in caller - the same leak closed
+        // on get_directory.
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         const { data, error } = await admin.from('teams')
           .select('id,name,leader_id,campus,team_target,active').order('name',{ascending:true});
         if(error) return json(500,{error:'teams_failed'});
-        return json(200,{ teams:data||[] });
+        // One question, asked once for the caller rather than per row. isMgr
+        // is the predicate the writes already use (create_team, update_team,
+        // delete_team), and it is exactly who the client shows the figure to:
+        // openTeamModal and toggleTeamActive are the only two readers, and
+        // both sit behind isUserAdmin(), which is rank >= manager.
+        const maySeeTarget = isMgr(me.role);
+        // Field by field, and the figure is ABSENT rather than null for a
+        // caller who may not have it - a null says "this team has no target",
+        // which is a different fact and a true one for some teams.
+        const teams = (data||[]).map(t => {
+          const out = { id:t.id, name:t.name, leader_id:t.leader_id,
+                        campus:t.campus, active:t.active };
+          if(maySeeTarget) out.team_target = t.team_target;
+          return out;
+        });
+        return json(200,{ teams });
       }
       case 'create_team': {
         const me = await callerProfile(caller);
@@ -3365,7 +3386,18 @@ exports.handler = async (event) => {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         const uid = p.user_id;
         if(!uid) return json(400,{error:'missing_id'});
-        const { data: tgt } = await admin.from('profiles').select('*').eq('id',uid).single();
+        // Named columns, not the row. Everything here is read by something:
+        // the first twenty-three are what mapProfileToUser() builds a person
+        // out of, and results_name is what receivedForProfile() matches
+        // against the forecast sheet below. select('*') also carried theme,
+        // last_login, must_change_password and the dead singular `language`,
+        // none of which any screen reads - and the third of those tells a
+        // viewer that a colleague is sitting on a temporary password.
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,first,last,nickname,email,role,campus,phone,instagram,linkedin,' +
+                  'nationality,job_title,languages,birth_day,birth_month,status,reports_to,' +
+                  'photo,bio,start_date,monthly_target,role_id,team_id,results_name')
+          .eq('id',uid).single();
         if(!tgt) return json(404,{error:'not_found'});
         const gates = await gatesFor(me, tgt);
         if(!gates.canView) return json(403,{error:'out_of_scope'});
@@ -3442,7 +3474,20 @@ exports.handler = async (event) => {
         // all, and which month the figure covers - a number without its
         // month is a number nobody can check.
         const fc = receivedForProfile(tgt, await forecastSnapshot());
-        return json(200,{ profile: tgt, certs, appraisals, documents, training_completions,
+        // Built, not passed through. results_name is deliberately not on it:
+        // it is returned on its own below, which is where the one screen that
+        // edits it already reads it from.
+        const profile = {
+          id: tgt.id, first: tgt.first, last: tgt.last, nickname: tgt.nickname,
+          email: tgt.email, role: tgt.role, campus: tgt.campus, phone: tgt.phone,
+          instagram: tgt.instagram, linkedin: tgt.linkedin, nationality: tgt.nationality,
+          job_title: tgt.job_title, languages: tgt.languages,
+          birth_day: tgt.birth_day, birth_month: tgt.birth_month,
+          status: tgt.status, reports_to: tgt.reports_to, photo: tgt.photo,
+          bio: tgt.bio, start_date: tgt.start_date, monthly_target: tgt.monthly_target,
+          role_id: tgt.role_id, team_id: tgt.team_id
+        };
+        return json(200,{ profile, certs, appraisals, documents, training_completions,
           results_name: fc.results_name,
           // Each campus apart, and the total that feeds the month. Apart
           // because an agent who sells to both is two rows in the sheet and
