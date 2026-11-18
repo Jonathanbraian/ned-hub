@@ -10030,7 +10030,11 @@ const CREATE_USER_ERRORS={
   role_not_found:'That cargo no longer exists',
   role_inactive:'That cargo is inactive',
   email_exists:'This email is already in use',
-  auth_create_failed:'This email is already in use',
+  // NOT "already in use". The gateway sends this when the sign-in account
+  // could not be created for any reason EXCEPT a duplicate address, which has
+  // its own code above. It carries the real reason in detail, and failMsg
+  // below puts it on the end.
+  auth_create_failed:'Could not create the sign-in account',
   weak_password:'Password must be at least 6 characters',
   forbidden:"You don't have permission for this",
   forbidden_role:"You don't have permission for this"
@@ -10063,7 +10067,9 @@ async function saveUser(){
       password:pw, reports_to: reportsTo || null
     }});
     if(!r||!r.ok){
-      showUserError(CREATE_USER_ERRORS[r&&r.error]||'Could not create user');
+      // failMsg adds whatever the server knew and this map did not, the same
+      // way fifteen other saves report a failure.
+      showUserError(failMsg(r, CREATE_USER_ERRORS, 'Could not create user'));
       return;
     }
     closeModal('modal-user');

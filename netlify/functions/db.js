@@ -1760,6 +1760,27 @@ function assignmentOut(row, eff){
 // The one scope question for every assignment write that lands on somebody
 // else. Self is NOT a shortcut here: a manager assigning themselves work is
 // the same question as assigning anybody else, and canActOn answers it.
+// Is this auth error "that address is already registered", and not one of
+// the other things that can stop a create? GoTrue has named the case
+// differently across versions, so all three are asked: the error code it
+// carries now, the 422 it answers with, and the sentence it has always used.
+// Anything else is deliberately NOT a duplicate - a create that failed for
+// another reason has to say so rather than blame the address.
+function isDuplicateEmail(err){
+  if(!err) return false;
+  if(String(err.code || '') === 'email_exists') return true;
+  const msg = String(err.message || '').toLowerCase();
+  const registered = msg.includes('already been registered')
+    || msg.includes('already registered')
+    || msg.includes('already exists')
+    || msg.includes('duplicate key');
+  if(!registered) return false;
+  // A 422 or 400 from the auth API with that sentence is the duplicate. A 500
+  // that happens to contain it is the database falling over, not an answer.
+  const status = Number(err.status);
+  return !Number.isFinite(status) || status < 500;
+}
+
 async function assignmentTarget(me, userId){
   if(!userId) return { ok:false, status:400, error:'missing_user' };
   const { data: tgt } = await admin.from('profiles')
@@ -1780,6 +1801,7 @@ async function assignmentForManager(me, id){
   return { ok:true, row, tgt: who.tgt };
 }
 exports.__assignments = { assignmentEffective, assignmentPassKey, ASSIGNMENT_TYPES };
+exports.__isDuplicateEmail = isDuplicateEmail;
 
 // ── APPRAISALS ───────────────────────────────────────────────────
 // The template content itself lives in the client, assembled from
@@ -2252,7 +2274,15 @@ exports.handler = async (event) => {
         const { data: created, error: cErr } = await admin.auth.admin.createUser({
           email, password, email_confirm:true
         });
-        if(cErr) return json(400,{error:'auth_create_failed', detail:cErr.message});
+        // Auth refuses a create for many reasons, and only one of them is
+        // "somebody already has this address". Reporting them all as a
+        // duplicate sent whoever was adding the person hunting for a row that
+        // does not exist, which is how a password the project's own policy
+        // rejected read as a taken email.
+        if(cErr){
+          if(isDuplicateEmail(cErr)) return json(409,{error:'email_exists'});
+          return json(400,{error:'auth_create_failed', detail:cErr.message});
+        }
         const newId = created.user.id;
         const campus = ['dublin','limerick','both'].includes((b.campus||'').toLowerCase())
           ? (b.campus).toLowerCase() : 'dublin';
