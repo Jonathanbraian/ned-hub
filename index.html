@@ -4018,6 +4018,18 @@ a.clib-open{text-decoration:none}
   </div>
 </div>
 
+<!-- Delete User - admin only, and the one action here that does not undo -->
+<div class="modal-backdrop" id="modal-del-user">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Delete User</div><button class="modal-close" onclick="closeModal('modal-del-user')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <p id="del-user-msg" style="font-size:14px;color:var(--muted);line-height:1.65"></p>
+      <div class="login-error" id="del-user-error" style="margin-top:12px;margin-bottom:0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="closeModal('modal-del-user')">Cancel</button><button class="btn-save danger-save" id="btn-del-user-confirm" onclick="confirmDeleteUser()">Delete permanently</button></div>
+  </div>
+</div>
+
 <!-- Update Performance -->
 <div class="modal-backdrop" id="modal-update-perf">
   <div class="modal">
@@ -8816,9 +8828,59 @@ function renderUsers(){
           ${canEditProfile(u.id)?`<button class="tact-btn edit" onclick="openEditProfile('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</button>`:''}
           <button class="tact-btn reset" onclick="openModal('reset','${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Reset PW</button>
           <button class="tact-btn deact" onclick="openModal('deact','${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>${u.status==='active'?'Deactivate':'Activate'}</button>
+          ${canDeleteUser(u.id)?`<button class="tact-btn deact" onclick="openDeleteUser('${esc(u.id)}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button>`:''}
         </div>
       </td>
     </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No users found.</td></tr>';
+}
+
+// Deleting a person is admin only, and never yourself. The gateway decides
+// both again - this only keeps the button off a screen where pressing it
+// could not work.
+function canDeleteUser(uid){
+  return rank(currentRole) >= ROLE_RANK.admin && String(uid) !== String(currentUserId);
+}
+let delUserId = null;
+const DELETE_USER_ERRORS = {
+  has_records:'This user has records and cannot be deleted - deactivate them instead',
+  cannot_delete_self:'You cannot delete your own account',
+  not_found:'That user is no longer there',
+  forbidden:"You don't have permission for this",
+  auth_delete_failed:'The profile was removed but the sign-in account was not - tell an administrator',
+  profile_delete_failed:'Could not delete this user'
+};
+function openDeleteUser(uid){
+  if(!canDeleteUser(uid)) return;
+  const u = dbUsers.find(x=>String(x.id)===String(uid));
+  if(!u) return;
+  delUserId = uid;
+  document.getElementById('del-user-msg').textContent =
+    'Permanently delete ' + ((u.first||'') + ' ' + (u.last||'')).trim() + ' (' + (u.email||'') +
+    ')? This removes their profile and their access to the Sales Hub. It cannot be undone.';
+  const e = document.getElementById('del-user-error');
+  e.textContent=''; e.style.display='none';
+  document.getElementById('btn-del-user-confirm').disabled = false;
+  openBackdrop('modal-del-user');
+}
+async function confirmDeleteUser(){
+  if(!delUserId) return;
+  const btn = document.getElementById('btn-del-user-confirm');
+  const err = document.getElementById('del-user-error');
+  btn.disabled = true;
+  const r = await callDb('delete_user', { user_id: delUserId });
+  if(!r || !r.ok){
+    // failMsg puts the server's own reason on the end, the way every other
+    // save on this page reports a failure.
+    err.textContent = failMsg(r, DELETE_USER_ERRORS, 'Could not delete this user');
+    err.style.display = 'block';
+    btn.disabled = false;
+    return;
+  }
+  closeModal('modal-del-user');
+  showToast('User deleted','success');
+  delUserId = null;
+  await refreshUserManagement();
+  await loadDirectory();
 }
 
 function updateStats(){
