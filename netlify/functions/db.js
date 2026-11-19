@@ -2386,6 +2386,51 @@ exports.handler = async (event) => {
         await admin.from('profiles').update({ must_change_password:true }).eq('id',targetId);
         return json(200,{ ok:true });
       }
+      case 'delete_user': {
+        // Admin only, and only admin: this is the one action that destroys a
+        // person rather than switching them off. isMgr is the gate on every
+        // other write here and is deliberately NOT used - a manager may
+        // deactivate somebody, which is reversible, and may not delete them,
+        // which is not.
+        const me = await callerProfile(caller);
+        if(!me || rank(me.role) < ROLE_RANK.admin) return json(403,{error:'forbidden'});
+        const targetId = p.user_id || p.id;
+        if(!targetId) return json(400,{error:'missing_id'});
+        // Before anything else. An admin who deletes themselves locks the
+        // company out of its own admin seat, and there is nobody above them
+        // to undo it.
+        if(String(targetId) === String(me.id)) return json(400,{error:'cannot_delete_self'});
+        const { data: tgt } = await admin.from('profiles')
+          .select('id,first,last,email').eq('id', targetId).single();
+        if(!tgt) return json(404,{error:'not_found'});
+        // ORDER MATTERS, and this is the whole of why.
+        //
+        // The profile goes FIRST because it is the half that can refuse: a
+        // foreign key from any of the twenty-odd tables that reference a
+        // person blocks the delete with 23503. Doing it first means that
+        // refusal costs nothing - the auth user is still there, the row is
+        // still there, and the caller gets told to deactivate instead.
+        //
+        // The other order would sign the person out of an account that still
+        // exists, and leave an admin with a profile nobody can log into.
+        const { error: pErr } = await admin.from('profiles').delete().eq('id', targetId);
+        if(pErr){
+          // 23503 is foreign_key_violation. Whether a given reference blocks
+          // or cascades is set on the table in Supabase and is not knowable
+          // from here, so this asks the database rather than guessing.
+          if(pErr.code === '23503')
+            return json(409,{error:'has_records', detail:pErr.message});
+          return json(500,{error:'profile_delete_failed', detail:pErr.message});
+        }
+        // The profile is gone by now. If this half fails the caller has to be
+        // told exactly that, because a retry will say not_found and look like
+        // it worked - and an auth user with no profile can still sign in, to
+        // a page that cannot find them.
+        const { error: aErr } = await admin.auth.admin.deleteUser(targetId);
+        if(aErr) return json(500,{ error:'auth_delete_failed', detail:aErr.message,
+          profile_deleted:true });
+        return json(200,{ ok:true, id: tgt.id });
+      }
       case 'set_user_status': {
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
