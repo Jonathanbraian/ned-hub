@@ -1365,6 +1365,110 @@ function competitionRanking(rows, monthIdx){
   });
   return list;
 }
+// ── WHO IS RANKED, AND WHO MAY SEE THEM ─────────────────────
+// Three rules, all enforced HERE and not in the page. Until now
+// get_competition handed every signed-in caller the whole company board and
+// the "Showing" selector filtered it in the browser - which is a decoration,
+// not a permission: the data was already on the machine.
+//
+// RULE 1. A sales league ranks the people who sell. The three individual
+// contributor tiers are in it; everybody from senior_exec upward is not,
+// whatever they personally sold. Base role and not cargo, because the cargo
+// is a label somebody types and the role is the enum every other gate reads.
+const RANKED_ROLES = new Set(['agent','specialist','executive']);
+function isRankedRole(role){ return RANKED_ROLES.has(String(role == null ? '' : role)); }
+
+// RULE 3. The general ranking - everybody, both campuses - belongs to the two
+// people whose job is the whole sales floor.
+//
+// The cargo names are DATA: roles rows are created by hand in Supabase and
+// this repository has never held a list of them. So they are matched on a
+// normalised key rather than a literal - case, padding and doubled spaces do
+// not get to decide who sees the company board - and the rank fallback below
+// carries the director side even if the names here are spelled differently
+// in a given environment. If a cargo is renamed, this is the one line to
+// change.
+//
+// rank >= director, deliberately NOT seesWholeCompany: that predicate
+// includes senior_exec, a tier that reads everything and commands nobody,
+// and CLAUDE.md says in as many words to gate authority on the rank table
+// instead. A senior executive who is also a Sales Director by cargo still
+// passes, by name.
+const GENERAL_RANKING_CARGOS = new Set(['general sales manager','sales director']);
+function cargoKey(name){
+  return String(name == null ? '' : name).trim().toLowerCase().replace(/\s+/g,' ');
+}
+function seesGeneralRanking(me, cargo){
+  if(!me) return false;
+  if(rank(me.role) >= ROLE_RANK.director) return true;
+  return GENERAL_RANKING_CARGOS.has(cargoKey(cargo));
+}
+// The caller's own cargo name, or '' when they have none. One row, by id.
+async function cargoNameOf(me){
+  if(!me || me.role_id == null) return '';
+  const { data } = await admin.from('roles').select('id,name').eq('id', me.role_id).single();
+  return (data && data.name) ? String(data.name) : '';
+}
+// RULE 2. Everybody else sees their own people and nobody else's: never up,
+// never sideways. A leader, supervisor or manager gets their branch of
+// reports_to, transitively - the same answer scopeIdsFor gives them. An
+// individual contributor gets their TEAM, because scopeIdsFor would hand
+// them a set containing only themselves, and a ranking of one person is not
+// a ranking. Somebody on no team is that set of one, honestly.
+async function rankingScopeIdsFor(me){
+  if(isLocalLeader(me.role)){
+    const ids = await subtreeIds(me);
+    ids.add(me.id);
+    return ids;
+  }
+  const ids = new Set([me.id]);
+  if(me.team_id != null){
+    const { data } = await admin.from('profiles').select('id').eq('team_id', me.team_id);
+    (data || []).forEach(u => ids.add(u.id));
+  }
+  return ids;
+}
+// The sheet is keyed by name and the org is keyed by id; forecastKey is the
+// one bridge between them. Built with exactly the rule forecastNameMap uses
+// further down this file - results_name first, the profile's own name,
+// first one wins on a clash, and a profile with no name at all is not in the
+// map - so a row cannot be one person for the name on the board and a
+// different one for the permission.
+//
+// Every profile, not just the active ones: a deactivated manager is still a
+// manager, and reading them as "unmatched" would put them back on the board.
+function forecastProfileMap(profiles){
+  const out = new Map();
+  (profiles || []).forEach(u => {
+    const shown = [u.first, u.last].filter(Boolean).join(' ').trim();
+    if(!shown) return;
+    const stored = u.results_name ? String(u.results_name).trim() : '';
+    const key = forecastKey(stored || shown);
+    if(key && !out.has(key)) out.set(key, u);
+  });
+  return out;
+}
+// Rule 1, over sheet rows. A row that matches no profile STAYS: we cannot
+// prove it is leadership, and a real seller nobody linked is still a real
+// seller.
+function rankedRowsOnly(rows, profileMap){
+  return (rows || []).filter(r => {
+    const hit = profileMap.get(forecastKey(r.agent));
+    return hit ? isRankedRole(hit.role) : true;
+  });
+}
+// Rules 2 and 3, over sheet rows. ids === null means the whole company.
+// An unmatched row is in nobody's branch and on nobody's team, so it appears
+// only in the company view: handing it to a scoped caller would be handing
+// them a seller they have no claim to see, which is the thing rule 2 exists
+// to stop.
+function rowsInScope(rows, profileMap, ids){
+  if(ids === null) return rows || [];
+  return (rows || []).filter(r => {
+    const hit = profileMap.get(forecastKey(r.agent));
+    return !!hit && ids.has(hit.id);
+  });
+}
 // ── A PROFILE'S RECEIVED, FROM THE RANKING ITSELF ────────────
 // The figure on a profile and the figure in the Competitions ranking are the
 // same number because they are the same call: the sheet is loaded once, the
@@ -1591,6 +1695,8 @@ exports.__competition = { cleanAgent, parseEuro, parseCell, parseCsv,
   competitionRanking, attachProfile, competitionUrl, COMP_MONTHS,
   forecastKey, receivedForProfile, forecastNameMap, rankingWithProfileNames,
   forecastForMonth, monthActualFor, safeKind, safeAmount, extrasOf };
+exports.__ranking = { RANKED_ROLES, isRankedRole, GENERAL_RANKING_CARGOS, cargoKey,
+  seesGeneralRanking, forecastProfileMap, rankedRowsOnly, rowsInScope };
 exports.__setCompetitionFetch = (fn) => { __compFetch = (typeof fn === 'function') ? fn : null; };
 exports.__clearCompetitionCache = () => { __compCache.clear(); };
 
@@ -5040,6 +5146,14 @@ exports.handler = async (event) => {
       // ── COMPETITIONS & RECOGNITION ───────────────────────────
       case 'get_competition': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // Rule 3, and before anything else is read: a caller who ASKS for the
+        // company board and may not have it is refused outright, rather than
+        // quietly handed their own team's and left to believe that is
+        // everybody. The refusal is the gate; hiding the control in the page
+        // is only so nobody is invited to press a button that cannot work.
+        const canGeneral = seesGeneralRanking(me, await cargoNameOf(me));
+        if(String(p.scope == null ? '' : p.scope) === 'company' && !canGeneral)
+          return json(403,{error:'forbidden_scope'});
         const src = await competitionSource();
         const data = await loadCompetition(src);
         // A sheet that cannot be read is a state, not a failure: the page
@@ -5060,8 +5174,9 @@ exports.handler = async (event) => {
         // for is the current one - so the home band gets this month and the
         // page's cards follow its picker instead of contradicting it.
         const { data: profs } = await admin.from('profiles')
-          .select('id,first,last,photo,status,results_name');
-        const live = (profs || []).filter(u => u.status !== 'inactive');
+          .select('id,first,last,photo,status,results_name,role,team_id');
+        const all = profs || [];
+        const live = all.filter(u => u.status !== 'inactive');
         const hi = competitionHighlights(data.rows, monthIdx);
         const highlights = {
           staff_of_month: {
@@ -5073,17 +5188,32 @@ exports.handler = async (event) => {
             dublin: attachProfile(hi.sales_star.dublin, live),
             limerick: attachProfile(hi.sales_star.limerick, live) },
         };
+        // Rule 1, then rules 2 and 3, over the SHEET ROWS - before the
+        // places are worked out, never after. A supervisor's board has to
+        // read 1, 2, 3; handing them company places of 4, 9 and 17 would be
+        // telling them exactly how many people are above them, which is the
+        // thing rule 2 is for.
+        const profileMap = forecastProfileMap(all);
+        const ranked = rankedRowsOnly(data.rows, profileMap);
+        const visible = rowsInScope(ranked, profileMap,
+          canGeneral ? null : await rankingScopeIdsFor(me));
         return json(200,{ ok:true,
           months: COMP_MONTHS.map((label,i) => ({ value:i+1, label })),
           selected_month: month, current_month: nowMonth,
+          // Whether the company board is this caller's to ask for. The page
+          // hides the control when it is false; the gate above is what
+          // actually refuses it.
+          can_see_general: canGeneral,
           // The sheet's names are what the ranking was computed from; what
           // goes out is what the company calls these people. Display only -
           // the remap happens after the ranking, so no value and no position
           // depends on it.
           ranking: rankingWithProfileNames(
-            competitionRanking(data.rows, monthIdx), forecastNameMap(live)),
+            competitionRanking(visible, monthIdx), forecastNameMap(live)),
           highlights,
-          teams: Array.from(new Set(data.rows.map(r => r.team).filter(Boolean))).sort(),
+          // From what they may see, not from the sheet: the team names alone
+          // would say which other teams exist.
+          teams: Array.from(new Set(visible.map(r => r.team).filter(Boolean))).sort(),
         });
       }
       // The names the ranking sheet carries, for the Received name selector.

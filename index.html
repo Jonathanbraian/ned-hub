@@ -9236,7 +9236,12 @@ async function saveAssignment(){
 // gateway; nothing here knows about Google. The page's job is to let one
 // set of figures be looked at three ways - whose month, whose campus, and
 // value against percentage - without asking the server again each time.
-let compData = null, compScope = 'company', compSort = 'value', compSource = null;
+// 'mine' is whatever the gateway decided this caller may see - their branch
+// of the org, or their team - and it is the default because most people may
+// not ask for the company board at all. 'company' is an option only when
+// can_see_general comes back true, and asking for it anyway is refused by
+// the gateway, not by this line.
+let compData = null, compScope = 'mine', compSort = 'value', compSource = null;
 // Declared WITH the rest of the state rather than below its first use: a
 // top-level let is hoisted into a dead zone, and reading one before its
 // declaration line has run is a ReferenceError no syntax check would catch.
@@ -9265,6 +9270,10 @@ function compMonthLabel(){
 
 async function loadCompetitionBoard(month){
   const payload = (month === undefined || month === null || month === '') ? {} : { month: Number(month) };
+  // Only ever sent when the person has the company board selected, and the
+  // option only exists when the gateway said it may. A caller who asks
+  // anyway gets a 403 - this is a request, not a claim.
+  if(compScope === 'company') payload.scope = 'company';
   const r = await callDb('get_competition', payload);
   // An error body is not a board. Keeping the old one would show last
   // month's winners under this month's heading.
@@ -9331,6 +9340,9 @@ function compTieName(r){ return String((r && (r.sheet_name || r.name)) || ''); }
 // ── The page ────────────────────────────────────────────────────
 function compRows(){
   const all = (compData && compData.ranking) || [];
+  // 'mine' and 'company' both mean "everything the gateway sent". They differ
+  // only in what the gateway sent, which is the point: the filtering that
+  // matters already happened on the server.
   let rows = all;
   if(compScope === 'dublin' || compScope === 'limerick'){
     rows = all.filter(r => r.campus === compScope);
@@ -9360,7 +9372,11 @@ function setCompetitionSort(kind){
 }
 function renderCompetitionBoard(){
   const scopeSel = document.getElementById('comp-scope');
-  if(scopeSel) compScope = scopeSel.value || 'company';
+  // Whatever the selector is ON, when it is on anything. Naming a default
+  // here too would be a second answer to a question renderCompetitionPage
+  // has already answered - it lands the selection on an option that exists,
+  // and which option that is depends on can_see_general.
+  if(scopeSel && scopeSel.value) compScope = scopeSel.value;
   const host = document.getElementById('comp-board-host');
   if(!host) return;
   const rows = compRows();
@@ -9379,7 +9395,8 @@ function renderCompetitionBoard(){
       // The place is the one the GATEWAY worked out, on value - a filtered
       // or re-sorted view renumbers its own rows rather than claiming
       // somebody moved up the company board by being looked at differently.
-      const place = (compScope === 'company' && compSort === 'value') ? r.rank : (i + 1);
+      const unfiltered = (compScope === 'company' || compScope === 'mine');
+      const place = (unfiltered && compSort === 'value') ? r.rank : (i + 1);
       const cls = place <= 3 ? (' top' + place) : '';
       const pctNum = (r.pct === null || r.pct === undefined) ? null : Number(r.pct);
       const barW = pctNum === null ? 0 : Math.max(0, Math.min(100, Math.round(pctNum * 100)));
@@ -9445,14 +9462,22 @@ function renderCompetitionPage(){
   const ssel = document.getElementById('comp-scope');
   if(ssel){
     const teams = compData.teams || [];
-    const opts = ['<option value="company">Everyone</option>',
+    // The company board is offered only to somebody the gateway said may
+    // have it. Everybody else is offered their own people under their own
+    // name, rather than an "Everyone" that would be a lie about what they
+    // are looking at.
+    const opts = [compData.can_see_general
+        ? '<option value="company">Everyone</option>'
+        : '<option value="mine">My team</option>',
       '<option value="dublin">Dublin</option>',
       '<option value="limerick">Limerick</option>']
       .concat(teams.map(t => '<option value="team:' + esc(t) + '">Team ' + esc(t) + '</option>'));
     ssel.innerHTML = opts.join('');
-    // A team that has vanished from the sheet cannot stay selected.
+    // A team that has vanished from the sheet cannot stay selected, and
+    // neither can a company view somebody has stopped being allowed.
+    const fallback = compData.can_see_general ? 'company' : 'mine';
     const keep = Array.from(ssel.options).some(o => o.value === compScope);
-    ssel.value = keep ? compScope : 'company';
+    ssel.value = keep ? compScope : fallback;
     compScope = ssel.value;
   }
   const hi = compData.highlights || {};
