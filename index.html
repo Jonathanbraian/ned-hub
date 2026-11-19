@@ -2179,12 +2179,12 @@ a.clib-open{text-decoration:none}
       <img class="brand-logo brand-light" src="assets/logo-light.png" alt="SalesHub" onerror="this.style.display='none'">
       <img class="brand-logo brand-dark"  src="assets/logo-dark.png"  alt="SalesHub" onerror="this.style.display='none'">
     </div>
-    <div class="change-pw-badge">
+    <div class="change-pw-badge" id="cpw-badge">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       Temporary Password - Action Required
     </div>
-    <h2 style="font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:6px">Create your password</h2>
-    <p style="font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:28px">Your account was created with a temporary password. Please create a new secure password to continue.</p>
+    <h2 id="cpw-heading" style="font-size:22px;font-weight:700;letter-spacing:-.3px;margin-bottom:6px">Create your password</h2>
+    <p id="cpw-sub" style="font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:28px">Your account was created with a temporary password. Please create a new secure password to continue.</p>
     <div class="form-group"><label class="form-label">New Password</label>
       <div class="input-wrap"><input class="form-input" type="password" id="new-pw" placeholder="Min. 8 characters" oninput="checkStrPw(this.value)">
         <button class="input-eye" onclick="togglePwEl('new-pw',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -2196,7 +2196,7 @@ a.clib-open{text-decoration:none}
       <input class="form-input" type="password" id="new-pw2" placeholder="Repeat your new password">
     </div>
     <div class="login-error" id="cpw-error" style="margin-top:0;margin-bottom:12px"></div>
-    <button class="btn-primary-full" onclick="doChangePw()">Set Password & Continue</button>
+    <button class="btn-primary-full" id="btn-change-pw" onclick="doChangePw()">Set Password &amp; Continue</button>
   </div>
 </div>
 
@@ -4233,7 +4233,25 @@ async function attachRealtimeAuth(){
     return !!session;
   } catch(e){ return false; }
 }
+// ── ARRIVING FROM A RECOVERY LINK ───────────────────────────────
+// Both the welcome email's set-password link and Forgot password land here
+// with a recovery token in the URL hash. supabase-js reads that hash on its
+// own and opens a session from it, which is where this used to go wrong:
+// somebody who already had a password was signed straight into the app and
+// never offered the form they had asked for. A new user only reached it by
+// accident, because must_change_password happened to route them there.
+//
+// Set before any boot runs, so bootRestore can see it. Read from the hash
+// AND from the auth event, because supabase-js strips the hash once it has
+// consumed it and the two can race.
+let arrivedFromRecovery = (function(){
+  try {
+    const h = String(window.location.hash || '');
+    return h.indexOf('type=recovery') !== -1;
+  } catch(e){ return false; }
+})();
 sb.auth.onAuthStateChange((_event, session) => {
+  if(_event === 'PASSWORD_RECOVERY') arrivedFromRecovery = true;
   try { sb.realtime.setAuth(session ? session.access_token : null); } catch(e){}
   // The refreshed token has to reach the presence channel too, and a re-auth
   // can drop the tracked meta, so re-assert it.
@@ -5191,12 +5209,24 @@ async function doForgotPassword(){
   note.textContent='If that address has an account, a reset link is on its way. Check your inbox.';
 }
 
-function showChangePwScreen(){
+function showChangePwScreen(fromRecovery){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('change-pw-screen').style.display='flex';
   document.getElementById('new-pw').value='';
   document.getElementById('new-pw2').value='';
   document.getElementById('cpw-error').style.display='none';
+  // Somebody following a link they asked for is not being told off about a
+  // temporary password, so the heading says what they came to do.
+  const h = document.getElementById('cpw-heading');
+  const sub = document.getElementById('cpw-sub');
+  const badge = document.getElementById('cpw-badge');
+  if(h) h.textContent = fromRecovery ? 'Set your password' : 'Create your password';
+  if(sub) sub.textContent = fromRecovery
+    ? 'Choose a password for your NED Sales Hub account. You will be signed in straight after.'
+    : 'Your account was created with a temporary password. Please create a new secure password to continue.';
+  // The badge is about a temporary password, which is not what brought
+  // somebody here from a link they asked for.
+  if(badge) badge.style.display = fromRecovery ? 'none' : '';
 }
 
 async function doChangePw(){
@@ -5209,6 +5239,12 @@ async function doChangePw(){
   err.style.display='none';
   const { error } = await sb.auth.updateUser({ password:pw });
   if(error){fail(error.message);return;}
+  // The token is spent, so it leaves the address bar now - not two round
+  // trips later, when the app finally renders and the router happens to tidy
+  // the hash away. Clearing it is also what makes a reload from here an
+  // ordinary signed-in boot instead of another trip to this form, because
+  // arrivedFromRecovery is re-read from the hash on every load.
+  try { if(window.location.hash) history.replaceState(null,'',window.location.pathname + window.location.search); } catch(e){}
   await callDb('set_password_changed');
   const r = await callDb('get_my_profile');
   const profile = r.profile || pendingLoginProfile;
@@ -14324,10 +14360,13 @@ async function bootRestore(){
       showLoginScreen('Account inactive');
       return;
     }
-    if(profile.must_change_password){
+    // A recovery landing is a request to set a password, whether or not the
+    // profile is flagged. Without this half, Forgot password signed an
+    // existing user in and never asked them for anything.
+    if(profile.must_change_password || arrivedFromRecovery){
       pendingLoginProfile = profile;
       hideBootSplash();
-      showChangePwScreen();
+      showChangePwScreen(arrivedFromRecovery);
       return;
     }
     await completeLoginReal(profile);

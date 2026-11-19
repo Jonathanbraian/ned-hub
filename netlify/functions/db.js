@@ -1940,7 +1940,16 @@ exports.__appraisals = { APPRAISAL_TEMPLATES, APPRAISAL_CADENCES, APPRAISAL_CARG
 // and no caller reads the result. Merging this before RESEND_API_KEY exists
 // is safe because the missing key is just one more skipped send.
 const MAIL_FROM = process.env.MAIL_FROM || 'no-reply@nedsales.app';
-const APP_URL   = process.env.APP_URL   || 'https://nedsales.app';
+// Trailing slashes are stripped so every link built from this reads
+// https://nedsales.app/assets/... and never https://nedsales.app//assets/...,
+// whatever somebody puts in the environment variable. An empty or blank
+// APP_URL falls back rather than producing links to nowhere.
+function appUrlOf(v){
+  const t = String(v == null ? '' : v).trim().replace(/\/+$/,'');
+  return t || 'https://nedsales.app';
+}
+const APP_URL   = appUrlOf(process.env.APP_URL);
+const LOGO_URL  = process.env.MAIL_LOGO_URL || (APP_URL + '/assets/logo-light.png');
 const RESEND_URL = 'https://api.resend.com/emails';
 // The network behind a seam, exactly as compFetch does it above: a test
 // replaces this and reads back what would have gone to Resend.
@@ -1950,35 +1959,71 @@ function emailFetch(url, init){
   if(typeof fetch !== 'function') return Promise.reject(new Error('no fetch in this runtime'));
   return fetch(url, init);
 }
-// One template for every message: header, a line or two, one button. Inline
-// styles because an email client throws away a stylesheet, and plain hyphens
-// because somebody reads this.
+// One template for every message the gateway sends: a header with the logo,
+// a line or two, one button, a footer.
+//
+// Tables and inline styles throughout, and no stylesheet: an email client
+// throws a <style> block away, and several still ignore div-based layout, so
+// the card is a table. The logo is referenced by URL rather than attached,
+// because an attachment shows up as a paperclip on a message that has no
+// other files. Most clients block remote images until the reader allows
+// them, so nothing the image carries is load bearing: the heading and the
+// footer say whose message this is, and the alt text carries the name.
 function emailHtml(o){
   const esc = v => String(v == null ? '' : v)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const lines = (o.lines || []).map(t =>
-    '<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155">' + esc(t) + '</p>').join('');
+    '<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#334155">' + esc(t) + '</p>').join('');
+  // #0032FF is the app's own --blue, so the button somebody clicks here is
+  // the colour of the button they land on. The link is repeated as text
+  // underneath because a button is an <a> an email client may well mangle,
+  // and because some readers will not click a button at all.
   const button = (o.button && o.url)
-    ? '<p style="margin:26px 0 8px"><a href="' + esc(o.url) + '" style="display:inline-block;' +
-      'background:#1d4ed8;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;' +
-      'padding:12px 24px;border-radius:8px">' + esc(o.button) + '</a></p>' +
-      '<p style="margin:0 0 14px;font-size:12px;line-height:1.6;color:#64748b">' +
-      'If the button does not work, copy this link into your browser:<br>' +
-      '<span style="color:#1d4ed8">' + esc(o.url) + '</span></p>'
+    ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 18px">' +
+      '<tr><td style="background:#0032FF;border-radius:10px">' +
+      '<a href="' + esc(o.url) + '" style="display:inline-block;padding:14px 30px;' +
+      'font-size:15px;font-weight:600;color:#ffffff;text-decoration:none">' +
+      esc(o.button) + '</a></td></tr></table>' +
+      '<p style="margin:0 0 4px;font-size:12px;line-height:1.6;color:#64748b">' +
+      'If the button does not work, copy this link into your browser:</p>' +
+      '<p style="margin:0 0 8px;font-size:12px;line-height:1.6;word-break:break-all">' +
+      '<a href="' + esc(o.url) + '" style="color:#0032FF;text-decoration:none">' +
+      esc(o.url) + '</a></p>'
     : '';
   const note = o.note
-    ? '<p style="margin:18px 0 0;font-size:12px;line-height:1.6;color:#64748b">' + esc(o.note) + '</p>'
+    ? '<p style="margin:20px 0 0;padding:12px 14px;background:#f8fafc;border-radius:8px;' +
+      'font-size:12px;line-height:1.6;color:#64748b">' + esc(o.note) + '</p>'
     : '';
-  return '<!doctype html><html><body style="margin:0;padding:24px;background:#f1f5f9;' +
-    'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">' +
-    '<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;' +
-    'background:#ffffff;border-radius:12px;border:1px solid #e2e8f0"><tr><td style="padding:28px 32px">' +
-    '<div style="font-size:13px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;' +
-    'color:#1d4ed8;margin-bottom:6px">NED College</div>' +
-    '<div style="font-size:20px;font-weight:700;color:#0f172a;margin-bottom:18px">Sales Hub</div>' +
-    '<h1 style="margin:0 0 14px;font-size:19px;line-height:1.35;color:#0f172a">' + esc(o.heading) + '</h1>' +
+  return '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + esc(o.heading) + '</title></head>' +
+    '<body style="margin:0;padding:28px 16px;background:#eef2f7;' +
+    'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" width="560" ' +
+    'style="width:100%;max-width:560px;background:#ffffff;border-radius:14px;' +
+    'border:1px solid #e2e8f0;overflow:hidden">' +
+    // Header: the logo. Blocked, it falls back to its alt text, and the
+    // heading below says the same thing anyway.
+    '<tr><td style="padding:24px 32px 20px;border-bottom:1px solid #eef2f7">' +
+    '<img src="' + esc(LOGO_URL) + '" alt="NED Sales Hub" width="132" ' +
+    'style="display:block;width:132px;max-width:60%;height:auto;border:0"></td></tr>' +
+    // Body.
+    '<tr><td style="padding:28px 32px 8px">' +
+    '<h1 style="margin:0 0 16px;font-size:20px;line-height:1.35;font-weight:700;' +
+    'color:#0f172a">' + esc(o.heading) + '</h1>' +
     lines + button + note +
-    '</td></tr></table></body></html>';
+    '</td></tr>' +
+    // Footer.
+    '<tr><td style="padding:20px 32px 26px">' +
+    '<p style="margin:0;padding-top:18px;border-top:1px solid #eef2f7;' +
+    'font-size:12px;line-height:1.6;color:#94a3b8">' +
+    'NED College Sales Hub &middot; ' +
+    '<a href="' + esc(APP_URL) + '" style="color:#64748b;text-decoration:none">' +
+    esc(APP_URL.replace(/^https?:\/\//,'')) + '</a><br>' +
+    'This message was sent automatically. Please do not reply to it.' +
+    '</p></td></tr>' +
+    '</table></td></tr></table></body></html>';
 }
 // Never throws. Returns what happened so a test can read it; no caller does.
 async function sendEmail(msg){
@@ -2006,7 +2051,7 @@ async function sendEmail(msg){
     return { ok:false, error: e && e.message };
   }
 }
-exports.__email = { emailHtml, sendEmail, MAIL_FROM, APP_URL, RESEND_URL };
+exports.__email = { emailHtml, sendEmail, MAIL_FROM, APP_URL, LOGO_URL, RESEND_URL, appUrlOf };
 exports.__setEmailFetch = (fn) => { __emailFetch = (typeof fn === 'function') ? fn : null; };
 
 exports.handler = async (event) => {
