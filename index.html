@@ -2166,6 +2166,71 @@ a.clib-open{text-decoration:none}
 .comms-emoji-btn{width:36px;height:36px;border-radius:8px;background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s;font-size:16px;flex-shrink:0}
 .comms-emoji-btn:hover{background:var(--bg);color:var(--text)}
 
+/* ── CHAT ATTACHMENTS ─────────────────────────────────────────── */
+.msg-attach{display:block;margin:-1px 0 6px;max-width:100%}
+.msg-file{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;
+  text-decoration:none;min-width:0}
+.msg-bubble.other .msg-file{background:var(--bg);border:1px solid var(--border)}
+.msg-bubble.own   .msg-file{background:rgba(255,255,255,.16)}
+.msg-file-ico{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;font-size:9.5px;font-weight:800;letter-spacing:.3px}
+.msg-bubble.other .msg-file-ico{background:var(--light-blue);color:var(--blue)}
+.msg-bubble.own   .msg-file-ico{background:rgba(255,255,255,.22);color:#fff}
+.msg-file-text{min-width:0;display:block}
+.msg-file-name{display:block;font-size:12.5px;font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.msg-bubble.other .msg-file-name{color:var(--text)}
+.msg-bubble.own   .msg-file-name{color:#fff}
+.msg-file-size{display:block;font-size:10.5px;opacity:.75;margin-top:1px}
+.msg-audio{display:block;width:260px;max-width:100%;height:38px}
+.msg-audio-len{font-size:10.5px;opacity:.75;margin-top:3px}
+
+/* The recording strip replaces the text box while a voice note is being
+   taken, so there is never a composer that is half one thing and half the
+   other. */
+.rec-bar{flex:1;display:flex;align-items:center;gap:10px;min-height:40px;padding:0 12px;
+  border:1.5px solid var(--danger);border-radius:10px;background:var(--bg);min-width:0}
+.rec-dot{width:9px;height:9px;border-radius:50%;background:var(--danger);flex-shrink:0;
+  animation:recpulse 1.1s ease-in-out infinite}
+@keyframes recpulse{0%,100%{opacity:1}50%{opacity:.25}}
+.rec-label{font-size:12.5px;font-weight:600;color:var(--danger);white-space:nowrap}
+.rec-time{font-size:12.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;
+  margin-left:auto}
+.rec-cancel{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;
+  font-weight:600;padding:4px 6px;border-radius:6px;flex-shrink:0}
+.rec-cancel:hover{background:var(--surface);color:var(--text)}
+.comms-emoji-btn.recording{border-color:var(--danger);color:var(--danger);background:var(--bg)}
+
+.comms-back-btn{display:none;align-items:center;justify-content:center;width:32px;height:32px;
+  border:1px solid var(--border);background:var(--surface);border-radius:9px;cursor:pointer;
+  color:var(--text);flex-shrink:0;padding:0}
+.comms-back-btn:hover{background:var(--bg)}
+
+/* ── FULL-PAGE CHAT ON A PHONE ────────────────────────────────
+   The overrides for this screen sit near the top of the sheet, about
+   1160 lines before .comms-layout and .comms-sidebar define themselves.
+   Equal specificity, so the later base rules won and the media query did
+   nothing: at 390px the grid stayed 260px 1fr and the conversation column
+   ended up about 40px wide, off the right edge. Re-stated here, after the
+   rules they are meant to beat, and with a descendant selector so source
+   order alone is not what holds them up. One column, and the list and the
+   open conversation take turns - which is the only thing a phone has room
+   for, and why the header grows a back control at this width. */
+@media(max-width:900px){
+  .comms-wrap{padding:16px}
+  /* The hero above and the bottom nav below both take a bite out of a
+     phone screen, and dvh is the one that does not count the browser's own
+     collapsing chrome twice. Sized so the composer lands above the nav
+     rather than below the fold. */
+  .comms-layout{grid-template-columns:1fr;height:calc(100dvh - 330px);min-height:320px}
+  .comms-layout .comms-sidebar{display:flex}
+  .comms-layout .comms-chat{display:none}
+  .comms-layout.has-thread .comms-sidebar{display:none}
+  .comms-layout.has-thread .comms-chat{display:flex}
+  .comms-back-btn{display:flex}
+  .comms-chat-header{padding:12px 14px;gap:10px}
+}
+
 /* Group chat badge */
 .group-badge{font-size:10px;font-weight:700;background:var(--light-blue);color:var(--blue);border:1px solid var(--border2);padding:2px 8px;border-radius:10px}
 /* Unread badge */
@@ -2714,6 +2779,7 @@ a.clib-open{text-decoration:none}
         <!-- CHAT AREA -->
         <div class="comms-chat">
           <div class="comms-chat-header" id="chat-header">
+            <button class="comms-back-btn" id="comms-back-btn" aria-label="Back to conversations" onclick="closePageThread()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
             <div class="chat-header-avatar ua-blue" id="chat-header-avatar"></div>
             <div>
               <div class="chat-header-name" id="chat-header-name">Select a conversation</div>
@@ -2729,6 +2795,15 @@ a.clib-open{text-decoration:none}
           </div>
           <div class="comms-input-bar" id="comms-input-bar">
             <button class="comms-emoji-btn" id="emoji-btn-page" aria-label="Insert emoji" onclick="toggleEmojiPicker('page', this)">😊</button>
+            <button class="comms-emoji-btn" id="attach-btn-page" aria-label="Attach a file" title="Attach a file" onclick="pickChatFile('page')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+            <button class="comms-emoji-btn" id="mic-btn-page" aria-label="Record a voice message" title="Record a voice message" onclick="toggleChatRecording('page')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+            <input type="file" id="attach-input-page" style="display:none" onchange="onChatFilePicked('page', this)">
+            <div class="rec-bar" id="rec-bar-page" style="display:none">
+              <span class="rec-dot"></span>
+              <span class="rec-label">Recording</span>
+              <span class="rec-time" id="rec-time-page">0:00</span>
+              <button class="rec-cancel" onclick="cancelChatRecording('page')">Cancel</button>
+            </div>
             <textarea class="comms-textarea" id="comms-msg-input" placeholder="Type a message..." rows="1" onkeydown="handleMsgKey(event)" oninput="autoResizeTextarea(this)"></textarea>
             <button class="comms-send-btn" onclick="sendMessage()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -3503,6 +3578,15 @@ a.clib-open{text-decoration:none}
       </div>
       <div class="chat-panel-input-row">
         <button class="comms-emoji-btn" id="emoji-btn-panel" aria-label="Insert emoji" onclick="toggleEmojiPicker('panel', this)">😊</button>
+        <button class="comms-emoji-btn" id="attach-btn-panel" aria-label="Attach a file" title="Attach a file" onclick="pickChatFile('panel')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+        <button class="comms-emoji-btn" id="mic-btn-panel" aria-label="Record a voice message" title="Record a voice message" onclick="toggleChatRecording('panel')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+        <input type="file" id="attach-input-panel" style="display:none" onchange="onChatFilePicked('panel', this)">
+        <div class="rec-bar" id="rec-bar-panel" style="display:none">
+          <span class="rec-dot"></span>
+          <span class="rec-label">Recording</span>
+          <span class="rec-time" id="rec-time-panel">0:00</span>
+          <button class="rec-cancel" onclick="cancelChatRecording('panel')">Cancel</button>
+        </div>
         <textarea class="comms-textarea" id="cp-msg-input" placeholder="Type a message..." rows="1" onkeydown="handleCpMsgKey(event)" oninput="autoResizeTextarea(this)"></textarea>
         <button class="comms-send-btn" onclick="sendCpMessage()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -11975,6 +12059,32 @@ const CHAT_SURFACES = {
   },
 };
 
+// ── CHAT ATTACHMENTS ─────────────────────────────────────────────
+// Mirrors of the gateway's limits. Checking here is a courtesy - it turns a
+// pointless upload into an immediate sentence - and the gateway checks again
+// because nothing from a browser is trusted.
+const CHAT_FILE_MAX_MB = 25;
+const CHAT_AUDIO_MAX_SECONDS = 300;
+const CHAT_EXT_DENY = ['exe','msi','bat','cmd','com','scr','pif','cpl','jar','sh','bash',
+  'zsh','csh','ksh','ps1','psm1','vbs','vbe','jse','wsf','wsh','hta','dll','so','dylib',
+  'app','dmg','pkg','deb','rpm','apk','php','phtml','py','pyc','pl','rb','lnk','reg',
+  'scf','gadget','js','mjs','cjs','jsp','asp','aspx','cgi'];
+function chatExtOf(name){
+  const m = String(name||'').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+function chatBytes(n){
+  const b = Number(n);
+  if(!Number.isFinite(b) || b <= 0) return '';
+  if(b < 1024) return b + ' B';
+  if(b < 1024*1024) return (b/1024).toFixed(0) + ' KB';
+  return (b/(1024*1024)).toFixed(b < 10*1024*1024 ? 1 : 0) + ' MB';
+}
+function chatClock(secs){
+  const t = Math.max(0, Math.round(Number(secs)||0));
+  return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0');
+}
+
 const CHAT_ERRORS = {
   forbidden:     'You are not a member of that conversation',
   not_found:     'That conversation no longer exists',
@@ -11983,6 +12093,16 @@ const CHAT_ERRORS = {
   no_self_dm:    'You cannot message yourself',
   missing_target:'Pick a conversation first',
   send_failed:   'Could not send that message',
+  bad_kind:      'That attachment type is not supported',
+  bad_size:      'That file looks empty',
+  bad_path:      'That upload is not one this app handed out',
+  too_large:     'That file is over ' + CHAT_FILE_MAX_MB + 'MB - please send a smaller one',
+  too_long:      'A voice message can be at most ' + Math.round(CHAT_AUDIO_MAX_SECONDS/60) + ' minutes',
+  bad_type:      'That kind of file cannot be sent in chat',
+  sign_failed:   'Storage would not accept the upload - try again',
+  upload_failed: 'The upload did not finish - check the connection and retry',
+  mic_denied:    'Microphone access was refused - allow it in your browser settings',
+  no_recorder:   'This browser cannot record audio',
 };
 
 function threadById(id){ return chatThreads.find(t => String(t.id) === String(id)) || null; }
@@ -12012,7 +12132,14 @@ function chatDayLabel(iso){
 function chatPreview(t){
   if(!t.last_message) return t.kind === 'group' ? 'No messages yet' : displayRole(users.find(u=>u.id===(t.other&&t.other.id))||{}) || 'No messages yet';
   const who = t.kind === 'group' ? dashFix(t.last_message.sender_first || '?') + ': ' : '';
-  return who + dashFix(t.last_message.body);
+  // A voice note or a bare file has no words, so the preview says what it
+  // is rather than going blank.
+  const k = t.last_message.attachment_kind;
+  const body = dashFix(t.last_message.body || '');
+  if(body) return who + body;
+  if(k === 'audio') return who + 'Voice message';
+  if(k === 'file')  return who + (dashFix(t.last_message.attachment_name || '') || 'File');
+  return who + body;
 }
 
 // ── loading ──────────────────────────────────────────────────────
@@ -12143,7 +12270,7 @@ function renderThread(sk){
       <div class="msg-avatar ${sender.photo?'':avColor(sender.id)}"${compact?' style="width:24px;height:24px;font-size:10px"':''}>${av}</div>
       <div class="msg-wrap">
         ${(!isOwn && isGroup && !compact) ? `<div class="msg-name">${esc(dashFix(sender.first))}</div>` : ''}
-        <div class="msg-bubble ${isOwn?'own':'other'}"${compact?' style="font-size:12.5px;padding:7px 10px"':''}>${esc(m.body)}<div class="msg-time ${isOwn?'':'other'}"${compact?' style="font-size:10px"':''}>${esc(chatTime(m.created_at))}</div></div>
+        <div class="msg-bubble ${isOwn?'own':'other'}"${compact?' style="font-size:12.5px;padding:7px 10px"':''}>${chatAttachHtml(m.attachment)}${esc(m.body)}<div class="msg-time ${isOwn?'':'other'}"${compact?' style="font-size:10px"':''}>${esc(chatTime(m.created_at))}</div></div>
       </div>
     </div>`;
   }).join('');
@@ -12203,6 +12330,183 @@ function renderThreadHeader(sk){
 }
 
 // ── opening a thread ─────────────────────────────────────────────
+// The signed URL is the only thing a client is given, and it is still an
+// href, so it is held to the same http(s) rule as any other stored link.
+function chatAttachHtml(a){
+  if(!a || !a.url || !/^https?:\/\//i.test(String(a.url))) return '';
+  if(a.kind === 'audio'){
+    return '<div class="msg-attach">' +
+      '<audio class="msg-audio" controls preload="none" src="' + esc(a.url) + '"></audio>' +
+      (a.duration ? '<div class="msg-audio-len">' + esc(chatClock(a.duration)) + '</div>' : '') +
+      '</div>';
+  }
+  const ext = (chatExtOf(a.name) || 'file').toUpperCase().slice(0,4);
+  const size = chatBytes(a.size);
+  return '<div class="msg-attach">' +
+    '<a class="msg-file" href="' + esc(a.url) + '" target="_blank" rel="noopener noreferrer" ' +
+      'download="' + esc(a.name || 'file') + '">' +
+      '<span class="msg-file-ico">' + esc(ext) + '</span>' +
+      '<span class="msg-file-text">' +
+        '<span class="msg-file-name">' + esc(a.name || 'file') + '</span>' +
+        (size ? '<span class="msg-file-size">' + esc(size) + '</span>' : '') +
+      '</span>' +
+    '</a></div>';
+}
+
+// ── sending an attachment ────────────────────────────────────────
+// One path for both kinds: ask for a signed URL, PUT the bytes straight to
+// Storage, then post the message. The bytes never pass through the gateway.
+async function sendChatAttachment(sk, blob, meta){
+  const sur = CHAT_SURFACES[sk];
+  if(!sur || (!sur.open && !sur.draft)){ showToast(CHAT_ERRORS.missing_target, 'error'); return; }
+  const target = sur.draft ? { to_user_id: sur.draft.id } : { thread_id: sur.open };
+  setChatComposerBusy(sk, true);
+  try {
+    const want = Object.assign({ kind: meta.kind, filename: meta.name, mime: meta.mime,
+      size: meta.size, duration: meta.duration }, target);
+    const up = await callDb('chat_attachment_upload_url', want);
+    if(!up || !up.ok) throw dbError(up, 'sign_failed');
+    const { error } = await sb.storage.from(up.bucket)
+      .uploadToSignedUrl(up.path, up.token, blob, { contentType: meta.mime || 'application/octet-stream' });
+    if(error) throw new Error('upload_failed');
+    const r = await callDb('send_chat_attachment', Object.assign({
+      attachment_path: up.path, attachment_kind: meta.kind, attachment_name: meta.name,
+      attachment_mime: meta.mime, attachment_size: meta.size,
+      attachment_duration: meta.duration }, target));
+    if(!r || !r.ok) throw dbError(r, 'send_failed');
+    if(sur.draft){ sur.draft = null; await loadThreads(); await openThread(sk, r.thread_id); }
+    // Unlike text, this one is echoed at once: the realtime row carries a
+    // storage path and no signed URL, so waiting for it would show a chip
+    // that cannot be opened until the next load.
+    applyIncomingMessage(r.message, r.thread_id);
+  } catch(e){
+    showToast(CHAT_ERRORS[e && e.message] || 'Could not send that attachment', 'error');
+  } finally {
+    setChatComposerBusy(sk, false);
+  }
+}
+
+function setChatComposerBusy(sk, busy){
+  ['attach-btn-','mic-btn-'].forEach(pre => {
+    const b = document.getElementById(pre + sk);
+    if(b){ b.disabled = !!busy; b.style.opacity = busy ? '.5' : ''; }
+  });
+}
+
+// ── a file ───────────────────────────────────────────────────────
+function pickChatFile(sk){
+  const el = document.getElementById('attach-input-' + sk);
+  if(el){ el.value = ''; el.click(); }
+}
+function onChatFilePicked(sk, input){
+  const f = input && input.files && input.files[0];
+  input.value = '';
+  if(!f) return;
+  if(f.size > CHAT_FILE_MAX_MB*1024*1024){ showToast(CHAT_ERRORS.too_large, 'error'); return; }
+  if(!f.size){ showToast(CHAT_ERRORS.bad_size, 'error'); return; }
+  if(CHAT_EXT_DENY.includes(chatExtOf(f.name))){ showToast(CHAT_ERRORS.bad_type, 'error'); return; }
+  sendChatAttachment(sk, f, { kind:'file', name: f.name || 'file',
+    mime: f.type || 'application/octet-stream', size: f.size, duration: null });
+}
+
+// ── a voice message ──────────────────────────────────────────────
+// One recorder at a time, whichever composer started it: two microphones
+// open at once is a permission prompt nobody asked for and two half
+// recordings.
+let chatRec = null;
+function chatRecActive(sk){ return !!(chatRec && chatRec.sk === sk); }
+function paintChatRec(sk, on){
+  const bar = document.getElementById('rec-bar-' + sk);
+  const ta  = document.getElementById(CHAT_SURFACES[sk].input);
+  const mic = document.getElementById('mic-btn-' + sk);
+  if(bar) bar.style.display = on ? 'flex' : 'none';
+  if(ta)  ta.style.display  = on ? 'none' : '';
+  if(mic) mic.classList.toggle('recording', !!on);
+  const t = document.getElementById('rec-time-' + sk);
+  if(t && !on) t.textContent = '0:00';
+}
+function stopChatRecTimer(){
+  if(chatRec && chatRec.timer){ clearInterval(chatRec.timer); chatRec.timer = null; }
+}
+function teardownChatRec(){
+  if(!chatRec) return;
+  stopChatRecTimer();
+  try { (chatRec.stream.getTracks()||[]).forEach(t => t.stop()); } catch(e){}
+  paintChatRec(chatRec.sk, false);
+  chatRec = null;
+}
+async function toggleChatRecording(sk){
+  if(chatRec && chatRec.sk !== sk){ showToast('A recording is already running in the other chat', 'error'); return; }
+  if(chatRecActive(sk)){ chatRec.keep = true; try { chatRec.mr.stop(); } catch(e){ teardownChatRec(); } return; }
+  const sur = CHAT_SURFACES[sk];
+  if(!sur || (!sur.open && !sur.draft)){ showToast(CHAT_ERRORS.missing_target, 'error'); return; }
+  if(typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    showToast(CHAT_ERRORS.no_recorder, 'error'); return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio:true }); }
+  catch(e){ showToast(CHAT_ERRORS.mic_denied, 'error'); return; }
+  let mr;
+  // No mimeType is asked for: the browser default is the one it can
+  // certainly produce, which is webm/opus everywhere this matters.
+  try { mr = new MediaRecorder(stream); }
+  catch(e){ try { stream.getTracks().forEach(t=>t.stop()); } catch(_e){}
+            showToast(CHAT_ERRORS.no_recorder, 'error'); return; }
+  const chunks = [];
+  chatRec = { sk, mr, stream, chunks, started: Date.now(), keep:false, timer:null };
+  mr.ondataavailable = ev => { if(ev.data && ev.data.size) chunks.push(ev.data); };
+  mr.onstop = () => {
+    const rec = chatRec;
+    if(!rec) return;
+    const secs = Math.min(CHAT_AUDIO_MAX_SECONDS, (Date.now() - rec.started) / 1000);
+    const keep = rec.keep;
+    const type = (rec.mr && rec.mr.mimeType) || 'audio/webm';
+    teardownChatRec();
+    if(!keep || !chunks.length) return;
+    const blob = new Blob(chunks, { type });
+    if(!blob.size) return;
+    if(blob.size > CHAT_FILE_MAX_MB*1024*1024){ showToast(CHAT_ERRORS.too_large, 'error'); return; }
+    const ext = type.indexOf('ogg') !== -1 ? 'ogg' : (type.indexOf('mp4') !== -1 ? 'm4a' : 'webm');
+    sendChatAttachment(sk, blob, { kind:'audio', name: 'voice-message.' + ext,
+      mime: type.split(';')[0], size: blob.size, duration: Math.round(secs*10)/10 });
+  };
+  paintChatRec(sk, true);
+  const tick = () => {
+    if(!chatRec) return;
+    const secs = (Date.now() - chatRec.started) / 1000;
+    const t = document.getElementById('rec-time-' + sk);
+    if(t) t.textContent = chatClock(secs);
+    // Five minutes is the cap, so the recorder stops itself and sends what
+    // it has rather than refusing the whole thing afterwards.
+    if(secs >= CHAT_AUDIO_MAX_SECONDS){ chatRec.keep = true; try { chatRec.mr.stop(); } catch(e){ teardownChatRec(); } }
+  };
+  chatRec.timer = setInterval(tick, 250);
+  try { mr.start(); } catch(e){ teardownChatRec(); showToast(CHAT_ERRORS.no_recorder, 'error'); }
+}
+function cancelChatRecording(sk){
+  if(!chatRecActive(sk)) return;
+  chatRec.keep = false;
+  try { chatRec.mr.stop(); } catch(e){ teardownChatRec(); }
+}
+
+// ── the full-page chat on a phone ────────────────────────────────
+// One column at that width, so the list and the open conversation take
+// turns. The class is what the media block keys on; on a desktop it is
+// set and read by nothing.
+function paintPageChatMobile(){
+  const l = document.querySelector('.comms-layout');
+  if(!l) return;
+  const sur = CHAT_SURFACES.page;
+  l.classList.toggle('has-thread', !!(sur && (sur.open || sur.draft)));
+}
+function closePageThread(){
+  const sur = CHAT_SURFACES.page;
+  if(!sur) return;
+  sur.open = null; sur.draft = null;
+  renderThreadHeader('page'); renderThread('page'); renderThreadList('page');
+  paintPageChatMobile();
+}
+
 async function openThread(sk, threadId){
   const sur = CHAT_SURFACES[sk];
   if(!sur) return;
@@ -12211,6 +12515,7 @@ async function openThread(sk, threadId){
   renderThreadHeader(sk);
   renderThread(sk);
   renderThreadList(sk);
+  paintPageChatMobile();
   const loaded = await loadMessages(threadId);
   if(loaded === null){ showToast(CHAT_ERRORS.forbidden, 'error'); return; }
   renderThread(sk);
@@ -12375,13 +12680,16 @@ function applyIncomingMessage(row, threadId){
   if(!tid) return;
   const list = chatMessages[tid] || (chatMessages[tid] = []);
   if(list.some(m => String(m.id) === String(row.id))) return;   // dedupe by id
-  list.push({ id:row.id, sender_id:row.sender_id, body:row.body, created_at:row.created_at });
+  list.push({ id:row.id, sender_id:row.sender_id, body:row.body, created_at:row.created_at,
+    attachment: row.attachment || null });
   list.sort((a,b) => Number(a.id) - Number(b.id));
 
   const t = threadById(tid);
   if(t){
     t.last_message = { body:row.body, created_at:row.created_at, sender_id:row.sender_id,
-      sender_first: (users.find(u=>u.id===row.sender_id)||{}).first || '?' };
+      sender_first: (users.find(u=>u.id===row.sender_id)||{}).first || '?',
+      attachment_kind: (row.attachment && row.attachment.kind) || row.attachment_kind || null,
+      attachment_name: (row.attachment && row.attachment.name) || row.attachment_name || null };
   }
   let openSomewhere = false;
   Object.keys(CHAT_SURFACES).forEach(sk => {
@@ -12405,6 +12713,21 @@ async function onRealtimeMessage(payload){
   if(!row || !row.id) return;
   if(!threadById(row.thread_id)){
     await loadThreads();            // a brand-new DM or team thread
+  }
+  // A row off the socket comes straight from Postgres, so it carries the
+  // storage path and no signed URL. Only the gateway can sign, so an
+  // attachment is re-read through it rather than rendered unopenable.
+  if(row.attachment_path && !row.attachment){
+    if(chatMessages[row.thread_id] && !chatMessages[row.thread_id].some(m => String(m.id) === String(row.id))){
+      await loadMessages(row.thread_id);
+      Object.keys(CHAT_SURFACES).forEach(sk => {
+        if(String(CHAT_SURFACES[sk].open) === String(row.thread_id)) renderThread(sk);
+      });
+    }
+    await loadThreads();
+    renderAllThreadLists();
+    updateChatBadge();
+    return;
   }
   applyIncomingMessage(row, row.thread_id);
 }
