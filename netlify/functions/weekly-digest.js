@@ -29,7 +29,6 @@ const { ROLE_RANK, rank, isLocalLeader } = api.__rank;
 const { campusTargetFor, beforeStart, agentTargetFor } = api.__targets;
 const { subtreeIds } = api.__scope;
 const { dayOfWeekStart } = api.__dates;
-const { seesGeneralRanking, cargoKey } = api.__ranking;
 
 // Its own client, on the same service-role key db.js uses. The browser never
 // reaches this function at all: it has no redirect in netlify.toml and the
@@ -227,8 +226,10 @@ async function buildPayloads(weekKey){
   const coWeek = weekDub + weekLim;
   const coMtd  = mtdDub + mtdLim;
   const coTarget = campusRows.reduce((a,c) => a + (c.target || 0), 0);
-  const chiefs = people.filter(u => u.email && seesGeneralRanking(u,
-    (u.role_id != null && roleById[String(u.role_id)]) ? roleById[String(u.role_id)].name : ''));
+  // Rank, and only rank: a director or an admin. A cargo named General
+  // Sales Manager is not a rung on this ladder, whatever the ranking board
+  // lets that cargo look at.
+  const chiefs = people.filter(u => u.email && rank(u.role) >= ROLE_RANK.director);
   chiefs.forEach(u => {
     items.push({ kind:'leadership', recipient_id: u.id, to: u.email,
       subject: 'NED weekly results - ' + fridayOf(weekKey),
