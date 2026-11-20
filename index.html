@@ -783,7 +783,7 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 
 /* ════════ CHAT PANEL ════════ */
 .chat-panel{
-  position:fixed;top:0;right:-440px;bottom:0;width:440px;
+  position:fixed;top:0;right:calc(0px - min(620px, 92vw));bottom:0;width:min(620px, 92vw);
   background:var(--surface);border-left:1px solid var(--border);
   z-index:300;display:flex;flex-direction:column;
   transition:right .28s cubic-bezier(.4,0,.2,1);
@@ -821,6 +821,28 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 @media(max-width:560px){
   .xnews-item{padding:12px 13px;gap:10px}
   .xnews-title{font-size:13.5px}
+}
+
+/* ════════ EMOJI PICKER ════════ */
+.emoji-pop{position:fixed;z-index:400;width:306px;max-width:calc(100vw - 16px);
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 12px 40px rgba(15,27,61,.18);display:none;flex-direction:column;
+  overflow:hidden}
+.emoji-pop.open{display:flex}
+.emoji-pop-tabs{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--border);
+  flex-shrink:0}
+.emoji-tab{flex:1;height:30px;border:none;background:transparent;border-radius:7px;
+  cursor:pointer;font-size:15px;line-height:1;padding:0;color:inherit}
+.emoji-tab:hover{background:var(--bg)}
+.emoji-tab.on{background:var(--light-blue)}
+.emoji-pop-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding:8px;
+  overflow-y:auto;max-height:232px}
+.emoji-cell{height:32px;border:none;background:transparent;border-radius:7px;
+  cursor:pointer;font-size:19px;line-height:1;padding:0;color:inherit}
+.emoji-cell:hover{background:var(--bg)}
+@media(max-width:560px){
+  .emoji-pop{width:calc(100vw - 16px)}
+  .emoji-pop-grid{grid-template-columns:repeat(7,1fr);max-height:200px}
 }
 
 /* ════════ CALENDAR ════════ */
@@ -2119,7 +2141,14 @@ a.clib-open{text-decoration:none}
 .msg-row.own{flex-direction:row-reverse}
 .msg-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
 .msg-avatar img{width:100%;height:100%;object-fit:cover}
-.msg-bubble{max-width:70%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;position:relative}
+/* The percentage has to resolve against the ROW. Left on the bubble it
+   resolved against this wrapper, a shrink-to-fit flex item, and on an own
+   row - row-reverse - the bubble then sat at the wrapper's left edge and a
+   gap opened between it and the avatar. Nothing else here earns its place:
+   overflow-wrap on the bubble already lets the wrapper shrink, and the
+   bubble fills the wrapper without a flex context to do it in. */
+.msg-wrap{max-width:78%}
+.msg-bubble{max-width:100%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;position:relative;overflow-wrap:anywhere}
 .msg-bubble.other{background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:3px;color:var(--text)}
 .msg-bubble.own{background:var(--blue);color:#fff;border-bottom-right-radius:3px}
 .msg-name{font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:3px}
@@ -2699,7 +2728,7 @@ a.clib-open{text-decoration:none}
             </div>
           </div>
           <div class="comms-input-bar" id="comms-input-bar">
-            <button class="comms-emoji-btn" onclick="addEmoji()">😊</button>
+            <button class="comms-emoji-btn" id="emoji-btn-page" aria-label="Insert emoji" onclick="toggleEmojiPicker('page', this)">😊</button>
             <textarea class="comms-textarea" id="comms-msg-input" placeholder="Type a message..." rows="1" onkeydown="handleMsgKey(event)" oninput="autoResizeTextarea(this)"></textarea>
             <button class="comms-send-btn" onclick="sendMessage()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -3473,6 +3502,7 @@ a.clib-open{text-decoration:none}
         <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">Select a chat to start</div>
       </div>
       <div class="chat-panel-input-row">
+        <button class="comms-emoji-btn" id="emoji-btn-panel" aria-label="Insert emoji" onclick="toggleEmojiPicker('panel', this)">😊</button>
         <textarea class="comms-textarea" id="cp-msg-input" placeholder="Type a message..." rows="1" onkeydown="handleCpMsgKey(event)" oninput="autoResizeTextarea(this)"></textarea>
         <button class="comms-send-btn" onclick="sendCpMessage()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -3482,6 +3512,12 @@ a.clib-open{text-decoration:none}
   </div>
 </div>
 <div id="chat-panel-backdrop" class="chat-panel-backdrop" onclick="toggleChatPanel()"></div>
+
+<!-- EMOJI PICKER - shared by the full-page composer and the side panel -->
+<div id="emoji-pop" class="emoji-pop" role="dialog" aria-label="Emoji picker">
+  <div class="emoji-pop-tabs" id="emoji-pop-tabs"></div>
+  <div class="emoji-pop-grid" id="emoji-pop-grid"></div>
+</div>
 
 <!-- CALENDAR PAGE (inside #app) -->
 
@@ -12105,7 +12141,7 @@ function renderThread(sk){
     // Bodies are other people's input: every one of them goes through esc().
     return `${sep}<div class="msg-row ${isOwn?'own':''}">
       <div class="msg-avatar ${sender.photo?'':avColor(sender.id)}"${compact?' style="width:24px;height:24px;font-size:10px"':''}>${av}</div>
-      <div>
+      <div class="msg-wrap">
         ${(!isOwn && isGroup && !compact) ? `<div class="msg-name">${esc(dashFix(sender.first))}</div>` : ''}
         <div class="msg-bubble ${isOwn?'own':'other'}"${compact?' style="font-size:12.5px;padding:7px 10px"':''}>${esc(m.body)}<div class="msg-time ${isOwn?'':'other'}"${compact?' style="font-size:10px"':''}>${esc(chatTime(m.created_at))}</div></div>
       </div>
@@ -12224,13 +12260,112 @@ function autoResizeTextarea(el){
   el.style.height='auto';
   el.style.height=Math.min(el.scrollHeight,100)+'px';
 }
-function addEmoji(){
-  const emojis=['😊','🎉','👍','💪','🔥','✅','📈','🚀','👏','😄'];
-  const el=document.getElementById('comms-msg-input');
-  if(!el) return;
-  el.value+=emojis[Math.floor(Math.random()*emojis.length)];
-  el.focus();
+/* ════════ EMOJI PICKER ════════ */
+// Every entry is a single code point, so Array.from() splits the strings
+// correctly. No ZWJ sequences and no skin-tone modifiers: those are several
+// code points each and would come apart one cell at a time.
+const EMOJI_GROUPS = [
+  { key:'smileys', tab:'😀', label:'Smileys',
+    chars:'😀😃😄😁😆😅😂🤣😊😇🙂🙃😉😌😍🥰😘😗😙😚😋😛😝😜🤪🤨🧐🤓😎🥳😏😒😞😔😟😕🙁😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠😈👿👹👺🤡💩👻💀👽🤖🎃' },
+  { key:'gestures', tab:'👍', label:'Gestures',
+    chars:'👋🤚🖐✋🖖👌🤌🤏✌🤞🤟🤘🤙👈👉👆👇👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏💪🦾✍💅👂👃👀👁👅👄🦷🦴🧠🗣👤👥' },
+  { key:'people', tab:'🧑', label:'People',
+    chars:'👶🧒👦👧🧑👨👩🧓👴👵👮🕵💂👷🤴👸👳👲🧕🤵👰🤰🤱👼🎅🤶🦸🦹🧙🧚🧛🧜🧝🧞🧟💆💇🚶🧍🧎🏃💃🕺👯🧖🧗🤺🏇⛷🏂🏌🏄🚣🏊⛹🏋🚴🚵🤸🤼🤽🤾🤹🧘👪👫👬👭' },
+  { key:'objects', tab:'💻', label:'Objects',
+    chars:'📱💻⌨🖥🖨🖱💽💾💿📀📷📸📹🎥📞☎📟📠📺📻🎙🎚🎛⏱⏲⏰🕰⌛⏳📡🔋🔌💡🔦🕯🧯🛢💸💵💴💶💷💰💳💎⚖🔧🔨⚒🛠⛏🔩⚙⛓🗝🔒🔓🔏🔐🔑🚪🛋🛏🖼🛍🛒🎁🎈🎏🎀🎊🎉🏮🎐✉📩📨📧💌📥📤📦🏷📪📫📬📭📮📜📃📄📑📊📈📉🗒🗓📆📅📇🗃🗳🗄📋📁📂🗂🗞📰📓📔📒📕📗📘📙📚📖🔖🔗📎🖇📐📏📌📍✂🖊🖋✒📝✏🔍🔎🔬🔭💼🛎' },
+  { key:'symbols', tab:'✅', label:'Symbols',
+    chars:'❤🧡💛💚💙💜🖤🤍🤎💔❣💕💞💓💗💖💘💝✅❌❎➕➖➗✖♾‼⁉❓❔❕❗〰💯🔔🔕🎵🎶⚠🚸⛔🚫💢♻✨⭐🌟💫⚡🔥💥☄🌈☀🌤⛅🌥☁🌦🌧⛈🌩🌨❄☃⛄🌬💨🌪🌫🌊💧💦☔⛱🏆🥇🥈🥉🏅🎖🏱🚀✈🎯🎲' }
+];
+let emojiPickerTarget = null;      // the surface key the open picker writes to
+let emojiPickerBuilt = false;
+
+function buildEmojiPicker(){
+  if(emojiPickerBuilt) return;
+  const tabs = document.getElementById('emoji-pop-tabs');
+  const grid = document.getElementById('emoji-pop-grid');
+  if(!tabs || !grid) return;
+  tabs.innerHTML = EMOJI_GROUPS.map((g,i)=>
+    `<button type="button" class="emoji-tab ${i===0?'on':''}" data-group="${g.key}" title="${g.label}" aria-label="${g.label}" onclick="showEmojiGroup('${g.key}')">${g.tab}</button>`
+  ).join('');
+  showEmojiGroup(EMOJI_GROUPS[0].key);
+  emojiPickerBuilt = true;
 }
+
+function showEmojiGroup(key){
+  const g = EMOJI_GROUPS.find(x=>x.key===key);
+  const grid = document.getElementById('emoji-pop-grid');
+  if(!g || !grid) return;
+  grid.innerHTML = Array.from(g.chars).map(ch=>
+    `<button type="button" class="emoji-cell" onclick="insertEmoji('${ch}')">${ch}</button>`
+  ).join('');
+  grid.scrollTop = 0;
+  document.querySelectorAll('#emoji-pop-tabs .emoji-tab').forEach(b=>
+    b.classList.toggle('on', b.dataset.group===key));
+}
+
+function emojiPickerIsOpen(){
+  const pop = document.getElementById('emoji-pop');
+  return !!(pop && pop.classList.contains('open'));
+}
+
+function closeEmojiPicker(){
+  const pop = document.getElementById('emoji-pop');
+  if(pop) pop.classList.remove('open');
+  emojiPickerTarget = null;
+}
+
+// Fixed coordinates clamped to the viewport: above the button where it fits,
+// below it where it does not. On a phone the popover is nearly the full width,
+// so the left clamp is what keeps it on screen.
+function placeEmojiPop(btn){
+  const pop = document.getElementById('emoji-pop');
+  if(!pop || !btn) return;
+  const r = btn.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  let left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+  let top = r.top - h - 8;
+  if(top < 8) top = Math.max(8, Math.min(r.bottom + 8, window.innerHeight - h - 8));
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+function toggleEmojiPicker(sk, btn){
+  const pop = document.getElementById('emoji-pop');
+  if(!pop) return;
+  if(emojiPickerIsOpen() && emojiPickerTarget === sk){ closeEmojiPicker(); return; }
+  buildEmojiPicker();
+  emojiPickerTarget = sk;
+  pop.classList.add('open');
+  placeEmojiPop(btn);
+}
+
+// At the caret, not at the end: selectionStart/End also means a selected run
+// is replaced rather than left behind. Focus and the caret both go back to the
+// textarea so the next character lands after the emoji.
+function insertEmoji(ch){
+  const sur = CHAT_SURFACES[emojiPickerTarget];
+  const el = sur ? document.getElementById(sur.input) : null;
+  if(!el){ closeEmojiPicker(); return; }
+  const v = el.value;
+  const a = typeof el.selectionStart === 'number' ? el.selectionStart : v.length;
+  const b = typeof el.selectionEnd === 'number' ? el.selectionEnd : a;
+  el.value = v.slice(0, a) + ch + v.slice(b);
+  closeEmojiPicker();
+  el.focus();
+  const pos = a + ch.length;
+  try { el.setSelectionRange(pos, pos); } catch(e) {}
+  autoResizeTextarea(el);
+}
+
+document.addEventListener('click', e=>{
+  if(!emojiPickerIsOpen()) return;
+  if(e.target.closest('#emoji-pop') || e.target.closest('.comms-emoji-btn')) return;
+  closeEmojiPicker();
+});
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Escape' && emojiPickerIsOpen()) closeEmojiPicker();
+});
+window.addEventListener('resize', ()=>{ if(emojiPickerIsOpen()) closeEmojiPicker(); });
 
 // ── realtime receive ─────────────────────────────────────────────
 // RLS has already filtered these to threads the viewer may read, so anything
