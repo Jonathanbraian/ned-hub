@@ -626,6 +626,36 @@ function audienceAllows(me, audience){
   const a = audienceOf(audience);
   return a === 'everyone' || a === audienceTierFor(me);
 }
+// ── LIST_USERS: THE FIELDS, IN ONE PLACE ─────────────────────────
+// The names are the source of truth for what is ASKED for; userRowOut is
+// the source of truth for what GOES OUT. Two statements of one list could
+// drift - a column selected and never emitted is harmless, one emitted and
+// never selected is undefined on the wire - so the suite asserts the keys
+// userRowOut produces are exactly this list. Narrowing the select is
+// defence in depth; the field-by-field build below is what closes the leak.
+// nickname, phone, job_title and reports_to are deliberately NOT here.
+// loadDbUsers copied all four into its page state and read none of them
+// back: every nickname, phone number, job title and manager the app shows
+// comes from get_directory, which still carries them. Four fields kept on
+// the strength of one line that copies them is the habit this fix is about,
+// and the browser controls are what caught it - each dropped a field and
+// nothing on the screen noticed.
+const USER_ROW_FIELDS = ['id','first','last','email','role','campus',
+  'role_id','team_id','status','must_change_password','photo'];
+const USER_ROW_COLUMNS = USER_ROW_FIELDS.join(',');
+// Written out rather than looped, for the same reason get_teams writes its
+// out: a loop over an allowlist reads like a projection, and the next person
+// to add a column should have to type its name here.
+function userRowOut(u){
+  return {
+    id: u.id, first: u.first, last: u.last, email: u.email,
+    role: u.role, campus: u.campus,
+    role_id: u.role_id, team_id: u.team_id,
+    status: u.status, must_change_password: u.must_change_password,
+    photo: u.photo,
+  };
+}
+exports.__listUsers = { USER_ROW_FIELDS, USER_ROW_COLUMNS, userRowOut };
 // ── THE TRAINING LADDER ──────────────────────────────────────────
 // Trainings and courses are not aimed at a tier, they start at one: an item
 // with min_level 'supervisor' is for supervisors AND everybody above them.
@@ -2397,20 +2427,40 @@ exports.handler = async (event) => {
         });
         return json(200,{ ok:true, people });
       }
+      // ── WHAT USER MANAGEMENT ACTUALLY READS ──────────────────
+      // Exactly the fields User Management READS BACK, and nothing else.
+      // Every one of them is used: id, the name parts and email for the row
+      // and its search; role and role_id for the badge, the role filter and
+      // the reports-to picker; campus and team_id for the campus chip, its
+      // filter and the team label; status for the dot and the
+      // Active/Inactive count; must_change_password for the Temporary chip
+      // and the stat beside it; photo for the avatar.
+      //
+      // Dropping one of these is a regression, not a tightening, so the
+      // suite asserts the whole set is present rather than only that the
+      // dead columns are gone.
       case 'list_users': {
+        // Same leak as get_directory in #66 and the two in #70: select('*')
+        // and the row straight out through the wire. The gate was never the
+        // problem - a manager IS allowed to see these people - but being
+        // allowed to see somebody is not being handed every column their
+        // profile happens to carry. A bio, a birthday, an Instagram handle
+        // and a results_name are none of User Management's business.
         const me = await callerProfile(caller);
         if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
         const { data, error } = await admin.from('profiles')
-          .select('*').order('first',{ascending:true});
+          .select(USER_ROW_COLUMNS).order('first',{ascending:true});
         if(error) return json(500,{error:'list_failed'});
         // .neq() takes a single value, so the rank filter runs here instead of
         // in the query - it has to exclude every tier above the caller. A local
         // leader is then narrowed again to their own branch: this list feeds
-        // every management screen and every "reports to" picker.
+        // every management screen and every "reports to" picker. Unchanged:
+        // this fix is about the columns, not about who is in the list.
         const scope = await scopeIdsFor(me);
         return json(200,{ users:(data||[])
           .filter(u => outranks(me.role, u.role))
-          .filter(u => scope === null || scope.has(u.id)) });
+          .filter(u => scope === null || scope.has(u.id))
+          .map(userRowOut) });
       }
       case 'create_user': {
         const me = await callerProfile(caller);
@@ -4675,7 +4725,15 @@ exports.handler = async (event) => {
       case 'get_my_training_status': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         if(p.content_id){
-          const t = await trainingRow(p.content_id);
+          // `me`, where it used to be left off. The bulk path below has
+          // always refused a training this person is never shown; the
+          // single-id path asked for the row and answered about it, so a
+          // held id was enough to learn whether a training above somebody's
+          // rung has a test, what the pass mark is and how many lessons it
+          // runs to. Every other un-gated trainingRow call sits behind
+          // isMgr, which ladderAllows lets through, so this was the only
+          // one where the missing argument meant anything.
+          const t = await trainingRow(p.content_id, me);
           if(!t.ok) return json(t.status,{error:t.error});
           const mine = await myTrainingStatus(me.id, p.content_id);
           const pr = await pieceProgress(me.id, t.row.id);
