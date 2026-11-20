@@ -8812,15 +8812,17 @@ async function saveTeamTarget(){
 async function loadDbUsers(){
   const r = await callDb('list_users');
   const rows = (r && r.users) || [];
+  // Only what this screen reads back. nickname, phone, jobTitle and
+  // reports_to used to be copied here and were never read again - every one
+  // of them is shown from the DIRECTORY instead, which still carries them.
   dbUsers = rows.map(u => ({
-    id:u.id, first:dashFix(u.first), last:dashFix(u.last), nickname:dashFix(u.nickname)||'', email:u.email,
-    role:u.role, campus:u.campus, phone:u.phone||'',
+    id:u.id, first:dashFix(u.first), last:dashFix(u.last), email:u.email,
+    role:u.role, campus:u.campus,
     role_id:u.role_id!=null?u.role_id:null,
     role_name: dashFix((rolesById[u.role_id]||{}).name) || null,
     team_id:u.team_id!=null?u.team_id:null,
     team_name: dashFix((teamsById[u.team_id]||{}).name) || null,
-    jobTitle:dashFix(u.job_title)||'', status:u.status, tempPw:u.must_change_password,
-    reports_to:u.reports_to||null, photo:u.photo||''
+    status:u.status, tempPw:u.must_change_password, photo:u.photo||''
   }));
 }
 
