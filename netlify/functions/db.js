@@ -4164,6 +4164,43 @@ exports.handler = async (event) => {
       // Reading is everyone's; every write is isMgr. Nothing here consults
       // the branch scope: a training is published to the company, not to a
       // reporting line, so Manager = LOCAL deliberately does not apply.
+      // ── EXTERNAL NEWS: IMMIGRATION AND QQI ───────────────────
+      // Filed once a day by the news-fetch scheduled function. Read by
+      // anybody who is signed in: this is public news from public websites,
+      // and the shelf rules that gate content_items do not apply to it.
+      // Hidden rows never leave the server, and the response is built field
+      // by field like every other list in this file - fetched_at and the
+      // hidden flag are bookkeeping and are nobody's business but ours.
+      case 'get_external_news': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const { data, error } = await admin.from('external_news')
+          .select('url,source,title,published_at,excerpt,hidden')
+          .eq('hidden', false)
+          .order('published_at',{ascending:false});
+        if(error) return json(500,{error:'news_failed', detail:error.message});
+        const items = (data||[]).map(r => ({
+          url: r.url, source: r.source, title: r.title,
+          published_at: r.published_at, excerpt: r.excerpt || null }));
+        return json(200,{ ok:true, items });
+      }
+      // Soft delete, and soft on purpose: the fetcher inserts on conflict do
+      // nothing, so a row that stays on file with hidden=true can never be
+      // brought back by tomorrow's run. A hard delete would reappear within
+      // a day. The url IS the key - the table has no separate id - and the
+      // older `id` spelling is accepted so a caller cannot miss by a name.
+      case 'delete_external_news': {
+        const me = await callerProfile(caller);
+        if(!me || !isMgr(me.role)) return json(403,{error:'forbidden'});
+        const url = String((p.url != null ? p.url : p.id) || '').trim();
+        if(!url) return json(400,{error:'missing_url'});
+        const { data: row } = await admin.from('external_news')
+          .select('url').eq('url', url).single();
+        if(!row) return json(404,{error:'not_found'});
+        const { error } = await admin.from('external_news')
+          .update({ hidden:true }).eq('url', url);
+        if(error) return json(500,{error:'hide_failed', detail:error.message});
+        return json(200,{ ok:true, url });
+      }
       case 'get_content': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         let q = admin.from('content_items')

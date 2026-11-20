@@ -17,3 +17,12 @@
 # reach this function, and the only unauthenticated caller is the scheduler.
 [functions."weekly-digest"]
   schedule = "0 14,15 * * 5"
+
+# The external news reader: immigration and QQI, once a day. No hour guard
+# and no Dublin arithmetic, because nothing here is time sensitive - a feed
+# read an hour either side of 06:30 is the same feed. Insert-on-conflict-do-
+# nothing is what keeps a second run in a day harmless.
+#
+# Same as above: no /api/* redirect, so the scheduler is the only caller.
+[functions."news-fetch"]
+  schedule = "30 6 * * *"
