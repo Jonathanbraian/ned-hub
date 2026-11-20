@@ -166,6 +166,13 @@ const ROLE_LEVELS = ['agent','specialist','executive','senior_exec','leader','su
 // Exported so the suite can hold TRAINING_LADDER to it: the two agree
 // today and are allowed to stop agreeing, but not by accident.
 exports.__roleLevels = ROLE_LEVELS;
+// Reused by the weekly digest function, which must not grow a second copy
+// of any of this: one answer to "whose target is what", one to "whose
+// people are these", one to "what week is it".
+exports.__rank = { ROLE_RANK, rank, outranks, isMgr, seesWholeCompany, isLocalLeader };
+exports.__targets = { monthIndex, campusTargetFor, startMonthOf, beforeStart, agentTargetFor };
+exports.__scope = { subtreeIds, scopeIdsFor };
+exports.__dates = { dublinYMD, dublinWeekday, mondayOfWeek, dayOfWeekStart };
 // What each tier is CALLED. Mirrors ROLE_LABELS in index.html, and is only
 // ever a fallback: a person's cargo name is the label wherever they have one,
 // exactly as displayRole() picks it on the client.
@@ -2126,6 +2133,30 @@ function emailHtml(o){
       '<a href="' + esc(o.url) + '" style="color:#0032FF;text-decoration:none">' +
       esc(o.url) + '</a></p>'
     : '';
+  // An optional table, for a message whose body is a list of people rather
+  // than a paragraph. o.table is { head:[...], rows:[[...],...] } and the
+  // first column is left aligned while the rest are right, because the rest
+  // are money. No table means not one byte of this appears, so every message
+  // written before it existed is unchanged.
+  const cell = (v, i, bold) =>
+    '<td style="padding:8px 0;font-size:14px;line-height:1.5;color:#334155;' +
+    'text-align:' + (i === 0 ? 'left' : 'right') +
+    (bold ? ';font-weight:600' : '') +
+    ';border-bottom:1px solid #eef2f7">' + esc(v) + '</td>';
+  const table = (o.table && (o.table.rows || []).length)
+    ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ' +
+      'style="width:100%;margin:4px 0 8px;border-collapse:collapse">' +
+      '<tr>' + (o.table.head || []).map((h,i) =>
+        '<th style="padding:0 0 6px;font-size:11px;letter-spacing:.6px;' +
+        'text-transform:uppercase;color:#94a3b8;font-weight:600;text-align:' +
+        (i === 0 ? 'left' : 'right') + '">' + esc(h) + '</th>').join('') + '</tr>' +
+      (o.table.rows || []).map(r =>
+        '<tr>' + r.map((v,i) => cell(v, i, false)).join('') + '</tr>').join('') +
+      ((o.table.total || []).length
+        ? '<tr>' + o.table.total.map((v,i) => cell(v, i, true)).join('') + '</tr>'
+        : '') +
+      '</table>'
+    : '';
   const note = o.note
     ? '<p style="margin:20px 0 0;padding:12px 14px;background:#f8fafc;border-radius:8px;' +
       'font-size:12px;line-height:1.6;color:#64748b">' + esc(o.note) + '</p>'
@@ -2148,7 +2179,7 @@ function emailHtml(o){
     '<tr><td style="padding:28px 32px 8px">' +
     '<h1 style="margin:0 0 16px;font-size:20px;line-height:1.35;font-weight:700;' +
     'color:#0f172a">' + esc(o.heading) + '</h1>' +
-    lines + button + note +
+    lines + table + button + note +
     '</td></tr>' +
     // Footer.
     '<tr><td style="padding:20px 32px 26px">' +
