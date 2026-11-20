@@ -799,6 +799,30 @@ html[data-theme="dark"] .brand-logo.brand-dark{display:inline-block}
 .chat-panel-thread-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;flex-shrink:0;min-height:42px;display:flex;align-items:center}
 .chat-panel-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0}
 
+/* ════════ EXTERNAL NEWS (IMMIGRATION & QQI) ════════ */
+.xnews-list{display:flex;flex-direction:column;gap:10px}
+.xnews-item{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;transition:border-color .15s,box-shadow .15s}
+.xnews-item:hover{border-color:var(--border2);box-shadow:0 2px 10px rgba(15,27,61,.05)}
+.xnews-main{flex:1;min-width:0}
+.xnews-title{font-size:14px;font-weight:600;line-height:1.45;color:var(--text);text-decoration:none;
+  display:inline-block}
+.xnews-title:hover{color:var(--blue);text-decoration:underline}
+.xnews-meta{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.xnews-badge{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px}
+.xnews-badge.immigration{background:var(--light-blue);color:var(--blue)}
+.xnews-badge.qqi{background:rgba(16,185,129,.12);color:var(--success)}
+.xnews-date{font-size:12px;color:var(--muted)}
+.xnews-del{width:28px;height:28px;border-radius:8px;background:transparent;border:1px solid var(--border);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);
+  flex-shrink:0;transition:all .15s}
+.xnews-del:hover{background:rgba(239,68,68,.1);border-color:var(--danger);color:var(--danger)}
+@media(max-width:560px){
+  .xnews-item{padding:12px 13px;gap:10px}
+  .xnews-title{font-size:13.5px}
+}
+
 /* ════════ CALENDAR ════════ */
 .cal-wrap{max-width:1200px;margin:0 auto;padding:24px 36px}
 .cal-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
@@ -2975,6 +2999,15 @@ a.clib-open{text-decoration:none}
         </button>
       </div>
       <div class="clib-grid" id="clib-grid-update"></div>
+    </div>
+    <!-- Read from two public websites once a day by the news-fetch
+         scheduled function. Hidden entirely until there is something in it,
+         so a day the sources are quiet leaves no empty shelf behind. -->
+    <div class="sec" id="xnews-sec" style="display:none">
+      <div class="clib-head">
+        <div><div class="sec-label">External</div><div class="sec-title">Immigration &amp; QQI</div></div>
+      </div>
+      <div class="xnews-list" id="xnews-list"></div>
     </div>
   </div>
 
@@ -5596,7 +5629,13 @@ function showPage(name){
   // way in shows the same library rather than a second copy of it.
   if(name==='mgr-handbook') showContentPage(['handbook']);
   if(name==='tools')     showContentPage(['tool']);
-  if(name==='updates')   showContentPage(['update']);
+  if(name==='updates'){
+    showContentPage(['update']);
+    // Drawn from whatever is cached first, then refreshed behind it, the
+    // same way showContentPage treats the shelves above it.
+    renderExternalNews();
+    (async()=>{ await softLoad('external-news', loadExternalNews); renderExternalNews(); })();
+  }
   if(name==='my-profile') renderMyProfile();
   if(name==='performance') (async()=>{ await softLoad('performance', loadPerformance); renderPerformancePage(); })();
   if(name==='team-profiles') renderTeamProfiles();
@@ -10398,6 +10437,65 @@ async function uploadToStorage(kind, file){
   return (kind === 'cover')
     ? { cover_url: r.public_url || '' }
     : { file_path: r.path, file_name: file.name || 'file', file_type: file.type || '' };
+}
+
+// ── EXTERNAL NEWS (IMMIGRATION & QQI) ───────────────────────────
+// Public news from two public websites, filed daily by a scheduled
+// function and read back through the gateway like everything else - the
+// browser never touches the table. Everybody signed in sees the same list;
+// there is no shelf rule here, because there is nothing private about it.
+let xnewsItems = null;
+const XNEWS_LABEL = { immigration:'Immigration', qqi:'QQI' };
+async function loadExternalNews(){
+  const r = await callDb('get_external_news');
+  xnewsItems = (r && r.items) || [];
+  return xnewsItems;
+}
+function xnewsDate(d){
+  // YYYY-MM-DD, read as a plain date. Parsing it as an instant would shift
+  // it a day for anybody west of here.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d || ''));
+  if(!m) return '';
+  const MON = ['January','February','March','April','May','June','July',
+    'August','September','October','November','December'];
+  return Number(m[3]) + ' ' + MON[Number(m[2]) - 1] + ' ' + m[1];
+}
+function renderExternalNews(){
+  const sec = document.getElementById('xnews-sec');
+  const host = document.getElementById('xnews-list');
+  if(!sec || !host) return;
+  const items = xnewsItems || [];
+  // Nothing to say, so nothing on the page at all.
+  if(!items.length){ sec.style.display = 'none'; host.innerHTML = ''; return; }
+  sec.style.display = '';
+  const mayDelete = isUserAdmin();
+  host.innerHTML = items.map(it => {
+    const src = (it.source === 'qqi') ? 'qqi' : 'immigration';
+    return '<div class="xnews-item">' +
+      '<div class="xnews-main">' +
+        '<a class="xnews-title" href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(dashFix(it.title)) + '</a>' +
+        '<div class="xnews-meta">' +
+          '<span class="xnews-badge ' + src + '">' + esc(XNEWS_LABEL[src]) + '</span>' +
+          (it.published_at ? '<span class="xnews-date">' + esc(xnewsDate(it.published_at)) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      (mayDelete
+        ? '<button class="xnews-del" title="Remove from this list" onclick="hideExternalNews(\'' +
+          esc(it.url).replace(/'/g, '&#39;') + '\')">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+          '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
+        : '') +
+    '</div>';
+  }).join('');
+}
+async function hideExternalNews(url){
+  if(!isUserAdmin()) return;
+  const r = await callDb('delete_external_news', { url });
+  if(!r || !r.ok){ showToast('Could not remove that item','error'); return; }
+  xnewsItems = (xnewsItems || []).filter(x => String(x.url) !== String(url));
+  renderExternalNews();
+  showToast('Removed from the list','success');
 }
 
 async function loadContent(type){
