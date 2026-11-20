@@ -6,3 +6,14 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
+
+# The weekly results digest. Netlify cron is UTC and Dublin is not - UTC in
+# winter, UTC+1 in summer - so a single UTC hour would be 15:00 Dublin for
+# half the year and 16:00 for the other half. Both hours are scheduled and
+# the function throws away the run whose Dublin hour is not 15, so exactly
+# one survives each Friday, year round. The dedup log is the second guard.
+#
+# Deliberately NOT given a /api/* redirect above: the browser has no way to
+# reach this function, and the only unauthenticated caller is the scheduler.
+[functions."weekly-digest"]
+  schedule = "0 14,15 * * 5"
