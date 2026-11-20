@@ -461,6 +461,123 @@ async function findOrCreateGroup(teamId){
   return raced || null;
 }
 
+// ── CHAT ATTACHMENTS ───────────────────────────────────
+// A message may carry one file or one voice note. The bytes live in a
+// private bucket; the browser never gets a path, only a signed URL that
+// expires, so a link copied out of the page stops working.
+const CHAT_BUCKET = 'chat-attachments';
+const CHAT_ATT_PREFIX = 'chat/';
+// Long enough to play a voice note through or start a download, same
+// reasoning as a lesson's hour.
+const CHAT_ATT_TTL = 3600;
+const CHAT_KINDS = ['file','audio'];
+const CHAT_FILE_MAX = 25 * 1024 * 1024;
+// Five minutes. A voice note longer than that is a phone call.
+const CHAT_AUDIO_MAX_SECONDS = 300;
+// Executables and scripts, by declared type and by extension. The type is
+// whatever the browser decided to send, so it is the weaker of the two and
+// the extension check is what actually holds: renaming notes.pdf.exe to
+// something with a harmless mime still trips on the extension.
+const CHAT_MIME_DENY = [
+  'application/x-msdownload','application/x-msdos-program','application/x-dosexec',
+  'application/vnd.microsoft.portable-executable','application/x-executable',
+  'application/x-elf','application/x-mach-binary','application/x-msi',
+  'application/x-sh','application/x-shellscript','text/x-sh','application/x-csh',
+  'application/x-bat','application/bat','application/x-ms-shortcut','application/hta',
+  'application/java-archive','application/vnd.android.package-archive',
+  'application/x-apple-diskimage','text/javascript','application/javascript',
+  'application/x-httpd-php','text/x-php','text/x-python','application/x-python-code',
+  'application/x-perl','text/x-perl','application/x-ruby','text/x-ruby'
+];
+// What a browser's own recorder produces, and nothing else.
+const CHAT_AUDIO_EXT = ['webm','ogg','oga','m4a','mp4','mp3','wav'];
+const CHAT_EXT_DENY = ['exe','msi','bat','cmd','com','scr','pif','cpl','jar','sh','bash',
+  'zsh','csh','ksh','ps1','psm1','vbs','vbe','jse','wsf','wsh','hta','dll','so','dylib',
+  'app','dmg','pkg','deb','rpm','apk','php','phtml','py','pyc','pl','rb','lnk','reg',
+  'scf','gadget','js','mjs','cjs','jsp','asp','aspx','cgi'];
+function chatKindOf(v){ return CHAT_KINDS.includes(v) ? v : null; }
+function chatExtOf(name){
+  const m = String(name||'').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+// One answer to "may this be attached at all", asked by the upload action
+// before a URL is signed and again by the send action before a row exists.
+// Returns null when it is fine, or the error code to refuse with.
+function chatAttachmentRefusal(o){
+  const kind = chatKindOf(o.kind);
+  if(!kind) return 'bad_kind';
+  const size = Number(o.size);
+  if(!Number.isFinite(size) || size <= 0) return 'bad_size';
+  if(size > CHAT_FILE_MAX) return 'too_large';
+  const mime = String(o.mime||'').toLowerCase().split(';')[0].trim();
+  if(kind === 'audio'){
+    const secs = Number(o.duration);
+    // A voice note the browser could not measure is still bounded by size.
+    if(Number.isFinite(secs) && secs > CHAT_AUDIO_MAX_SECONDS) return 'too_long';
+    // Saying "audio" is not what makes it audio. Without this, kind:'audio'
+    // was a way past the deny lists entirely: payload.exe, declared a voice
+    // note, stored and handed back with a signed URL.
+    if(!/^audio\//.test(mime)) return 'bad_type';
+    if(!CHAT_AUDIO_EXT.includes(chatExtOf(o.filename))) return 'bad_type';
+    return null;
+  }
+  if(CHAT_MIME_DENY.includes(mime)) return 'bad_type';
+  if(CHAT_EXT_DENY.includes(chatExtOf(o.filename))) return 'bad_type';
+  return null;
+}
+// The thread a send is aimed at, by id, by person or by team. Lifted out of
+// send_message so the attachment path resolves and gates identically rather
+// than nearly identically.
+async function resolveChatThread(me, p){
+  let thread = null;
+  if(p.thread_id){
+    const { data } = await admin.from('threads').select('*').eq('id', p.thread_id).single();
+    if(!data) return { status:404, error:'not_found' };
+    thread = data;
+  } else if(p.to_user_id){
+    if(String(p.to_user_id) === String(me.id)) return { status:400, error:'no_self_dm' };
+    const { data: tgt } = await admin.from('profiles').select('id').eq('id', p.to_user_id).single();
+    if(!tgt) return { status:404, error:'not_found' };
+    thread = await findOrCreateDm(me.id, tgt.id);
+  } else if(p.team_id != null){
+    const { ids } = await chatTeamIdsOf(me);
+    if(!ids.includes(p.team_id)) return { status:403, error:'forbidden' };
+    thread = await findOrCreateGroup(p.team_id);
+  } else {
+    return { status:400, error:'missing_target' };
+  }
+  if(!thread) return { status:500, error:'send_failed' };
+  if(!await memberOfThread(me, thread)) return { status:403, error:'forbidden' };
+  return { ok:true, thread };
+}
+// A message on its way out. Built field by field, so attachment_path - the
+// one column that would let a client ask Storage for the object itself -
+// never leaves the server. Only rows that carry an attachment are signed,
+// so a thread of plain text costs nothing.
+async function chatMessageOut(r){
+  const out = { id: r.id, sender_id: r.sender_id, body: r.body || '',
+    created_at: r.created_at };
+  if(r.thread_id !== undefined) out.thread_id = r.thread_id;
+  if(!r.attachment_path) return out;
+  out.attachment = {
+    kind: chatKindOf(r.attachment_kind) || 'file',
+    name: r.attachment_name || 'file',
+    mime: r.attachment_mime || '',
+    size: (r.attachment_size === null || r.attachment_size === undefined) ? null : Number(r.attachment_size),
+    duration: (r.attachment_duration === null || r.attachment_duration === undefined) ? null : Number(r.attachment_duration),
+    url: ''
+  };
+  const { data } = await admin.storage.from(CHAT_BUCKET)
+    .createSignedUrl(r.attachment_path, CHAT_ATT_TTL);
+  out.attachment.url = (data && data.signedUrl) || '';
+  return out;
+}
+const MSG_FIELDS = 'id,thread_id,sender_id,body,created_at,attachment_path,attachment_kind,' +
+  'attachment_name,attachment_mime,attachment_size,attachment_duration';
+exports.__chat = { CHAT_BUCKET, CHAT_ATT_PREFIX, CHAT_ATT_TTL, CHAT_KINDS, CHAT_FILE_MAX,
+  CHAT_AUDIO_MAX_SECONDS, CHAT_MIME_DENY, CHAT_EXT_DENY, CHAT_AUDIO_EXT, chatKindOf, chatExtOf,
+  chatAttachmentRefusal, chatMessageOut, MSG_FIELDS };
+
 // Everyone below this person in the reports_to chain, transitively.
 async function subtreeIds(me){
   const { data: all } = await admin.from('profiles').select('id,reports_to');
@@ -2255,7 +2372,9 @@ exports.handler = async (event) => {
           (t.kind==='dm' && (t.user_a===me.id || t.user_b===me.id)));
         const ids = mine.map(t => t.id);
         const { data: msgs } = ids.length
-          ? await admin.from('messages').select('id,thread_id,sender_id,body,created_at').in('thread_id', ids)
+          ? await admin.from('messages')
+              .select('id,thread_id,sender_id,body,created_at,attachment_kind,attachment_name')
+              .in('thread_id', ids)
           : { data: [] };
         const { data: reads } = await admin.from('thread_reads')
           .select('thread_id,last_read_at').eq('user_id', me.id);
@@ -2281,7 +2400,11 @@ exports.handler = async (event) => {
           }
           return { id:t.id, kind:t.kind, team_id:t.team_id ?? null, name, other,
             unread, last_message: last ? { body:last.body, created_at:last.created_at,
-              sender_id:last.sender_id, sender_first:(profById[last.sender_id]||{}).first || '?' } : null };
+              sender_id:last.sender_id, sender_first:(profById[last.sender_id]||{}).first || '?',
+              // Enough to write the preview, and no signed URL: a list of
+              // threads should not pay to sign files nobody has opened.
+              attachment_kind: chatKindOf(last.attachment_kind),
+              attachment_name: last.attachment_name || null } : null };
         });
         return json(200,{ threads: out });
       }
@@ -2292,45 +2415,84 @@ exports.handler = async (event) => {
         if(!thread) return json(404,{error:'not_found'});
         if(!await memberOfThread(me, thread)) return json(403,{error:'forbidden'});
         const { data } = await admin.from('messages')
-          .select('id,sender_id,body,created_at').eq('thread_id', thread.id);
+          .select(MSG_FIELDS).eq('thread_id', thread.id);
         // id is a bigint identity, so it orders and paginates without the tie
         // problems created_at has at sub-millisecond resolution.
         let rows = (data||[]).slice().sort((a,b) => Number(b.id) - Number(a.id));
         if(p.before != null) rows = rows.filter(m => Number(m.id) < Number(p.before));
         const page = rows.slice(0, MSG_PAGE).reverse();
-        return json(200,{ thread_id: thread.id, messages: page,
-          has_more: rows.length > MSG_PAGE, cursor: page.length ? page[0].id : null });
+        const out = [];
+        for(const m of page) out.push(await chatMessageOut(m));
+        return json(200,{ thread_id: thread.id, messages: out,
+          has_more: rows.length > MSG_PAGE, cursor: out.length ? out[0].id : null });
       }
       case 'send_message': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
         const body = String(p.body == null ? '' : p.body).trim();
         if(!body) return json(400,{error:'empty_body'});
         if(body.length > MSG_MAX) return json(400,{error:'body_too_long'});
-        let thread = null;
-        if(p.thread_id){
-          const { data } = await admin.from('threads').select('*').eq('id', p.thread_id).single();
-          if(!data) return json(404,{error:'not_found'});
-          thread = data;
-        } else if(p.to_user_id){
-          if(String(p.to_user_id) === String(me.id)) return json(400,{error:'no_self_dm'});
-          const { data: tgt } = await admin.from('profiles').select('id').eq('id', p.to_user_id).single();
-          if(!tgt) return json(404,{error:'not_found'});
-          thread = await findOrCreateDm(me.id, tgt.id);
-        } else if(p.team_id != null){
-          const { ids } = await chatTeamIdsOf(me);
-          if(!ids.includes(p.team_id)) return json(403,{error:'forbidden'});
-          thread = await findOrCreateGroup(p.team_id);
-        } else {
-          return json(400,{error:'missing_target'});
-        }
-        if(!thread) return json(500,{error:'send_failed'});
-        if(!await memberOfThread(me, thread)) return json(403,{error:'forbidden'});
+        const t = await resolveChatThread(me, p);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const thread = t.thread;
         // sender_id is the resolved caller, never anything the client sent.
         const { data: row, error } = await admin.from('messages')
           .insert({ thread_id: thread.id, sender_id: me.id, body })
-          .select('id,thread_id,sender_id,body,created_at').single();
+          .select(MSG_FIELDS).single();
         if(error) return json(500,{error:'send_failed'});
-        return json(200,{ ok:true, thread_id: thread.id, message: row });
+        return json(200,{ ok:true, thread_id: thread.id, message: await chatMessageOut(row) });
+      }
+      // A signed URL to PUT one attachment straight into the private bucket.
+      // Signed before the bytes exist, so the size has to be declared here and
+      // is checked again on the way in: a client that lies about it gets a URL
+      // and then a refusal when it tries to post the message.
+      case 'chat_attachment_upload_url': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        // When the thread is known, membership is asked here too, so a
+        // stranger cannot even get a place to put the file.
+        if(p.thread_id){
+          const { data: th } = await admin.from('threads').select('*').eq('id', p.thread_id).single();
+          if(!th) return json(404,{error:'not_found'});
+          if(!await memberOfThread(me, th)) return json(403,{error:'forbidden'});
+        }
+        const refusal = chatAttachmentRefusal({ kind:p.kind, size:p.size,
+          duration:p.duration, mime:p.mime, filename:p.filename });
+        if(refusal) return json(400,{error:refusal});
+        const path = CHAT_ATT_PREFIX + require('crypto').randomUUID() + '_' + safeFileName(p.filename);
+        const { data, error } = await admin.storage.from(CHAT_BUCKET).createSignedUploadUrl(path);
+        if(error || !data) return json(500,{error:'sign_failed', detail:error && error.message});
+        return json(200,{ ok:true, bucket: CHAT_BUCKET, path: data.path || path,
+          token: data.token, signed_url: data.signedUrl });
+      }
+      // The same send, with a file on it. Gated by the same helper as
+      // send_message, so there is one answer to "may this person post here".
+      case 'send_chat_attachment': {
+        const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
+        const path = String(p.attachment_path == null ? '' : p.attachment_path).trim();
+        // Only a path this gateway handed out: a client cannot name some
+        // other object in the bucket and have it signed back to everyone.
+        if(!path || path.indexOf(CHAT_ATT_PREFIX) !== 0) return json(400,{error:'bad_path'});
+        const refusal = chatAttachmentRefusal({ kind:p.attachment_kind, size:p.attachment_size,
+          duration:p.attachment_duration, mime:p.attachment_mime, filename:p.attachment_name });
+        if(refusal) return json(400,{error:refusal});
+        // A caption is optional here, which is the one way this differs from
+        // send_message: a voice note has nothing to say in words.
+        const body = String(p.body == null ? '' : p.body).trim();
+        if(body.length > MSG_MAX) return json(400,{error:'body_too_long'});
+        const t = await resolveChatThread(me, p);
+        if(!t.ok) return json(t.status,{error:t.error});
+        const thread = t.thread;
+        const dur = Number(p.attachment_duration);
+        const { data: row, error } = await admin.from('messages').insert({
+          thread_id: thread.id, sender_id: me.id, body,
+          attachment_path: path,
+          attachment_kind: chatKindOf(p.attachment_kind),
+          attachment_name: safeFileName(p.attachment_name),
+          attachment_mime: String(p.attachment_mime || '').slice(0,120),
+          attachment_size: Number(p.attachment_size),
+          attachment_duration: Number.isFinite(dur) ? dur : null
+        }).select(MSG_FIELDS).single();
+        if(error) return json(500,{error:'send_failed'});
+        return json(200,{ ok:true, thread_id: thread.id, message: await chatMessageOut(row) });
       }
       case 'mark_read': {
         const me = await callerProfile(caller); if(!me) return json(403,{error:'forbidden'});
